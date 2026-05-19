@@ -4,7 +4,7 @@ import SwiftUI
 struct LegadoApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
         }
     }
 }
