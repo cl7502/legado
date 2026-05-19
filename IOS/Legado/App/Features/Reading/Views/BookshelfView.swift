@@ -4,6 +4,9 @@ import SwiftUI
 struct BookshelfView: View {
     @StateObject private var viewModel = BookshelfViewModel()
     
+    @State private var selectedBook: Book?
+    @State private var isReaderPresented = false
+    
     // 定义 3 列网格
     let columns = [
         GridItem(.flexible(), spacing: 20),
@@ -28,6 +31,10 @@ struct BookshelfView: View {
                     LazyVGrid(columns: columns, spacing: 25) {
                         ForEach(viewModel.books) { book in
                             BookItemView(book: book)
+                                .onTapGesture {
+                                    selectedBook = book
+                                    isReaderPresented = true
+                                }
                         }
                     }
                     .padding()
@@ -46,6 +53,13 @@ struct BookshelfView: View {
             }
             .refreshable {
                 await viewModel.loadBooks()
+            }
+            .fullScreenCover(isPresented: $isReaderPresented, onDismiss: {
+                Task { await viewModel.loadBooks() } // 退出阅读器时刷新进度
+            }) {
+                if let book = selectedBook {
+                    ReaderView(viewModel: ReaderViewModel(book: book))
+                }
             }
         }
     }
