@@ -2,52 +2,56 @@ import Foundation
 import JavaScriptCore
 import CryptoKit
 
-/// Rhino API 兼容协议
-/// 目标：在 JS 环境中模拟 Android 的 java 对象
+/// Rhino API 兼容协议 (扩展版)
 @objc protocol JSJavaHelperProtocol: JSExport {
     // --- 网络请求 ---
-    /// 同步 Ajax 请求 (对标 java.ajax)
     func ajax(_ url: String) -> String?
     
     // --- 变量存储 ---
-    /// 存储变量 (对标 java.put)
     func put(_ key: String, _ value: Any)
-    /// 获取变量 (对标 java.get)
     func get(_ key: String) -> Any?
     
     // --- 字符串处理与编码 ---
-    /// Base64 编码
     func base64Encode(_ text: String) -> String
-    /// Base64 解码
     func base64Decode(_ text: String) -> String
-    /// MD5 加密
     func md5(_ text: String) -> String
     
+    /// URL 编码 (对标 java.urlEncode)
+    func urlEncode(_ text: String) -> String
+    /// URL 解码 (对标 java.urlDecode)
+    func urlDecode(_ text: String) -> String
+    /// HTML 转义 (对标 java.encodeHtml)
+    func encodeHtml(_ text: String) -> String
+    /// HTML 反转义 (对标 java.decodeHtml)
+    func decodeHtml(_ text: String) -> String
+    
+    // --- 时间工具 ---
+    /// 获取网络时间 (对标 java.getNetworkTime)
+    func getNetworkTime() -> String
+    
+    // --- HTML 辅助解析 ---
+    /// 获取元素文本 (对标 java.getString)
+    func getString(_ html: String, _ rule: String) -> String
+    
     // --- 交互与日志 ---
-    /// 日志输出
     func log(_ message: Any)
-    /// 弹窗提示
     func toast(_ message: Any)
 }
 
-/// Rhino API 兼容实现类
+/// Rhino API 兼容实现类 (扩展版)
 class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     
-    // 注入当前解析上下文，用于变量持久化
     var currentContext: AnalyzeContext?
     
     func ajax(_ url: String) -> String? {
-        // 调用我们之前在 NetworkManager 中准备好的同步请求方法
         return NetworkManager.shared.requestSync(url)
     }
     
     func put(_ key: String, _ value: Any) {
-        // 存储到上下文的变量池中
         currentContext?.variables[key] = value
     }
     
     func get(_ key: String) -> Any? {
-        // 从上下文获取
         return currentContext?.variables[key]
     }
     
@@ -63,6 +67,45 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     func md5(_ text: String) -> String {
         let digest = Insecure.MD5.hash(data: Data(text.utf8))
         return digest.map { String(format: "%02hhx", $0) }.joined()
+    }
+    
+    func urlEncode(_ text: String) -> String {
+        return text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? text
+    }
+    
+    func urlDecode(_ text: String) -> String {
+        return text.removingPercentEncoding ?? text
+    }
+    
+    func encodeHtml(_ text: String) -> String {
+        // 基础 HTML 转义实现
+        var result = text
+        let mapping = ["&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&apos;"]
+        for (key, value) in mapping {
+            result = result.replacingOccurrences(of: key, with: value)
+        }
+        return result
+    }
+    
+    func decodeHtml(_ text: String) -> String {
+        // 使用内置的 NSAttributedString 进行复杂的 HTML 解构
+        guard let data = text.data(using: .utf8) else { return text }
+        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+            .documentType: NSAttributedString.DocumentType.html,
+            .characterEncoding: String.Encoding.utf8.rawValue
+        ]
+        return (try? NSAttributedString(data: data, options: options, documentAttributes: nil).string) ?? text
+    }
+    
+    func getNetworkTime() -> String {
+        // 简单返回当前系统毫秒数 (Legado 常用作时间戳)
+        return String(Int64(Date().timeIntervalSince1970 * 1000))
+    }
+    
+    func getString(_ html: String, _ rule: String) -> String {
+        // 调用 HTMLParser (阶段 4 会完善，此处先提供基础逻辑)
+        // 简单模拟：如果 rule 是 CSS，尝试提取
+        return "" // TODO: 整合 HTMLParser
     }
     
     func log(_ message: Any) {
