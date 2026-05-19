@@ -1,6 +1,7 @@
 import Foundation
 
-/// 规则执行器 (列表支持版)
+/// 增强型规则执行器 (V2.0 终极版)
+/// 目标：100% 还原 Android 版链式解析逻辑
 class RuleExecutor {
     static let shared = RuleExecutor()
     
@@ -8,46 +9,91 @@ class RuleExecutor {
     private let htmlParser = HTMLParser.shared
     private let jsonEngine = JSONPathEngine.shared
     
-    /// 执行解析逻辑（单条结果）
+    /// 执行解析逻辑（单条结果，支持链式）
     func execute(_ rule: String, in context: inout AnalyzeContext) -> String? {
-        let ruleInfo = RuleParser.shared.parse(rule)
-        guard let input = context.result as? String else { return nil }
+        let segments = RuleParser.shared.parseChain(rule)
+        guard !segments.isEmpty else { return nil }
         
-        switch ruleInfo.type {
-        case .js:
-            return jsEngine.evaluateRule(ruleInfo.content, in: &context)
-        case .json:
-            let jsonResult = jsonEngine.extract(json: input, path: ruleInfo.content)
-            return "\(jsonResult ?? "")"
-        case .xpath, .defaultRule:
-            return htmlParser.text(input, query: ruleInfo.content)
-        case .regex:
-            return applyRegex(input, pattern: ruleInfo.content)
+        var currentInput: Any? = context.result
+        
+        for segment in segments {
+            guard let input = currentInput as? String else { break }
+            var tempContext = context
+            tempContext.result = input
+            
+            switch segment.type {
+            case .js:
+                currentInput = jsEngine.evaluateRule(segment.content, in: &tempContext)
+            case .json:
+                currentInput = jsonEngine.extract(json: input, path: segment.content)
+            case .xpath:
+                currentInput = htmlParser.xpathText(input, xpath: segment.content)
+            case .defaultRule:
+                currentInput = htmlParser.text(input, query: segment.content)
+            case .regex:
+                currentInput = applyRegex(input, pattern: segment.content)
+            }
+            
+            context.variables = tempContext.variables
         }
+        
+        return currentInput as? String
     }
     
-    /// 执行解析逻辑（列表结果）
-    /// 目标：支持搜索列表和目录列表的提取
+    /// 执行解析逻辑（列表版，支持链式）
     func executeList(_ rule: String, in context: inout AnalyzeContext) -> [String] {
-        let ruleInfo = RuleParser.shared.parse(rule)
-        guard let input = context.result as? String else { return [] }
+        let segments = RuleParser.shared.parseChain(rule)
+        guard !segments.isEmpty else { return [] }
         
-        switch ruleInfo.type {
-        case .js:
-            // TODO: JS 引擎需要支持返回数组
-            let result = jsEngine.evaluateRule(ruleInfo.content, in: &context)
-            return result?.components(separatedBy: ",") ?? []
-        case .json:
-            let jsonResult = jsonEngine.extract(json: input, path: ruleInfo.content)
-            if let array = jsonResult as? [Any] {
-                return array.map { "\($0)" }
+        var currentInputs: [String] = [context.result as? String].compactMap { $0 }
+        
+        for (index, segment) in segments.enumerated() {
+            var nextInputs: [String] = []
+            
+            for input in currentInputs {
+                var tempContext = context
+                tempContext.result = input
+                
+                if index == segments.count - 1 {
+                    // 最后一节，尝试产生列表
+                    switch segment.type {
+                    case .xpath:
+                        nextInputs.append(contentsOf: htmlParser.xpathList(input, xpath: segment.content))
+                    case .defaultRule:
+                        nextInputs.append(contentsOf: htmlParser.cssList(input, query: segment.content))
+                    case .json:
+                        if let array = jsonEngine.extract(json: input, path: segment.content) as? [Any] {
+                            nextInputs.append(contentsOf: array.map { "\($0)" })
+                        }
+                    case .js:
+                        let jsResult = jsEngine.evaluateRule(segment.content, in: &tempContext)
+                        nextInputs.append(contentsOf: jsResult?.components(separatedBy: ",") ?? [])
+                    default:
+                        if let single = executeSegment(segment, input: input, context: &tempContext) {
+                            nextInputs.append(single)
+                        }
+                    }
+                } else {
+                    // 中间节，保持单条流转
+                    if let single = executeSegment(segment, input: input, context: &tempContext) {
+                        nextInputs.append(single)
+                    }
+                }
+                context.variables = tempContext.variables
             }
-            return []
-        case .xpath, .defaultRule:
-            return htmlParser.cssList(input, query: ruleInfo.content)
-        case .regex:
-            // 正则暂不支持直接返回列表，通常在 JS 中处理
-            return []
+            currentInputs = nextInputs
+        }
+        
+        return currentInputs
+    }
+    
+    private func executeSegment(_ segment: RuleSegment, input: String, context: inout AnalyzeContext) -> String? {
+        switch segment.type {
+        case .js: return jsEngine.evaluateRule(segment.content, in: &context)
+        case .json: return "\(jsonEngine.extract(json: input, path: segment.content) ?? "")"
+        case .xpath: return htmlParser.xpathText(input, xpath: segment.content)
+        case .regex: return applyRegex(input, pattern: segment.content)
+        default: return htmlParser.text(input, query: segment.content)
         }
     }
     

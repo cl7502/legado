@@ -1,7 +1,7 @@
 import Foundation
 import Alamofire
 
-/// 增强型网络请求管理器 (V2.0 完美版)
+/// 增强型网络请求管理器 (V3.0 专业版)
 class NetworkManager {
     static let shared = NetworkManager()
     
@@ -11,65 +11,52 @@ class NetworkManager {
     private init() {
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 30
-        
-        // 集成拦截器
         session = Session(configuration: configuration, interceptor: interceptor)
     }
     
-    /// 执行请求，支持书源动态配置
-    /// - Parameters:
-    ///   - url: 请求地址
-    ///   - method: 方法
-    ///   - source: 书源对象（用于提取 Header 和执行动态脚本）
-    ///   - context: 解析上下文
+    /// 执行请求 (支持 GET/POST)
     func request(
         _ url: String,
         method: HTTPMethod = .get,
-        source: BookSource? = nil,
-        context: inout AnalyzeContext?
+        parameters: [String: Any]? = nil,
+        headers: HTTPHeaders? = nil,
+        source: BookSource? = nil
     ) async throws -> String {
         
-        var headers = HTTPHeaders()
-        
-        // 1. 注入书源定义的静态 Header
+        var finalHeaders = headers ?? HTTPHeaders()
         if let sourceHeaders = source?.headerDictionary {
             for (key, value) in sourceHeaders {
-                headers.add(name: key, value: value)
+                finalHeaders.add(name: key, value: value)
             }
         }
         
-        // 2. TODO: 动态 Header 脚本执行 (在阶段 3 完善后调用 JSEngine)
+        let encoding: ParameterEncoding = method == .get ? URLEncoding.default : JSONEncoding.default
         
-        let request = session.request(url, method: method, headers: headers)
-        
-        // 3. 处理响应并自动转码 (处理 GBK)
+        let request = session.request(url, method: method, parameters: parameters, encoding: encoding, headers: finalHeaders)
         let response = await request.serializingData().response
         
-        // 手动保存 Cookie (由于 Alamofire 拦截器不直接暴露 processResponse)
         interceptor.processResponse(response)
         
         switch response.result {
         case .success(let data):
-            // 使用 EncodingHelper 进行智能解码 (完美解决 GBK 乱码)
-            if let decodedString = EncodingHelper.shared.decode(data) {
-                return decodedString
-            }
-            return String(data: data, encoding: .utf8) ?? ""
+            return EncodingHelper.shared.decode(data) ?? String(data: data, encoding: .utf8) ?? ""
         case .failure(let error):
             throw error
         }
     }
     
-    /// 同步请求方法 (专为 JS 脚本设计)
-    func requestSync(_ url: String, method: String = "GET") -> String? {
+    /// 同步请求 (支持 POST)
+    func requestSync(_ url: String, method: String = "GET", body: String? = nil, headers: [String: String]? = nil) -> String? {
         let semaphore = DispatchSemaphore(value: 0)
         var result: String?
         
-        let headers: HTTPHeaders = [
-            "User-Agent": "Mozilla/5.0 (Legado; iOS)"
-        ]
+        var finalHeaders = HTTPHeaders()
+        headers?.forEach { finalHeaders.add(name: $0.key, value: $0.value) }
         
-        session.request(url, method: HTTPMethod(rawValue: method.uppercased()), headers: headers)
+        let httpMethod = HTTPMethod(rawValue: method.uppercased())
+        let parameters = body?.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        
+        session.request(url, method: httpMethod, parameters: parameters, encoding: httpMethod == .get ? URLEncoding.default : JSONEncoding.default, headers: finalHeaders)
             .responseData { response in
                 if let data = response.data {
                     result = EncodingHelper.shared.decode(data)
