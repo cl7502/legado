@@ -1,8 +1,7 @@
 import Foundation
 import SwiftSoup
 
-/// HTML 解析器 (基于 SwiftSoup)
-/// 目标：对标 JSoup，提供 CSS 选择器和 XPath 支持
+/// HTML 解析器 (增强版)
 class HTMLParser {
     static let shared = HTMLParser()
     
@@ -13,7 +12,7 @@ class HTMLParser {
             let elements = try doc.select(query)
             return elements.array().compactMap { try? $0.outerHtml() }
         } catch {
-            print("❌ [HTML Error]: CSS select failed: \(error)")
+            print("❌ [HTML Error]: CSS select failed: \(query)")
             return []
         }
     }
@@ -29,11 +28,33 @@ class HTMLParser {
         }
     }
     
-    /// 执行 XPath 查询 (SwiftSoup 原生不支持 XPath，后续需通过 JS 引擎或库增强)
-    /// 目前先提供一个降级方案：如果是简单 XPath，转为 CSS
-    func xpath(_ html: String, query: String) -> [String] {
-        // TODO: 真正的 XPath 支持将在 RuleExecutor 中通过桥接实现
-        print("⚠️ [HTML Warning]: XPath logic is being routed via JS Engine or custom library.")
-        return []
+    /// 获取带 HTML 标签的内容 (对标 Android 的 innerHtml)
+    func html(_ html: String, query: String) -> String? {
+        do {
+            let doc = try SwiftSoup.parse(html)
+            let element = try doc.selectFirst(query)
+            return try element?.html()
+        } catch {
+            return nil
+        }
+    }
+    
+    /// 移除指定 CSS 选择器的节点 (用于净化广告)
+    /// - Parameters:
+    ///   - html: 原始 HTML
+    ///   - selectors: 要删除的 CSS 选择器列表
+    /// - Returns: 处理后的 HTML
+    func removeNodes(_ html: String, selectors: [String]) -> String {
+        do {
+            let doc = try SwiftSoup.parse(html)
+            for selector in selectors {
+                let elements = try doc.select(selector)
+                try elements.remove()
+            }
+            return try doc.html()
+        } catch {
+            print("❌ [HTML Error]: Remove nodes failed")
+            return html
+        }
     }
 }
