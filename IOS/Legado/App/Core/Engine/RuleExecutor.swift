@@ -1,7 +1,6 @@
 import Foundation
 
-/// 规则执行器 (解析大脑)
-/// 目标：调度 JS、HTML、JSON 解析引擎，实现流式解析
+/// 规则执行器 (列表支持版)
 class RuleExecutor {
     static let shared = RuleExecutor()
     
@@ -9,35 +8,46 @@ class RuleExecutor {
     private let htmlParser = HTMLParser.shared
     private let jsonEngine = JSONPathEngine.shared
     
-    /// 执行解析逻辑
-    /// - Parameters:
-    ///   - rule: 原始规则字符串
-    ///   - context: 当前解析上下文 (包含 source, result, variables 等)
-    /// - Returns: 解析后的字符串结果
+    /// 执行解析逻辑（单条结果）
     func execute(_ rule: String, in context: inout AnalyzeContext) -> String? {
         let ruleInfo = RuleParser.shared.parse(rule)
+        guard let input = context.result as? String else { return nil }
         
         switch ruleInfo.type {
         case .js:
-            // 1. 调用 JS 引擎执行脚本
             return jsEngine.evaluateRule(ruleInfo.content, in: &context)
-            
         case .json:
-            // 2. 调用 JSONPath 解析
-            guard let jsonStr = context.result as? String else { return nil }
-            let jsonResult = jsonEngine.extract(json: jsonStr, path: ruleInfo.content)
+            let jsonResult = jsonEngine.extract(json: input, path: ruleInfo.content)
             return "\(jsonResult ?? "")"
-            
         case .xpath, .defaultRule:
-            // 3. 调用 HTML/CSS 解析
-            guard let html = context.result as? String else { return nil }
-            // 暂时统一使用 CSS 逻辑，后续通过 JS 引擎增强真正的 XPath
-            return htmlParser.text(html, query: ruleInfo.content)
-            
+            return htmlParser.text(input, query: ruleInfo.content)
         case .regex:
-            // 4. 正则提取逻辑
-            guard let text = context.result as? String else { return nil }
-            return applyRegex(text, pattern: ruleInfo.content)
+            return applyRegex(input, pattern: ruleInfo.content)
+        }
+    }
+    
+    /// 执行解析逻辑（列表结果）
+    /// 目标：支持搜索列表和目录列表的提取
+    func executeList(_ rule: String, in context: inout AnalyzeContext) -> [String] {
+        let ruleInfo = RuleParser.shared.parse(rule)
+        guard let input = context.result as? String else { return [] }
+        
+        switch ruleInfo.type {
+        case .js:
+            // TODO: JS 引擎需要支持返回数组
+            let result = jsEngine.evaluateRule(ruleInfo.content, in: &context)
+            return result?.components(separatedBy: ",") ?? []
+        case .json:
+            let jsonResult = jsonEngine.extract(json: input, path: ruleInfo.content)
+            if let array = jsonResult as? [Any] {
+                return array.map { "\($0)" }
+            }
+            return []
+        case .xpath, .defaultRule:
+            return htmlParser.cssList(input, query: ruleInfo.content)
+        case .regex:
+            // 正则暂不支持直接返回列表，通常在 JS 中处理
+            return []
         }
     }
     

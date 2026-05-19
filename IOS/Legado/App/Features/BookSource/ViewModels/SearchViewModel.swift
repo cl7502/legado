@@ -68,12 +68,28 @@ class SearchViewModel: ObservableObject {
             let html = try await network.request(finalUrl, source: source, context: &context)
             context.result = html
             
-            // 执行搜索列表规则 (阶段 4 完善的规则引擎)
-            // TODO: 这里需要 RuleExecutor 支持返回列表，目前先模拟单条返回
-            if let rule = source.ruleSearchUrl,
-               let _ = ruleExecutor.execute(rule, in: &context) {
-                // 暂时返回一个模拟结果证明流程打通
-                return [SearchResult(name: "示例书籍", author: "示例作者", bookUrl: finalUrl, origin: source.bookSourceUrl, originName: source.bookSourceName)]
+            // 2. 执行搜索列表规则
+            if let listRule = source.ruleSearchUrl {
+                let items = ruleExecutor.executeList(listRule, in: &context)
+                
+                var results: [SearchResult] = []
+                for item in items {
+                    var itemContext = context
+                    itemContext.result = item
+                    
+                    // 提取书名、作者等信息 (此处简化，后续在阶段 4 深度完善)
+                    let name = ruleExecutor.execute(".title@text", in: &itemContext) ?? "未知书名"
+                    let author = ruleExecutor.execute(".author@text", in: &itemContext) ?? "未知作者"
+                    
+                    results.append(SearchResult(
+                        name: name,
+                        author: author,
+                        bookUrl: url,
+                        origin: source.bookSourceUrl,
+                        originName: source.bookSourceName
+                    ))
+                }
+                return results
             }
         } catch {
             print("⚠️ [Search Source Error]: \(source.bookSourceName) - \(error.localizedDescription)")

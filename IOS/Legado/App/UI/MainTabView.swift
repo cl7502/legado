@@ -22,14 +22,14 @@ struct MainTabView: View {
                 .tag(1)
             
             // 3. 书源
-            Text("书源管理开发中")
+            BookSourceListView()
                 .tabItem {
                     Label("书源", systemImage: "network")
                 }
                 .tag(2)
             
             // 4. 设置
-            Text("设置开发中")
+            SettingsView()
                 .tabItem {
                     Label("设置", systemImage: "gearshape.fill")
                 }
