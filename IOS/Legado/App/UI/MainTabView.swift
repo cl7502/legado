@@ -15,7 +15,7 @@ struct MainTabView: View {
                 .tag(0)
             
             // 2. 发现 (搜索)
-            Text("搜索功能开发中")
+            SearchView()
                 .tabItem {
                     Label("搜索", systemImage: "magnifyingglass")
                 }
