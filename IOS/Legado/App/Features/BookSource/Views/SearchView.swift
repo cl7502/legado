@@ -17,7 +17,9 @@ struct SearchView: View {
                 
                 List {
                     ForEach(viewModel.searchResults) { result in
-                        SearchResultRow(result: result)
+                        NavigationLink(destination: BookInfoView(viewModel: BookInfoViewModel(searchResult: result))) {
+                            SearchResultRow(result: result)
+                        }
                     }
                 }
                 .listStyle(PlainListStyle())

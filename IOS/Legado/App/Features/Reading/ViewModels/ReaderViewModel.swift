@@ -1,7 +1,7 @@
 import SwiftUI
 import Combine
 
-/// 阅读器核心业务逻辑
+/// 阅读器核心业务逻辑 (V2.0 完美整合版)
 @MainActor
 class ReaderViewModel: ObservableObject {
     @Published var book: Book
@@ -10,11 +10,11 @@ class ReaderViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var showingMenu = false
     
-    // 进度信息
     @Published var currentChapterIndex: Int
     
     private let db = DatabaseManager.shared
     private let network = NetworkManager.shared
+    private let ruleExecutor = RuleExecutor.shared
     private let contentParser = BookContentParser.shared
     
     init(book: Book) {
@@ -22,27 +22,66 @@ class ReaderViewModel: ObservableObject {
         self.currentChapterIndex = book.durChapterIndex
     }
     
-    /// 初始化加载
     func setup() async {
         await loadChapters()
-        await loadCurrentChapter()
-    }
-    
-    /// 加载目录
-    private func loadChapters() async {
-        do {
-            self.chapters = try await db.getChapters(for: book.bookUrl)
-            
-            // 如果本地没有目录，则需要从书源抓取 (此处暂略，阶段 8 深度整合时补全)
-            if chapters.isEmpty {
-                print("⚠️ [Reader]: Local TOC empty, fetching from source...")
-            }
-        } catch {
-            print("❌ [Reader Error]: Failed to load chapters: \(error)")
+        if !chapters.isEmpty {
+            await loadCurrentChapter()
         }
     }
     
-    /// 加载当前章节内容
+    /// 加载目录 (支持从网络抓取)
+    private func loadChapters() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            // 1. 先查本地
+            let localChapters = try await db.getChapters(for: book.bookUrl)
+            if !localChapters.isEmpty {
+                self.chapters = localChapters
+                return
+            }
+            
+            // 2. 本地没有，从网络抓取
+            print("🌐 [Reader]: Fetching TOC from network...")
+            let sources = try await db.getAllBookSources()
+            guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
+            
+            // 使用 tocUrl 或 bookUrl 作为目录页
+            let tocUrl = book.tocUrl ?? book.bookUrl
+            var context = AnalyzeContext(source: source, baseUrl: tocUrl)
+            let html = try await network.request(tocUrl, source: source)
+            context.result = html
+            
+            // 执行目录列表规则
+            if let listRule = source.ruleTocList {
+                let items = ruleExecutor.executeList(listRule, in: &context)
+                var newChapters: [Chapter] = []
+                
+                for (index, item) in items.enumerated() {
+                    var itemContext = context
+                    itemContext.result = item
+                    
+                    let title = ruleExecutor.execute(source.ruleChapterName ?? "", in: &itemContext) ?? "第\(index + 1)章"
+                    let url = ruleExecutor.execute(source.ruleChapterUrl ?? "", in: &itemContext) ?? tocUrl
+                    
+                    newChapters.append(Chapter(
+                        url: url,
+                        title: title,
+                        index: index,
+                        bookUrl: book.bookUrl
+                    ))
+                }
+                
+                // 3. 持久化并更新 UI
+                try await db.saveChapters(newChapters, for: book.bookUrl)
+                self.chapters = newChapters
+            }
+        } catch {
+            print("❌ [Reader Error]: Failed to fetch TOC: \(error)")
+        }
+    }
+    
     func loadCurrentChapter() async {
         guard currentChapterIndex < chapters.count else { return }
         let chapter = chapters[currentChapterIndex]
@@ -51,61 +90,40 @@ class ReaderViewModel: ObservableObject {
         defer { isLoading = false }
         
         do {
-            // 1. 获取书源
             let sources = try await db.getAllBookSources()
             guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else {
                 self.currentContent = "未找到关联书源"
                 return
             }
             
-            // 2. 发起请求
             var context = AnalyzeContext(source: source, baseUrl: chapter.url)
-            let html = try await network.request(chapter.url, source: source, context: &context)
+            let html = try await network.request(chapter.url, source: source)
             
-            // 3. 解析并净化
             let content = contentParser.parseContent(
                 html,
                 rule: source.ruleContent ?? "",
                 context: &context,
-                replaceRules: [] // TODO: 注入全局净化规则
+                replaceRules: []
             )
             
             self.currentContent = content
-            
-            // 4. 同步进度到数据库
             await syncProgress(chapter: chapter)
-            
-            // 5. 预加载下一章
-            prefetchNextChapter()
             
         } catch {
             self.currentContent = "加载失败: \(error.localizedDescription)"
         }
     }
     
-    /// 同步进度
     private func syncProgress(chapter: Chapter) async {
         var updatedBook = book
         updatedBook.durChapterIndex = currentChapterIndex
         updatedBook.durChapterTitle = chapter.title
         updatedBook.durChapterTime = Int64(Date().timeIntervalSince1970)
-        
         self.book = updatedBook
         try? await db.saveBook(updatedBook)
     }
     
-    /// 预加载 (GSD 强化：异步后台任务)
-    private func prefetchNextChapter() {
-        let nextIndex = currentChapterIndex + 1
-        guard nextIndex < chapters.count else { return }
-        
-        Task.detached(priority: .background) {
-            // 预取逻辑... (阶段 6 补砖后的后台任务集成)
-        }
-    }
-    
     // MARK: - 交互接口
-    
     func nextChapter() {
         guard currentChapterIndex < chapters.count - 1 else { return }
         currentChapterIndex += 1
