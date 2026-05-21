@@ -96,6 +96,12 @@ extension DatabaseManager {
     
     // --- 书源操作 ---
     
+    func deleteBookSource(_ source: BookSource) async throws {
+        try await dbPool.write { db in
+            try BookSource.filter(Column("bookSourceUrl") == source.bookSourceUrl).deleteAll(db)
+        }
+    }
+    
     func saveBookSources(_ sources: [BookSource]) async throws {
         try await dbPool.write { db in
             for source in sources {
@@ -149,6 +155,16 @@ extension DatabaseManager {
         try await dbPool.read { db in
             try Chapter.filter(Column("bookUrl") == bookUrl)
                 .order(Column("index").asc)
+                .fetchAll(db)
+        }
+    }
+    
+    // --- 净化规则操作 ---
+    
+    func getReplaceRules() async throws -> [ReplaceRule] {
+        try await dbPool.read { db in
+            try ReplaceRule.filter(Column("isEnabled") == true)
+                .order(Column("order").asc)
                 .fetchAll(db)
         }
     }

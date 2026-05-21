@@ -20,6 +20,10 @@ struct SettingsView: View {
                     Button(role: .destructive, action: { viewModel.clearCookies() }) {
                         Text("清理所有 Cookie (注销登录)")
                     }
+                    
+                    Button(role: .destructive, action: { viewModel.clearDatabase() }) {
+                        Text("重置数据库 (清空所有书源与书籍)")
+                    }
                 }
                 
                 Section(header: Text("关于")) {

@@ -47,10 +47,7 @@ class BookSourceViewModel: ObservableObject {
     
     /// 删除书源
     func deleteSource(_ source: BookSource) async {
-        // TODO: 在 DatabaseManager 中实现删除逻辑
-        try? await db.dbPool.write { db in
-            try BookSource.filter(Column("bookSourceUrl") == source.bookSourceUrl).deleteAll(db)
-        }
+        try? await db.deleteBookSource(source)
         await loadSources()
     }
 }

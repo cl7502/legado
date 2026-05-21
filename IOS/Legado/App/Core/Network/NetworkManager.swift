@@ -20,14 +20,28 @@ class NetworkManager {
         method: HTTPMethod = .get,
         parameters: [String: Any]? = nil,
         headers: HTTPHeaders? = nil,
-        source: BookSource? = nil
+        source: BookSource? = nil,
+        context: inout AnalyzeContext? = nil
     ) async throws -> String {
         
         var finalHeaders = headers ?? HTTPHeaders()
+        
+        // 1. 注入书源定义的静态 Header
         if let sourceHeaders = source?.headerDictionary {
             for (key, value) in sourceHeaders {
                 finalHeaders.add(name: key, value: value)
             }
+        }
+        
+        // 2. 动态 Header 脚本执行
+        if let source = source, let loginCheckJs = source.loginCheckJs, var ctx = context {
+            if let dynamicHeaderJson = LegadoJSEngine.shared.evaluateRule(loginCheckJs, in: &ctx) {
+                if let data = dynamicHeaderJson.data(using: .utf8),
+                   let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+                    dict.forEach { finalHeaders.add(name: $0.key, value: $0.value) }
+                }
+            }
+            context = ctx // 写回上下文
         }
         
         let encoding: ParameterEncoding = method == .get ? URLEncoding.default : JSONEncoding.default

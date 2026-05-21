@@ -14,17 +14,9 @@ struct ReaderView: View {
                 .ignoresSafeArea()
             
             // 2. 正文层 (仿真分页容器)
-            // 使用 TabView 模拟水平翻页体验
-            TabView(selection: $viewModel.currentChapterIndex) {
-                ForEach(0..<viewModel.chapters.count, id: \.self) { index in
-                    ReaderPageContent(content: viewModel.currentContent, chapterTitle: viewModel.chapters[index].title)
-                        .tag(index)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .onChange(of: viewModel.currentChapterIndex) { _ in
-                Task { await viewModel.loadCurrentChapter() }
-            }
+            // 使用 UIKit 桥接实现的仿真翻页引擎
+            SimulationPagingView(viewModel: viewModel)
+                .ignoresSafeArea()
             
             // 3. 透明点击层 (三段式分区交互)
             // 注意：在 TabView 模式下，左右点击层可能与滑动冲突，此处优先支持滑动，点击中间唤起菜单
@@ -142,6 +134,14 @@ struct ReaderMenuView: View {
                 .padding(.horizontal)
                 
                 HStack(spacing: 40) {
+                    Button(action: { viewModel.toggleTTS() }) {
+                        VStack {
+                            Image(systemName: viewModel.isTTSEnabled ? "headphones.circle.fill" : "headphones")
+                                .foregroundColor(viewModel.isTTSEnabled ? .blue : .primary)
+                            Text("朗读").font(.caption2)
+                        }
+                    }
+                    
                     Button(action: { showingTOC = true }) {
                         VStack { Image(systemName: "list.bullet"); Text("目录").font(.caption2) }
                     }

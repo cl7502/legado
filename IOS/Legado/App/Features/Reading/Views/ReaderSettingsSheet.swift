@@ -30,7 +30,21 @@ struct ReaderSettingsSheet: View {
             }
             .padding(.horizontal)
             
-            // 3. 主题选择
+            // 3. 朗读语速 (TTS)
+            HStack {
+                Text("朗读语速")
+                Spacer()
+                Slider(value: Binding(
+                    get: { Double(TTSManager.shared.rate) },
+                    set: { TTSManager.shared.rate = Float($0) }
+                ), in: 0.1...1.0)
+                .frame(width: 150)
+                Text(String(format: "%.1fx", TTSManager.shared.rate * 2)) // 转换为常规倍速显示
+                    .frame(width: 40)
+            }
+            .padding(.horizontal)
+            
+            // 4. 主题选择
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 15) {
                     ForEach(ReaderTheme.allThemes) { theme in

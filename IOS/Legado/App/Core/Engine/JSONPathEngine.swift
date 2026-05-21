@@ -22,11 +22,23 @@ class JSONPathEngine {
         var current: Any? = jsonObject
         
         for part in parts {
+            var key = part
+            var arrayIndex: Int?
+            
+            // 处理索引语法 like list[0]
+            if let indexRange = part.range(of: "\\[(\\d+)\\]", options: .regularExpression) {
+                let indexStr = part[indexRange].replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
+                arrayIndex = Int(indexStr)
+                key = String(part[..<indexRange.lowerBound])
+            }
+            
             if let dict = current as? [String: Any] {
-                current = dict[part]
-            } else if let array = current as? [[String: Any]], part.contains("[*]") {
-                // 简单处理数组全选
-                return array // 返回整个数组，供后续循环处理
+                current = dict[key]
+                if let index = arrayIndex, let array = current as? [Any], index < array.count {
+                    current = array[index]
+                }
+            } else if let array = current as? [Any], part.contains("[*]") {
+                return array 
             } else {
                 return nil
             }

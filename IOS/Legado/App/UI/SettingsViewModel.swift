@@ -15,4 +15,13 @@ class SettingsViewModel: ObservableObject {
     func clearCookies() {
         CookieManager.shared.clearAll()
     }
+    
+    func clearDatabase() {
+        Task {
+            try? await DatabaseManager.shared.dbPool.write { db in
+                try db.execute(sql: "DELETE FROM book_source")
+                try db.execute(sql: "DELETE FROM book")
+            }
+        }
+    }
 }
