@@ -52,22 +52,88 @@ class BookSourceViewModel: ObservableObject {
     }
 }
 
-/// 书源导入解析器
+/// 书源导入解析器 — 支持 Android 嵌套 JSON 格式
 class BookSourceImporter {
     func parse(_ jsonString: String) -> [BookSource] {
         guard let data = jsonString.data(using: .utf8) else { return [] }
+
+        // 先解析为原始字典数组
+        let rawObjects: [[String: Any]]
+        if let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            rawObjects = arr
+        } else if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            rawObjects = [obj]
+        } else {
+            return []
+        }
+
+        // 将 Android 嵌套格式展平为 iOS 扁平字段
+        let flattened = rawObjects.map { flattenAndroidFormat($0) }
+        guard let flatData = try? JSONSerialization.data(withJSONObject: flattened) else { return [] }
+
         let decoder = JSONDecoder()
-        
-        // 尝试解析为数组
-        if let sources = try? decoder.decode([BookSource].self, from: data) {
-            return sources
+        return (try? decoder.decode([BookSource].self, from: flatData)) ?? []
+    }
+
+    // 将 Android BookSource JSON（嵌套规则对象）转换为 iOS 扁平字段
+    private func flattenAndroidFormat(_ obj: [String: Any]) -> [String: Any] {
+        var flat = obj
+
+        // ruleSearch → ruleSearch* 扁平字段
+        if let rs = obj["ruleSearch"] as? [String: Any] {
+            flat["ruleSearchList"]        = rs["bookList"]
+            flat["ruleSearchName"]        = rs["name"]
+            flat["ruleSearchAuthor"]      = rs["author"]
+            flat["ruleSearchKind"]        = rs["kind"]
+            flat["ruleSearchLastChapter"] = rs["lastChapter"]
+            flat["ruleSearchCoverUrl"]    = rs["coverUrl"]
+            flat["ruleSearchNoteUrl"]     = rs["bookUrl"]
+            flat.removeValue(forKey: "ruleSearch")
         }
-        
-        // 尝试解析为单体
-        if let source = try? decoder.decode(BookSource.self, from: data) {
-            return [source]
+
+        // ruleBookInfo → ruleBook* 扁平字段
+        if let rbi = obj["ruleBookInfo"] as? [String: Any] {
+            flat["ruleBookInfoInit"]    = rbi["init"]
+            flat["ruleBookName"]        = rbi["name"]
+            flat["ruleBookAuthor"]      = rbi["author"]
+            flat["ruleBookIntro"]       = rbi["intro"]
+            flat["ruleBookKind"]        = rbi["kind"]
+            flat["ruleBookLastChapter"] = rbi["lastChapter"]
+            flat["ruleBookCoverUrl"]    = rbi["coverUrl"]
+            flat["ruleTocUrl"]          = rbi["tocUrl"]
+            flat.removeValue(forKey: "ruleBookInfo")
         }
-        
-        return []
+
+        // ruleToc → ruleToc*/ruleChapter* 扁平字段
+        if let toc = obj["ruleToc"] as? [String: Any] {
+            flat["ruleTocList"]      = toc["chapterList"]
+            flat["ruleChapterName"]  = toc["chapterName"]
+            flat["ruleChapterUrl"]   = toc["chapterUrl"]
+            flat["ruleChapterVip"]   = toc["isVolume"]
+            flat["ruleTocNextUrl"]   = toc["nextTocUrl"]
+            flat.removeValue(forKey: "ruleToc")
+        }
+
+        // ruleContent: 可能是嵌套对象或直接字符串
+        if let contentObj = obj["ruleContent"] as? [String: Any] {
+            flat["ruleContent"]        = contentObj["content"]
+            flat["ruleContentNextUrl"] = contentObj["nextContentUrl"]
+            flat["ruleContentReplace"] = contentObj["replaceRegex"]
+            flat.removeValue(forKey: "ruleContent") // 移除嵌套对象，用字符串字段替代
+        }
+        // 若 ruleContent 已是字符串则保持不变
+
+        // ruleExplore → ruleExplore* 扁平字段
+        if let ex = obj["ruleExplore"] as? [String: Any] {
+            flat["ruleExploreList"]    = ex["bookList"]
+            flat["ruleExploreName"]    = ex["name"]
+            flat["ruleExploreAuthor"]  = ex["author"]
+            flat["ruleExploreKind"]    = ex["kind"]
+            flat["ruleExploreCoverUrl"] = ex["coverUrl"]
+            flat["ruleExploreNoteUrl"] = ex["bookUrl"]
+            flat.removeValue(forKey: "ruleExplore")
+        }
+
+        return flat
     }
 }

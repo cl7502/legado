@@ -88,7 +88,7 @@ class ChapterPageViewController: UIViewController {
         addChild(hostingController)
         view.addSubview(hostingController.view)
         hostingController.view.frame = view.bounds
-        hostingController.view.autoresizingMask = [.flexibleWidth, .autoresizingMask]
+        hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         hostingController.didMove(toParent: self)
         
         // 继承背景色

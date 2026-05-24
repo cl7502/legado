@@ -1,38 +1,40 @@
 import Foundation
 
-/// 书源模型 (V2.0 工业级版)
-/// 目标：100% 物理与逻辑对标 Android 版 BookSource.kt
+/// 书源模型 — 完整对标 Android BookSource.kt
 struct BookSource: Codable, Identifiable, Equatable {
     var id: String { bookSourceUrl }
-    
+
     // --- 基础信息 ---
     var bookSourceUrl: String = ""
     var bookSourceName: String = ""
     var bookSourceGroup: String?
-    var bookSourceType: Int = 0 
+    var bookSourceType: Int = 0
     var bookSourceComment: String?
     var customOrder: Int = 0
     var enabled: Bool = true
     var lastUpdateTime: Int64 = 0
-    
+    var weight: Int = 0
+    var bookUrlPattern: String?
+    var jsLib: String?
+
     // --- 登录与并发 ---
     var loginUrl: String?
     var loginUi: String?
     var loginCheckJs: String?
     var concurrentRate: String?
-    var header: String? 
-    
-    // --- 搜索规则 (Search) ---
+    var header: String?
+
+    // --- 搜索规则 ---
     var searchUrl: String?
-    var ruleSearchList: String?        // 对应 bookList
-    var ruleSearchName: String?        // 对应 name
-    var ruleSearchAuthor: String?      // 对应 author
-    var ruleSearchKind: String?        // 对应 kind
-    var ruleSearchLastChapter: String? // 对应 lastChapter
-    var ruleSearchCoverUrl: String?    // 对应 coverUrl
-    var ruleSearchNoteUrl: String?     // 对应 bookUrl
-    
-    // --- 详情页规则 (BookInfo) ---
+    var ruleSearchList: String?
+    var ruleSearchName: String?
+    var ruleSearchAuthor: String?
+    var ruleSearchKind: String?
+    var ruleSearchLastChapter: String?
+    var ruleSearchCoverUrl: String?
+    var ruleSearchNoteUrl: String?
+
+    // --- 详情页规则 ---
     var ruleBookInfoInit: String?
     var ruleBookName: String?
     var ruleBookAuthor: String?
@@ -41,60 +43,56 @@ struct BookSource: Codable, Identifiable, Equatable {
     var ruleBookLastChapter: String?
     var ruleBookCoverUrl: String?
     var ruleTocUrl: String?
-    
-    // --- 目录规则 (TOC) ---
+
+    // --- 目录规则 ---
     var ruleTocList: String?
     var ruleChapterName: String?
     var ruleChapterUrl: String?
     var ruleChapterVip: String?
-    
-    // --- 正文规则 (Content) ---
+    var ruleTocNextUrl: String?
+
+    // --- 正文规则 ---
     var ruleContent: String?
+    var ruleContentNextUrl: String?
     var ruleContentReplace: String?
-    
-    // --- 其他 ---
+
+    // --- 发现规则 ---
     var exploreUrl: String?
+    var ruleExploreList: String?
+    var ruleExploreName: String?
+    var ruleExploreAuthor: String?
+    var ruleExploreKind: String?
+    var ruleExploreCoverUrl: String?
+    var ruleExploreNoteUrl: String?
+
+    // --- 其他 ---
     var enabledCookieJar: Bool = false
     var variableComment: String?
     var respondTime: Int64 = 0
 
-    // 自定义 CodingKeys 处理 Android JSON 的嵌套结构
     enum CodingKeys: String, CodingKey {
         case bookSourceUrl, bookSourceName, bookSourceGroup, bookSourceType
-        case bookSourceComment, customOrder, enabled, lastUpdateTime
+        case bookSourceComment, customOrder, enabled, lastUpdateTime, weight
+        case bookUrlPattern, jsLib
         case loginUrl, loginUi, loginCheckJs, concurrentRate, header
         case searchUrl, exploreUrl, enabledCookieJar, variableComment, respondTime
-        
-        // 嵌套的规则字段通常在 JSON 中是扁平的或有前缀
-        case ruleSearchList = "ruleSearchList"
-        case ruleSearchName = "ruleSearchName"
-        case ruleSearchAuthor = "ruleSearchAuthor"
-        case ruleSearchKind = "ruleSearchKind"
-        case ruleSearchLastChapter = "ruleSearchLastChapter"
-        case ruleSearchCoverUrl = "ruleSearchCoverUrl"
-        case ruleSearchNoteUrl = "ruleSearchNoteUrl"
-        
-        case ruleBookName = "ruleBookName"
-        case ruleBookAuthor = "ruleBookAuthor"
-        case ruleBookIntro = "ruleBookIntro"
-        case ruleBookKind = "ruleBookKind"
-        case ruleBookCoverUrl = "ruleBookCoverUrl"
-        case ruleTocUrl = "ruleTocUrl"
-        
-        case ruleTocList = "ruleTocList"
-        case ruleChapterName = "ruleChapterName"
-        case ruleChapterUrl = "ruleChapterUrl"
-        
-        case ruleContent = "ruleContent"
+        case ruleSearchList, ruleSearchName, ruleSearchAuthor, ruleSearchKind
+        case ruleSearchLastChapter, ruleSearchCoverUrl, ruleSearchNoteUrl
+        case ruleBookInfoInit, ruleBookName, ruleBookAuthor, ruleBookIntro
+        case ruleBookKind, ruleBookLastChapter, ruleBookCoverUrl, ruleTocUrl
+        case ruleTocList, ruleChapterName, ruleChapterUrl, ruleChapterVip, ruleTocNextUrl
+        case ruleContent, ruleContentNextUrl, ruleContentReplace
+        case ruleExploreList, ruleExploreName, ruleExploreAuthor
+        case ruleExploreKind, ruleExploreCoverUrl, ruleExploreNoteUrl
     }
 }
 
+// MARK: - 工具属性
 extension BookSource {
     var headerDictionary: [String: String] {
         guard let data = header?.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] else {
-            return [:]
-        }
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String]
+        else { return [:] }
         return dict
     }
 }

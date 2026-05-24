@@ -59,7 +59,45 @@ class NetworkManager {
         }
     }
     
-    /// 同步请求 (支持 POST)
+    /// POST 请求（body 为 JSON 字符串或表单字符串）
+    func requestPost(
+        _ url: String,
+        body: String,
+        source: BookSource? = nil,
+        headers: HTTPHeaders? = nil
+    ) async throws -> String {
+        var finalHeaders = headers ?? HTTPHeaders()
+        if let sourceHeaders = source?.headerDictionary {
+            sourceHeaders.forEach { finalHeaders.add(name: $0.key, value: $0.value) }
+        }
+
+        // 尝试解析为 JSON，否则按表单发送
+        var parameters: [String: Any]?
+        var encoding: ParameterEncoding = URLEncoding.httpBody
+        if let data = body.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            parameters = json
+            encoding = JSONEncoding.default
+        } else {
+            // 表单格式 key=val&key2=val2
+            parameters = body.components(separatedBy: "&").reduce(into: [:]) { dict, pair in
+                let kv = pair.components(separatedBy: "=")
+                if kv.count == 2 { dict[kv[0]] = kv[1].removingPercentEncoding ?? kv[1] }
+            }
+        }
+
+        let request = session.request(url, method: .post, parameters: parameters,
+                                      encoding: encoding, headers: finalHeaders)
+        let response = await request.serializingData().response
+        interceptor.processResponse(response)
+
+        switch response.result {
+        case .success(let data):
+            return EncodingHelper.shared.decode(data) ?? String(data: data, encoding: .utf8) ?? ""
+        case .failure(let error):
+            throw error
+        }
+    }
     func requestSync(_ url: String, method: String = "GET", body: String? = nil, headers: [String: String]? = nil) -> String? {
         let semaphore = DispatchSemaphore(value: 0)
         var result: String?

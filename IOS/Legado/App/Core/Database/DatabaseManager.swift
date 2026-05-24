@@ -86,6 +86,88 @@ class DatabaseManager {
             }
         }
         
+        // v2: 补充所有规则字段列（v1 只有 JSON blob 列，规则字段全部缺失）
+        migrator.registerMigration("v2-rule-columns") { db in
+            try db.alter(table: "book_source") { t in
+                t.add(column: "bookSourceComment",    .text)
+                t.add(column: "weight",               .integer).defaults(to: 0)
+                t.add(column: "bookUrlPattern",       .text)
+                t.add(column: "jsLib",                .text)
+                t.add(column: "loginUrl",             .text)
+                t.add(column: "loginUi",              .text)
+                t.add(column: "loginCheckJs",         .text)
+                t.add(column: "concurrentRate",       .text)
+                t.add(column: "enabledCookieJar",     .boolean).defaults(to: false)
+                t.add(column: "variableComment",      .text)
+                t.add(column: "respondTime",          .integer).defaults(to: 0)
+                // 搜索规则
+                t.add(column: "ruleSearchList",       .text)
+                t.add(column: "ruleSearchName",       .text)
+                t.add(column: "ruleSearchAuthor",     .text)
+                t.add(column: "ruleSearchKind",       .text)
+                t.add(column: "ruleSearchLastChapter",.text)
+                t.add(column: "ruleSearchCoverUrl",   .text)
+                t.add(column: "ruleSearchNoteUrl",    .text)
+                // 详情页规则
+                t.add(column: "ruleBookInfoInit",     .text)
+                t.add(column: "ruleBookName",         .text)
+                t.add(column: "ruleBookAuthor",       .text)
+                t.add(column: "ruleBookIntro",        .text)
+                t.add(column: "ruleBookKind",         .text)
+                t.add(column: "ruleBookLastChapter",  .text)
+                t.add(column: "ruleBookCoverUrl",     .text)
+                t.add(column: "ruleTocUrl",           .text)
+                // 目录规则
+                t.add(column: "ruleTocList",          .text)
+                t.add(column: "ruleChapterName",      .text)
+                t.add(column: "ruleChapterUrl",       .text)
+                t.add(column: "ruleChapterVip",       .text)
+                t.add(column: "ruleTocNextUrl",       .text)
+                // 正文规则（ruleContent 已在 v1，只补其余）
+                t.add(column: "ruleContentNextUrl",   .text)
+                t.add(column: "ruleContentReplace",   .text)
+                // 发现规则
+                t.add(column: "ruleExploreList",      .text)
+                t.add(column: "ruleExploreName",      .text)
+                t.add(column: "ruleExploreAuthor",    .text)
+                t.add(column: "ruleExploreKind",      .text)
+                t.add(column: "ruleExploreCoverUrl",  .text)
+                t.add(column: "ruleExploreNoteUrl",   .text)
+            }
+        }
+
+        // v3: 书籍表补充缺失列
+        migrator.registerMigration("v3-book-columns") { db in
+            try db.alter(table: "book") { t in
+                t.add(column: "kind",               .text)
+                t.add(column: "wordCount",          .text)
+                t.add(column: "intro",              .text)
+                t.add(column: "originName",         .text)
+                t.add(column: "variable",           .text)
+                t.add(column: "infoHtml",           .text)
+                t.add(column: "totalChapterNum",    .integer).defaults(to: 0)
+                t.add(column: "latestChapterTitle", .text)
+                t.add(column: "latestChapterUrl",   .text)
+                t.add(column: "durChapterTitle",    .text)
+                t.add(column: "lastCheckTime",      .integer).defaults(to: 0)
+                t.add(column: "canUpdate",          .boolean).defaults(to: true)
+                t.add(column: "useReplaceRule",     .boolean).defaults(to: true)
+                t.add(column: "tocUrl",             .text)
+            }
+        }
+
+        // v4: 章节表补充缺失列
+        migrator.registerMigration("v4-chapter-columns") { db in
+            try db.alter(table: "book_chapter") { t in
+                t.add(column: "tag",         .text)
+                t.add(column: "volume",      .text)
+                t.add(column: "resourceUrl", .text)
+                t.add(column: "pay",         .boolean).defaults(to: false)
+                t.add(column: "vip",         .boolean).defaults(to: false)
+                t.add(column: "updateTime",  .integer).defaults(to: 0)
+            }
+        }
+
         return migrator
     }
 }

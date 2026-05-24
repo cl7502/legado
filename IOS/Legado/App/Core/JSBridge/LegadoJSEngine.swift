@@ -1,60 +1,59 @@
 import Foundation
 import JavaScriptCore
 
-/// Legado 核心 JS 引擎 (GSD 强化版)
-/// 目标：100% 模拟 Rhino 环境，支持书源规则执行
+/// Legado JS 引擎 — 串行队列保证并发安全
 class LegadoJSEngine {
     static let shared = LegadoJSEngine()
-    
+
     private let context: JSContext
     private let javaHelper: JSJavaHelper
-    
+    // 串行队列：所有 JS 执行在同一线程上依次进行，避免 JSContext 竞态
+    private let queue = DispatchQueue(label: "com.legado.jsengine", qos: .userInteractive)
+
     init() {
         self.context = JSContext()
         self.javaHelper = JSJavaHelper()
         setupContext()
     }
-    
+
     private func setupContext() {
-        // 配置异常处理
-        context.exceptionHandler = { context, exception in
-            let error = exception?.toString() ?? "unknown error"
-            print("❌ [JS Error]: \(error)")
+        context.exceptionHandler = { _, exception in
+            print("❌ [JS Error]: \(exception?.toString() ?? "unknown")")
         }
-        
-        // 注入 java 对象 (Rhino 兼容桥梁)
         context.setObject(javaHelper, forKeyedSubscript: "java" as (NSCopying & NSObjectProtocol))
-        
-        // 注入全局基础变量
         context.setObject("", forKeyedSubscript: "baseUrl" as (NSCopying & NSObjectProtocol))
     }
-    
-    /// 执行规则脚本
-    /// - Parameters:
-    ///   - script: JS 规则代码
-    ///   - analyzeContext: 解析上下文（包含书源、变量、上级结果）
+
+    /// 执行规则脚本（线程安全）
     func evaluateRule(_ script: String, in analyzeContext: inout AnalyzeContext) -> String? {
-        // 1. 同步上下文到桥接对象
-        javaHelper.currentContext = analyzeContext
-        
-        // 2. 注入 JS 全局环境
-        context.setObject(analyzeContext.baseUrl, forKeyedSubscript: "baseUrl" as (NSCopying & NSObjectProtocol))
-        
-        // 如果有上级结果，注入为 result 变量
-        if let result = analyzeContext.result {
-            context.setObject(result, forKeyedSubscript: "result" as (NSCopying & NSObjectProtocol))
+        // 将 inout 值复制出来，因为闭包不能捕获 inout
+        var ctx = analyzeContext
+        var resultString: String?
+
+        queue.sync { [weak self] in
+            guard let self = self else { return }
+
+            self.javaHelper.currentContext = ctx
+            self.context.setObject(ctx.baseUrl as AnyObject,
+                                   forKeyedSubscript: "baseUrl" as (NSCopying & NSObjectProtocol))
+            if let res = ctx.result as? String {
+                self.context.setObject(res as AnyObject,
+                                       forKeyedSubscript: "result" as (NSCopying & NSObjectProtocol))
+            }
+
+            let jsValue = self.context.evaluateScript(script)
+            // 写回变量（JS 内通过 java.put/java.get 修改的变量）
+            ctx.variables = self.javaHelper.currentContext?.variables ?? [:]
+
+            if jsValue?.isUndefined == true || jsValue?.isNull == true {
+                resultString = nil
+            } else {
+                resultString = jsValue?.toString()
+            }
         }
-        
-        // 3. 执行脚本
-        let jsValue = context.evaluateScript(script)
-        
-        // 4. 回写变量 (如果有变更)
-        analyzeContext.variables = javaHelper.currentContext?.variables ?? [:]
-        
-        // 5. 返回结果
-        if jsValue?.isUndefined == true || jsValue?.isNull == true {
-            return nil
-        }
-        return jsValue?.toString()
+
+        // 把 JS 修改的变量写回原始 inout 上下文
+        analyzeContext.variables = ctx.variables
+        return resultString
     }
 }

@@ -47,12 +47,70 @@ class ReaderViewModel: ObservableObject {
     }
     
     func setup() async {
+        isLoading = true
+        defer { isLoading = false }
         await loadChapters()
         if !chapters.isEmpty {
             await loadChapterContent(at: currentChapterIndex)
-            // 预加载
             await prefetch(around: currentChapterIndex)
         }
+    }
+
+    // MARK: - 目录加载
+
+    func loadChapters() async {
+        do {
+            // 1. 优先从数据库读缓存
+            let cached = try await db.getChapters(for: book.bookUrl)
+            if !cached.isEmpty {
+                self.chapters = cached
+                return
+            }
+
+            // 2. 缓存为空则通过书源抓取目录
+            guard let tocUrl = book.tocUrl, !tocUrl.isEmpty else { return }
+            let sources = try await db.getAllBookSources()
+            guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
+
+            var context = AnalyzeContext(source: source, baseUrl: tocUrl)
+            let html = try await network.request(tocUrl, source: source)
+            context.result = html
+
+            let listRule = source.ruleTocList ?? ""
+            guard !listRule.isEmpty else { return }
+            let items = ruleExecutor.executeList(listRule, in: &context)
+
+            var fetched: [Chapter] = []
+            for (i, item) in items.enumerated() {
+                var ctx = context
+                ctx.result = item
+                let title = ruleExecutor.execute(source.ruleChapterName ?? "", in: &ctx)
+                            ?? "第\(i + 1)章"
+                var rawUrl = ruleExecutor.execute(source.ruleChapterUrl ?? "", in: &ctx) ?? ""
+                rawUrl = resolveUrl(rawUrl, base: tocUrl)
+                fetched.append(Chapter(
+                    url: rawUrl, title: title, index: i,
+                    bookUrl: book.bookUrl
+                ))
+            }
+
+            self.chapters = fetched
+
+            // 3. 持久化章节列表
+            if !fetched.isEmpty {
+                try await db.saveChapters(fetched, for: book.bookUrl)
+            }
+        } catch {
+            print("❌ [loadChapters]: \(error)")
+        }
+    }
+
+    private func resolveUrl(_ url: String, base: String) -> String {
+        if url.hasPrefix("http") { return url }
+        guard let baseURL = URL(string: base),
+              let resolved = URL(string: url, relativeTo: baseURL)
+        else { return url }
+        return resolved.absoluteString
     }
     
     func loadChapterContent(at index: Int) async {

@@ -29,32 +29,53 @@ class BookInfoViewModel: ObservableObject {
     func loadDetails() async {
         isLoading = true
         defer { isLoading = false }
-        
+
         do {
-            // 1. 检查是否已经在书架
             let localBooks = try await db.getBookshelf()
             self.isSaved = localBooks.contains { $0.bookUrl == book.bookUrl }
-            
-            // 2. 从网络抓取详情
+
             let sources = try await db.getAllBookSources()
             guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
-            
-            var context = AnalyzeContext(source: source, baseUrl: book.bookUrl)
-            let html = try await network.request(book.bookUrl, source: source)
+
+            // 执行 init 规则（可能跳转到真实详情页 URL）
+            var detailUrl = book.bookUrl
+            if let initRule = source.ruleBookInfoInit, !initRule.isEmpty {
+                var ctx = AnalyzeContext(source: source, baseUrl: book.bookUrl)
+                if let redirectUrl = ruleExecutor.execute(initRule, in: &ctx), !redirectUrl.isEmpty {
+                    detailUrl = redirectUrl
+                }
+            }
+
+            var context = AnalyzeContext(source: source, baseUrl: detailUrl)
+            let html = try await network.request(detailUrl, source: source)
             context.result = html
-            
-            // 执行详情页规则
-            if let intro = ruleExecutor.execute(source.ruleBookIntro ?? "", in: &context) {
-                book.intro = intro
+
+            // 执行所有详情页规则，有值则覆盖
+            if let v = ruleExecutor.execute(source.ruleBookName    ?? "", in: &context), !v.isEmpty { book.name      = v }
+            if let v = ruleExecutor.execute(source.ruleBookAuthor  ?? "", in: &context), !v.isEmpty { book.author    = v }
+            if let v = ruleExecutor.execute(source.ruleBookIntro   ?? "", in: &context), !v.isEmpty { book.intro     = v }
+            if let v = ruleExecutor.execute(source.ruleBookKind    ?? "", in: &context), !v.isEmpty { book.kind      = v }
+            if let v = ruleExecutor.execute(source.ruleBookCoverUrl ?? "", in: &context), !v.isEmpty {
+                book.coverUrl = resolveUrl(v, base: detailUrl)
             }
-            if let tocUrl = ruleExecutor.execute(source.ruleTocUrl ?? "", in: &context) {
-                book.tocUrl = tocUrl
+            if let v = ruleExecutor.execute(source.ruleBookLastChapter ?? "", in: &context), !v.isEmpty {
+                book.latestChapterTitle = v
             }
-            // ... 更多字段补全
-            
+            if let tocRaw = ruleExecutor.execute(source.ruleTocUrl ?? "", in: &context), !tocRaw.isEmpty {
+                book.tocUrl = resolveUrl(tocRaw, base: detailUrl)
+            }
+
         } catch {
             print("❌ [Detail Error]: \(error)")
         }
+    }
+
+    private func resolveUrl(_ url: String, base: String) -> String {
+        if url.hasPrefix("http") { return url }
+        guard let baseURL = URL(string: base),
+              let resolved = URL(string: url, relativeTo: baseURL)
+        else { return url }
+        return resolved.absoluteString
     }
     
     /// 加入书架
