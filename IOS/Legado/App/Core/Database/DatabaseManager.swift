@@ -242,12 +242,39 @@ extension DatabaseManager {
     }
     
     // --- 净化规则操作 ---
-    
+
     func getReplaceRules() async throws -> [ReplaceRule] {
         try await dbPool.read { db in
             try ReplaceRule.filter(Column("isEnabled") == true)
                 .order(Column("order").asc)
                 .fetchAll(db)
+        }
+    }
+
+    func getAllReplaceRules() async throws -> [ReplaceRule] {
+        try await dbPool.read { db in
+            try ReplaceRule.order(Column("order").asc).fetchAll(db)
+        }
+    }
+
+    func saveReplaceRule(_ rule: ReplaceRule) async throws {
+        try await dbPool.write { db in
+            try rule.save(db)
+        }
+    }
+
+    func deleteReplaceRule(_ rule: ReplaceRule) async throws {
+        try await dbPool.write { db in
+            try ReplaceRule.filter(Column("name") == rule.name && Column("pattern") == rule.pattern)
+                .deleteAll(db)
+        }
+    }
+
+    func saveReplaceRules(_ rules: [ReplaceRule]) async throws {
+        try await dbPool.write { db in
+            for rule in rules {
+                try rule.save(db)
+            }
         }
     }
 }

@@ -2,96 +2,142 @@ import SwiftUI
 import UIKit
 
 /// 仿真翻页容器 (基于 UIKit UIPageViewController)
-/// 目标：实现完美的仿真翻页手感 (Curl/Scroll)
+/// 数据源：viewModel.currentPages（章节内物理页切片）
 struct SimulationPagingView: UIViewControllerRepresentable {
     @ObservedObject var viewModel: ReaderViewModel
-    
+
     func makeUIViewController(context: Context) -> UIPageViewController {
         let pageVC = UIPageViewController(
-            transitionStyle: .pageCurl, // 仿真翻页
+            transitionStyle: .pageCurl,
             navigationOrientation: .horizontal,
             options: nil
         )
         pageVC.dataSource = context.coordinator
         pageVC.delegate = context.coordinator
-        
-        // 设置初始页面
-        let initialVC = context.coordinator.viewController(at: viewModel.currentChapterIndex)
+
+        // 初始页面：如果 currentPages 已填充则使用，否则显示占位
+        let initialVC = context.coordinator.makePageVC(at: viewModel.currentPageIndex)
         pageVC.setViewControllers([initialVC], direction: .forward, animated: false)
-        
+
         return pageVC
     }
-    
+
     func updateUIViewController(_ uiViewController: UIPageViewController, context: Context) {
-        // 当 viewModel 触发跳转时更新页面 (需判断是否已在当前页)
-        let currentVC = uiViewController.viewControllers?.first as? ChapterPageViewController
-        if currentVC?.index != viewModel.currentChapterIndex {
-            let nextVC = context.coordinator.viewController(at: viewModel.currentChapterIndex)
-            let direction: UIPageViewController.NavigationDirection = (currentVC?.index ?? 0) < viewModel.currentChapterIndex ? .forward : .reverse
-            uiViewController.setViewControllers([nextVC], direction: direction, animated: true)
-        }
+        let currentVC = uiViewController.viewControllers?.first as? PhysicalPageViewController
+        let desiredIndex = viewModel.currentPageIndex
+
+        guard currentVC?.pageIndex != desiredIndex else { return }
+
+        let direction: UIPageViewController.NavigationDirection =
+            (currentVC?.pageIndex ?? 0) < desiredIndex ? .forward : .reverse
+        let nextVC = context.coordinator.makePageVC(at: desiredIndex)
+        uiViewController.setViewControllers([nextVC], direction: direction, animated: true)
     }
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
+    // MARK: - Coordinator
+
     class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate {
         var parent: SimulationPagingView
-        
+
         init(_ parent: SimulationPagingView) {
             self.parent = parent
         }
-        
-        func viewController(at index: Int) -> UIViewController {
-            let vc = ChapterPageViewController()
-            vc.index = index
-            vc.content = parent.viewModel.chapterContents[index] ?? "正在加载..."
-            vc.titleStr = parent.viewModel.chapters[index].title
+
+        /// 为指定页码构建 VC（安全边界处理）
+        func makePageVC(at index: Int) -> PhysicalPageViewController {
+            let vm = parent.viewModel
+            let vc = PhysicalPageViewController()
+            vc.pageIndex = index
+
+            if vm.currentPages.isEmpty {
+                // 内容尚未分页，显示占位
+                let title = vm.chapters.indices.contains(vm.currentChapterIndex)
+                    ? vm.chapters[vm.currentChapterIndex].title : ""
+                let body = vm.chapterContents[vm.currentChapterIndex] ?? "正在加载..."
+                vc.content = body
+                vc.chapterTitle = title
+                vc.pageLabel = ""
+            } else {
+                let clampedIndex = max(0, min(index, vm.currentPages.count - 1))
+                vc.content = vm.currentPages[clampedIndex]
+                vc.chapterTitle = clampedIndex == 0
+                    ? (vm.chapters.indices.contains(vm.currentChapterIndex)
+                        ? vm.chapters[vm.currentChapterIndex].title : "")
+                    : ""
+                vc.pageLabel = "\(clampedIndex + 1) / \(vm.currentPages.count)"
+            }
             return vc
         }
-        
-        func pageViewController(_ pageViewController: UIPageViewController, viewControllerBefore viewController: UIViewController) -> UIViewController? {
-            let current = (viewController as! ChapterPageViewController).index
-            guard current > 0 else { return nil }
-            return self.viewController(at: current - 1)
+
+        // MARK: UIPageViewControllerDataSource
+
+        func pageViewController(
+            _ pageViewController: UIPageViewController,
+            viewControllerBefore viewController: UIViewController
+        ) -> UIViewController? {
+            guard let current = viewController as? PhysicalPageViewController,
+                  current.pageIndex > 0 else { return nil }
+            return makePageVC(at: current.pageIndex - 1)
         }
-        
-        func pageViewController(_ pageViewController: UIPageViewController, viewControllerAfter viewController: UIViewController) -> UIViewController? {
-            let current = (viewController as! ChapterPageViewController).index
-            guard current < parent.viewModel.chapters.count - 1 else { return nil }
-            return self.viewController(at: current + 1)
+
+        func pageViewController(
+            _ pageViewController: UIPageViewController,
+            viewControllerAfter viewController: UIViewController
+        ) -> UIViewController? {
+            guard let current = viewController as? PhysicalPageViewController else { return nil }
+            let maxIndex = max(0, parent.viewModel.currentPages.count - 1)
+            guard current.pageIndex < maxIndex else { return nil }
+            return makePageVC(at: current.pageIndex + 1)
         }
-        
-        func pageViewController(_ pageViewController: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
-            if completed, let currentVC = pageViewController.viewControllers?.first as? ChapterPageViewController {
-                // 更新 ViewModel 进度
-                DispatchQueue.main.async {
-                    self.parent.viewModel.currentChapterIndex = currentVC.index
-                }
+
+        // MARK: UIPageViewControllerDelegate
+
+        func pageViewController(
+            _ pageViewController: UIPageViewController,
+            didFinishAnimating finished: Bool,
+            previousViewControllers: [UIViewController],
+            transitionCompleted completed: Bool
+        ) {
+            guard completed,
+                  let currentVC = pageViewController.viewControllers?.first as? PhysicalPageViewController
+            else { return }
+
+            DispatchQueue.main.async {
+                self.parent.viewModel.currentPageIndex = currentVC.pageIndex
             }
         }
     }
 }
 
-/// 单个章节页面的 UIKit 控制器 (用于嵌入 PageViewController)
-class ChapterPageViewController: UIViewController {
-    var index: Int = 0
+// MARK: - PhysicalPageViewController
+
+/// 单个物理页面的 UIKit 容器（替代原来整章 ChapterPageViewController）
+class PhysicalPageViewController: UIViewController {
+    var pageIndex: Int = 0
     var content: String = ""
-    var titleStr: String = ""
-    
+    var chapterTitle: String = ""
+    var pageLabel: String = ""
+
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        // 使用 UIHostingController 桥接回 SwiftUI 进行页面内容渲染
-        let hostingController = UIHostingController(rootView: ReaderPageContent(content: content, chapterTitle: titleStr))
-        addChild(hostingController)
-        view.addSubview(hostingController.view)
-        hostingController.view.frame = view.bounds
-        hostingController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        hostingController.didMove(toParent: self)
-        
-        // 继承背景色
-        hostingController.view.backgroundColor = .clear
+        view.backgroundColor = .clear
+
+        let hostingVC = UIHostingController(
+            rootView: ReaderPageContent(
+                content: content,
+                chapterTitle: chapterTitle,
+                pageLabel: pageLabel
+            )
+        )
+        addChild(hostingVC)
+        view.addSubview(hostingVC.view)
+        hostingVC.view.frame = view.bounds
+        hostingVC.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        hostingVC.view.backgroundColor = .clear
+        hostingVC.didMove(toParent: self)
     }
 }

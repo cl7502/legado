@@ -36,6 +36,13 @@ class SearchViewModel: ObservableObject {
                     self.searchProgress = done / total
                 }
             }
+
+            // P2-A: 按 name+author 组合去重，保留每组的第一条结果
+            var seen = Set<String>()
+            self.searchResults = self.searchResults.filter { result in
+                let key = "\(result.name)|\(result.author)"
+                return seen.insert(key).inserted
+            }
         } catch {
             print("❌ [Search Error]: \(error)")
         }

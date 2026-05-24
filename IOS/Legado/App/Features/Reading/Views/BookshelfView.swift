@@ -3,17 +3,17 @@ import SwiftUI
 /// 书架视图
 struct BookshelfView: View {
     @StateObject private var viewModel = BookshelfViewModel()
-    
+
     @State private var selectedBook: Book?
     @State private var isReaderPresented = false
-    
+
     // 定义 3 列网格
     let columns = [
         GridItem(.flexible(), spacing: 20),
         GridItem(.flexible(), spacing: 20),
         GridItem(.flexible(), spacing: 20)
     ]
-    
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -29,7 +29,7 @@ struct BookshelfView: View {
                     .padding(.top, 100)
                 } else {
                     LazyVGrid(columns: columns, spacing: 25) {
-                        ForEach(viewModel.books) { book in
+                        ForEach(viewModel.sortedBooks) { book in
                             BookItemView(book: book)
                                 .onTapGesture {
                                     selectedBook = book
@@ -42,7 +42,27 @@ struct BookshelfView: View {
             }
             .navigationTitle("Legado")
             .toolbar {
+                // P2-C: 排序 Menu
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        ForEach(BookshelfViewModel.SortOrder.allCases, id: \.self) { order in
+                            Button {
+                                viewModel.sortOrder = order
+                            } label: {
+                                HStack {
+                                    Text(order.rawValue)
+                                    if viewModel.sortOrder == order {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button(action: { /* 切换列表/网格模式 */ }) {
                         Image(systemName: "square.grid.2x2")
                     }

@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 /// 阅读器核心业务逻辑 (V2.0 完美整合版)
 @MainActor
@@ -10,8 +11,14 @@ class ReaderViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var showingMenu = false
     @Published var isTTSEnabled = false
-    
+
     @Published var currentChapterIndex: Int
+
+    // MARK: - 章节内分页
+    /// 当前章节分割出的物理页内容列表（按页索引排列）
+    @Published var currentPages: [String] = []
+    /// 当前章节内的页码（0-based）
+    @Published var currentPageIndex: Int = 0
     
     private let db = DatabaseManager.shared
     private let network = NetworkManager.shared
@@ -81,17 +88,57 @@ class ReaderViewModel: ObservableObject {
             let items = ruleExecutor.executeList(listRule, in: &context)
 
             var fetched: [Chapter] = []
-            for (i, item) in items.enumerated() {
-                var ctx = context
-                ctx.result = item
-                let title = ruleExecutor.execute(source.ruleChapterName ?? "", in: &ctx)
-                            ?? "第\(i + 1)章"
-                var rawUrl = ruleExecutor.execute(source.ruleChapterUrl ?? "", in: &ctx) ?? ""
-                rawUrl = resolveUrl(rawUrl, base: tocUrl)
-                fetched.append(Chapter(
-                    url: rawUrl, title: title, index: i,
-                    bookUrl: book.bookUrl
-                ))
+
+            // 内部工具：将一批列表项追加到 fetched
+            func appendChapterItems(_ listItems: [String], baseCtx: AnalyzeContext, pageBaseUrl: String) {
+                for (_, item) in listItems.enumerated() {
+                    var ctx = baseCtx
+                    ctx.result = item
+                    let idx = fetched.count
+                    let title = ruleExecutor.execute(source.ruleChapterName ?? "", in: &ctx)
+                                ?? "第\(idx + 1)章"
+                    var rawUrl = ruleExecutor.execute(source.ruleChapterUrl ?? "", in: &ctx) ?? ""
+                    rawUrl = resolveUrl(rawUrl, base: pageBaseUrl)
+                    fetched.append(Chapter(
+                        url: rawUrl, title: title, index: idx,
+                        bookUrl: book.bookUrl
+                    ))
+                }
+            }
+
+            // 第一页
+            appendChapterItems(items, baseCtx: context, pageBaseUrl: tocUrl)
+
+            // P1-A: 循环抓取目录后续页 (ruleTocNextUrl)
+            if let nextUrlRule = source.ruleTocNextUrl, !nextUrlRule.isEmpty {
+                var visitedUrls = Set<String>([tocUrl])
+                var pageHtml = html
+                var pageBaseUrl = tocUrl
+                let maxTocPages = 50
+
+                for _ in 0..<maxTocPages {
+                    var pageCtx = AnalyzeContext(source: source, baseUrl: pageBaseUrl)
+                    pageCtx.result = pageHtml
+                    guard let rawNext = ruleExecutor.execute(nextUrlRule, in: &pageCtx),
+                          !rawNext.isEmpty else { break }
+                    let nextUrl = resolveUrl(rawNext, base: pageBaseUrl)
+                    guard !nextUrl.isEmpty, !visitedUrls.contains(nextUrl) else { break }
+                    visitedUrls.insert(nextUrl)
+
+                    let nextHtml = try await network.request(nextUrl, source: source)
+                    var nextCtx = AnalyzeContext(source: source, baseUrl: nextUrl)
+                    nextCtx.result = nextHtml
+                    let nextItems = ruleExecutor.executeList(listRule, in: &nextCtx)
+                    appendChapterItems(nextItems, baseCtx: nextCtx, pageBaseUrl: nextUrl)
+
+                    pageHtml = nextHtml
+                    pageBaseUrl = nextUrl
+                }
+            }
+
+            // 重新连续编号（抓取多页后序号可能不连续）
+            fetched = fetched.enumerated().map { idx, ch in
+                Chapter(url: ch.url, title: ch.title, index: idx, bookUrl: ch.bookUrl)
             }
 
             self.chapters = fetched
@@ -125,15 +172,46 @@ class ReaderViewModel: ObservableObject {
             
             var context = AnalyzeContext(source: source, baseUrl: chapter.url)
             let html = try await network.request(chapter.url, source: source)
-            
+
             let replaceRules = try await db.getReplaceRules()
-            let content = contentParser.parseContent(
+            var content = contentParser.parseContent(
                 html,
                 rule: source.ruleContent ?? "",
                 context: &context,
                 replaceRules: replaceRules
             )
-            
+
+            // P1-B: 循环抓取正文后续页 (ruleContentNextUrl)
+            if let nextUrlRule = source.ruleContentNextUrl, !nextUrlRule.isEmpty {
+                var visitedUrls = Set<String>([chapter.url])
+                var pageHtml = html
+                var pageBaseUrl = chapter.url
+                let maxContentPages = 20
+
+                for _ in 0..<maxContentPages {
+                    var pageCtx = AnalyzeContext(source: source, baseUrl: pageBaseUrl)
+                    pageCtx.result = pageHtml
+                    guard let rawNext = ruleExecutor.execute(nextUrlRule, in: &pageCtx),
+                          !rawNext.isEmpty else { break }
+                    let nextUrl = resolveUrl(rawNext, base: pageBaseUrl)
+                    guard !nextUrl.isEmpty, !visitedUrls.contains(nextUrl) else { break }
+                    visitedUrls.insert(nextUrl)
+
+                    let nextHtml = try await network.request(nextUrl, source: source)
+                    var nextCtx = AnalyzeContext(source: source, baseUrl: nextUrl)
+                    let nextContent = contentParser.parseContent(
+                        nextHtml,
+                        rule: source.ruleContent ?? "",
+                        context: &nextCtx,
+                        replaceRules: replaceRules
+                    )
+                    content += "\n" + nextContent
+
+                    pageHtml = nextHtml
+                    pageBaseUrl = nextUrl
+                }
+            }
+
             self.chapterContents[index] = content
             
             if index == currentChapterIndex {
@@ -160,26 +238,99 @@ class ReaderViewModel: ObservableObject {
         try? await db.saveBook(updatedBook)
     }
     
+    // MARK: - 章节内分页
+
+    /// 对当前章节执行分页，结果写入 currentPages / currentPageIndex。
+    /// 应在章节内容加载完成后，从 ReaderView 传入屏幕可用尺寸后调用。
+    func paginateCurrentChapter(screenSize: CGSize, settings: ReaderSettings) {
+        guard let content = chapterContents[currentChapterIndex],
+              currentChapterIndex < chapters.count else { return }
+
+        let font = UIFont.systemFont(ofSize: settings.fontSize)
+        let horizontalPadding = settings.sideMargin * 2
+        let verticalPadding: CGFloat = 80 // top 40 + bottom 40
+        let usableSize = CGSize(
+            width: max(screenSize.width - horizontalPadding, 100),
+            height: max(screenSize.height - verticalPadding, 100)
+        )
+
+        let paginator = ChapterPaginator(
+            pageSize: usableSize,
+            font: font,
+            lineSpacing: settings.lineSpacing
+        )
+        let title = chapters[currentChapterIndex].title
+        let pages = paginator.paginate(text: content, chapterTitle: title)
+
+        currentPages = pages
+        currentPageIndex = 0
+    }
+
+    // MARK: - 页内翻页
+
+    /// 翻到下一页（章节内）；章节末尾则切换下一章
+    func nextPage() {
+        if currentPageIndex < currentPages.count - 1 {
+            currentPageIndex += 1
+        } else {
+            // 章节末 → 切到下一章，分页在 ReaderView 侧监听到内容变化后重新触发
+            nextChapterOnly()
+        }
+    }
+
+    /// 翻到上一页（章节内）；章节首页则切换上一章
+    func prevPage() {
+        if currentPageIndex > 0 {
+            currentPageIndex -= 1
+        } else {
+            prevChapterOnly()
+        }
+    }
+
     // MARK: - 交互接口
+
+    /// 章节级别前进（跳过章节内分页，保留供外部菜单跳章用）
     func nextChapter() {
+        if currentPageIndex < currentPages.count - 1 {
+            currentPageIndex += 1
+            return
+        }
+        nextChapterOnly()
+    }
+
+    func prevChapter() {
+        if currentPageIndex > 0 {
+            currentPageIndex -= 1
+            return
+        }
+        prevChapterOnly()
+    }
+
+    private func nextChapterOnly() {
         guard currentChapterIndex < chapters.count - 1 else { return }
         currentChapterIndex += 1
-        Task { 
-            await loadChapterContent(at: currentChapterIndex) 
+        currentPageIndex = 0
+        currentPages = []
+        Task {
+            await loadChapterContent(at: currentChapterIndex)
             await prefetch(around: currentChapterIndex)
         }
     }
-    
-    func prevChapter() {
+
+    private func prevChapterOnly() {
         guard currentChapterIndex > 0 else { return }
         currentChapterIndex -= 1
+        currentPageIndex = 0
+        currentPages = []
         Task { await loadChapterContent(at: currentChapterIndex) }
     }
-    
+
     func jumpToChapter(_ index: Int) {
         currentChapterIndex = index
+        currentPageIndex = 0
+        currentPages = []
         showingMenu = false
-        Task { 
+        Task {
             await loadChapterContent(at: currentChapterIndex)
             await prefetch(around: currentChapterIndex)
         }

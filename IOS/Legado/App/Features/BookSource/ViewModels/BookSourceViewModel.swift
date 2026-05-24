@@ -29,6 +29,27 @@ class BookSourceViewModel: ObservableObject {
         await loadSources()
     }
     
+    /// 从远程 URL 下载并导入书源 (P2-D)
+    func importFromURL(_ urlString: String) async -> Int {
+        guard let url = URL(string: urlString.trimmingCharacters(in: .whitespacesAndNewlines)),
+              urlString.lowercased().hasPrefix("http") else {
+            print("❌ [Import Error]: Invalid URL — \(urlString)")
+            return 0
+        }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let jsonString = String(data: data, encoding: .utf8) else { return 0 }
+            let newSources = BookSourceImporter().parse(jsonString)
+            guard !newSources.isEmpty else { return 0 }
+            try await db.saveBookSources(newSources)
+            await loadSources()
+            return newSources.count
+        } catch {
+            print("❌ [Import Error]: \(error)")
+            return 0
+        }
+    }
+
     /// 批量导入书源 (支持 JSON 字符串)
     func importFromJSON(_ jsonString: String) async -> Int {
         let importer = BookSourceImporter()
@@ -49,6 +70,16 @@ class BookSourceViewModel: ObservableObject {
     func deleteSource(_ source: BookSource) async {
         try? await db.deleteBookSource(source)
         await loadSources()
+    }
+
+    /// 保存（新建或更新）书源
+    func saveSource(_ source: BookSource) async {
+        do {
+            try await db.saveBookSources([source])
+            await loadSources()
+        } catch {
+            print("❌ [BookSourceVM] saveSource: \(error)")
+        }
     }
 }
 

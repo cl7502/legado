@@ -5,13 +5,16 @@ struct BookSourceListView: View {
     @StateObject private var viewModel = BookSourceViewModel()
     @State private var showingImportAlert = false
     @State private var importText = ""
-    
+    @State private var newSourceSheet = false
+
     var body: some View {
         NavigationView {
             List {
                 ForEach(viewModel.sources) { source in
-                    BookSourceRow(source: source) {
-                        Task { await viewModel.toggleEnabled(source) }
+                    NavigationLink(destination: BookSourceEditView(source: source, viewModel: viewModel)) {
+                        BookSourceRow(source: source) {
+                            Task { await viewModel.toggleEnabled(source) }
+                        }
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
@@ -25,13 +28,29 @@ struct BookSourceListView: View {
             .navigationTitle("书源管理")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingImportAlert = true }) {
-                        Image(systemName: "square.and.arrow.down")
+                    Menu {
+                        Button {
+                            newSourceSheet = true
+                        } label: {
+                            Label("新建书源", systemImage: "plus.circle")
+                        }
+                        Button {
+                            showingImportAlert = true
+                        } label: {
+                            Label("导入书源", systemImage: "square.and.arrow.down")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                     }
                 }
             }
             .task {
                 await viewModel.loadSources()
+            }
+            .sheet(isPresented: $newSourceSheet) {
+                NavigationView {
+                    BookSourceEditView(source: BookSource(), viewModel: viewModel)
+                }
             }
             .alert("导入书源", isPresented: $showingImportAlert) {
                 TextField("粘贴书源 JSON", text: $importText)

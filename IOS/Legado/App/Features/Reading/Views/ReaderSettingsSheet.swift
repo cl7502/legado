@@ -3,13 +3,14 @@ import SwiftUI
 /// 阅读器排版与主题设置面板
 struct ReaderSettingsSheet: View {
     @ObservedObject var settings = ReaderSettings.shared
-    
+    @ObservedObject private var tts = TTSManager.shared
+
     var body: some View {
         VStack(spacing: 25) {
             Text("排版设置")
                 .font(.headline)
                 .padding(.top)
-            
+
             // 1. 字号调节
             HStack {
                 Text("字号")
@@ -19,7 +20,7 @@ struct ReaderSettingsSheet: View {
                     .frame(width: 30)
             }
             .padding(.horizontal)
-            
+
             // 2. 行高调节
             HStack {
                 Text("行高")
@@ -29,7 +30,7 @@ struct ReaderSettingsSheet: View {
                     .frame(width: 30)
             }
             .padding(.horizontal)
-            
+
             // 3. 朗读语速 (TTS)
             HStack {
                 Text("朗读语速")
@@ -43,8 +44,31 @@ struct ReaderSettingsSheet: View {
                     .frame(width: 40)
             }
             .padding(.horizontal)
-            
-            // 4. 主题选择
+
+            // 4. 朗读语音选择 (P2-B)
+            if !tts.availableVoices.isEmpty {
+                HStack {
+                    Text("朗读语音")
+                    Spacer()
+                    Picker("语音", selection: Binding(
+                        get: { tts.selectedVoiceIdentifier },
+                        set: { newId in
+                            tts.selectedVoiceIdentifier = newId
+                            tts.savedVoiceId = newId
+                        }
+                    )) {
+                        Text("默认 (zh-CN)").tag("")
+                        ForEach(tts.availableVoices, id: \.identifier) { voice in
+                            Text("\(voice.name) (\(voice.language))")
+                                .tag(voice.identifier)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                .padding(.horizontal)
+            }
+
+            // 5. 主题选择
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 15) {
                     ForEach(ReaderTheme.allThemes) { theme in
@@ -65,9 +89,9 @@ struct ReaderSettingsSheet: View {
                 }
                 .padding(.horizontal)
             }
-            
+
             Spacer()
         }
-        .presentationDetents([.height(300)])
+        .presentationDetents([.height(360)])
     }
 }
