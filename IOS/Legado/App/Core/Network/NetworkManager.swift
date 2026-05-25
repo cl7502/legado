@@ -1,6 +1,45 @@
 import Foundation
 import Alamofire
 
+// MARK: - Domain Rate Limiter (ISSUE-009)
+
+/// Per-domain concurrent rate limiter — mirrors Android ConcurrentRateLimiter.
+/// `concurrentRate` format: "maxConcurrent,intervalMs" (e.g. "2,500" = 2 slots, 500ms gap).
+actor DomainRateLimiter {
+    static let shared = DomainRateLimiter()
+
+    private struct DomainState {
+        var inflight: Int = 0
+        var lastReleaseDate: Date = .distantPast
+    }
+    private var states: [String: DomainState] = [:]
+
+    func acquire(domain: String, maxConcurrent: Int, intervalMs: Int) async {
+        while (states[domain]?.inflight ?? 0) >= maxConcurrent {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        if intervalMs > 0, let last = states[domain]?.lastReleaseDate {
+            let remainMs = Double(intervalMs) - Date().timeIntervalSince(last) * 1000
+            if remainMs > 0 { try? await Task.sleep(nanoseconds: UInt64(remainMs * 1_000_000)) }
+        }
+        var state = states[domain] ?? DomainState()
+        state.inflight += 1
+        states[domain] = state
+    }
+
+    func release(domain: String) {
+        var state = states[domain] ?? DomainState()
+        state.inflight = max(0, state.inflight - 1)
+        state.lastReleaseDate = Date()
+        states[domain] = state
+    }
+
+    static func parse(_ rate: String) -> (maxConcurrent: Int, intervalMs: Int) {
+        let parts = rate.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        return (max(1, Int(parts[0]) ?? 1), parts.count > 1 ? max(0, Int(parts[1]) ?? 0) : 0)
+    }
+}
+
 /// Network request manager — mirrors Android OkHttp + AnalyzeUrl.getStrResponseAwait()
 class NetworkManager {
     static let shared = NetworkManager()
@@ -25,6 +64,13 @@ class NetworkManager {
         headers: HTTPHeaders? = nil,
         source: BookSource? = nil
     ) async throws -> String {
+        let domain = URL(string: url)?.host ?? url
+        if let rate = source?.concurrentRate, !rate.isEmpty {
+            let (maxC, ms) = DomainRateLimiter.parse(rate)
+            await DomainRateLimiter.shared.acquire(domain: domain, maxConcurrent: maxC, intervalMs: ms)
+        }
+        defer { if source?.concurrentRate != nil { Task { await DomainRateLimiter.shared.release(domain: domain) } } }
+
         let finalHeaders = mergeHeaders(base: source?.headerDictionary, extra: headers)
         let encoding: ParameterEncoding = method == .get ? URLEncoding.default : JSONEncoding.default
         let req = session.request(url, method: method, parameters: parameters,
@@ -40,6 +86,13 @@ class NetworkManager {
         headers: HTTPHeaders? = nil,
         source: BookSource? = nil
     ) async throws -> (body: String, finalUrl: String) {
+        let domain = URL(string: url)?.host ?? url
+        if let rate = source?.concurrentRate, !rate.isEmpty {
+            let (maxC, ms) = DomainRateLimiter.parse(rate)
+            await DomainRateLimiter.shared.acquire(domain: domain, maxConcurrent: maxC, intervalMs: ms)
+        }
+        defer { if source?.concurrentRate != nil { Task { await DomainRateLimiter.shared.release(domain: domain) } } }
+
         let finalHeaders = mergeHeaders(base: source?.headerDictionary, extra: headers)
         let req = session.request(url, method: .get, headers: finalHeaders)
         let response = await req.serializingData().response

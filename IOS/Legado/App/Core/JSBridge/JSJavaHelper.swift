@@ -240,11 +240,16 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
 
     func randomUUID() -> String { UUID().uuidString }
 
-    // MARK: - Chinese conversion (simplified ↔ traditional)
-    // Full CC-CEDICT conversion not available without a library;
-    // these stubs return unchanged text — sufficient for sources that don't rely on conversion.
-    func t2s(_ text: String) -> String { text }
-    func s2t(_ text: String) -> String { text }
+    // MARK: - Chinese conversion (simplified ↔ traditional) — ISSUE-017
+    // Uses iOS's built-in ICU transforms ("Traditional-Simplified" / "Simplified-Traditional").
+    // These are available via Apple's ICU runtime (CFStringTransform) on iOS 9+.
+    // Falls back to unchanged text if the transform is unavailable.
+    func t2s(_ text: String) -> String {
+        text.applyingTransform(StringTransform("Traditional-Simplified"), reverse: false) ?? text
+    }
+    func s2t(_ text: String) -> String {
+        text.applyingTransform(StringTransform("Simplified-Traditional"), reverse: false) ?? text
+    }
 
     // MARK: - Logging
 

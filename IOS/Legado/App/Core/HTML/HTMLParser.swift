@@ -24,6 +24,12 @@ class HTMLParser {
     // MARK: - XPath single-string query
 
     func xpathText(_ html: String, xpath: String) -> String? {
+        // Handle XPath | union (e.g. //div/a | //span/a) — split before Legado && / ||
+        if hasTopLevelPipe(xpath) {
+            let parts = splitOnTopLevelPipe(xpath)
+            let results = parts.compactMap { xpathText(html, xpath: $0.trimmed) }
+            return results.isEmpty ? nil : results.joined(separator: "\n")
+        }
         // Handle && / ||
         if xpath.contains("&&") {
             let parts = xpath.components(separatedBy: "&&")
@@ -50,6 +56,11 @@ class HTMLParser {
 
     /// XPath list query — returns outerHTML of each matched element.
     func xpathList(_ html: String, xpath: String) -> [String] {
+        // Handle XPath | union
+        if hasTopLevelPipe(xpath) {
+            let parts = splitOnTopLevelPipe(xpath)
+            return parts.flatMap { xpathList(html, xpath: $0.trimmed) }
+        }
         // Handle && / ||
         if xpath.contains("&&") {
             let parts = xpath.components(separatedBy: "&&")
@@ -211,9 +222,8 @@ class HTMLParser {
             "[id*='\($0)']"
         }
         // starts-with(@attr,'x') → [attr^='x']
-        path = replacePattern(path,
-            pattern: #"\[starts-with\(\s*@(\w+)\s*,\s*['"](.+?)['"]\)\]"#) { _ in "" }
-        // (simplified — can't express in CSS easily, drop predicate)
+        path = replaceAllCaptures(path,
+            pattern: #"\[starts-with\(\s*@([\w-]+)\s*,\s*['"]([^'"]+)['"]\)\]"#) { "[\($0[0])^='\($0[1])']" }
 
         // [@class='x y'] → .x.y  (exact class)
         path = replacePattern(path,
@@ -224,17 +234,18 @@ class HTMLParser {
         path = replacePattern(path,
             pattern: #"\[@id\s*=\s*['"]([^'"]+)['"]\]"#) { "#\($0)" }
 
-        // [@attr='val'] → [attr='val']  (any other attribute)
-        path = replacePattern(path,
-            pattern: #"\[@(\w[\w-]*)\s*=\s*['"]([^'"]*)['"]\]"#) { _ in "" }
-        // (Generic attribute equality — keep the bracket without @ for CSS)
+        // [@attr='val'] → [attr='val']  (any attribute equality)
+        path = replaceAllCaptures(path,
+            pattern: #"\[@([\w-]+)\s*=\s*['"]([^'"]*)['"]\]"#) { "[\($0[0])='\($0[1])']" }
+        // [@attr] → [attr]  (attribute existence check)
         path = path.replacingOccurrences(of: "[@", with: "[")
 
         // Positional predicates
-        path = path.replacingOccurrences(of: "[1]", with: ":first-child")
         path = path.replacingOccurrences(of: "[last()]", with: ":last-child")
-        // [n] (n>1) — drop (CSS nth-child is complex, dropping is safer than wrong result)
-        path = replacePattern(path, pattern: #"\[\d+\]"#) { _ in "" }
+        // [n] → :nth-child(n) for any n (1-based, same as CSS)
+        path = replaceAllCaptures(path, pattern: #"\[(\d+)\]"#) { ":nth-child(\($0[0]))" }
+        // position() predicates — approximate (too complex for full CSS parity, drop)
+        path = replacePattern(path, pattern: #"\[position\(\)[^\]]*\]"#) { _ in "" }
 
         // Strip leading // and /
         if path.hasPrefix("//") { path = String(path.dropFirst(2)) }
@@ -250,6 +261,38 @@ class HTMLParser {
     }
 
     // MARK: - Private helpers
+
+    /// Returns true if the string contains a `|` that is NOT inside `[]` (XPath union operator).
+    private func hasTopLevelPipe(_ s: String) -> Bool {
+        var depth = 0
+        for ch in s {
+            if ch == "[" { depth += 1 }
+            else if ch == "]" { depth = max(0, depth - 1) }
+            else if ch == "|" && depth == 0 { return true }
+        }
+        return false
+    }
+
+    /// Splits on top-level `|` (XPath union), ignoring `|` inside `[]`.
+    private func splitOnTopLevelPipe(_ s: String) -> [String] {
+        var parts: [String] = []
+        var current = ""
+        var depth = 0
+        for ch in s {
+            if ch == "[" { depth += 1; current.append(ch) }
+            else if ch == "]" { depth = max(0, depth - 1); current.append(ch) }
+            else if ch == "|" && depth == 0 {
+                parts.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
+            } else {
+                current.append(ch)
+            }
+        }
+        if !current.trimmingCharacters(in: .whitespaces).isEmpty {
+            parts.append(current.trimmingCharacters(in: .whitespaces))
+        }
+        return parts
+    }
 
     private func replacePattern(_ input: String, pattern: String,
                                  replacement: (String) -> String) -> String {
@@ -267,6 +310,29 @@ class HTMLParser {
                 captured = String(result[range])
             }
             result.replaceSubrange(range, with: replacement(captured))
+        }
+        return result
+    }
+
+    /// Like replacePattern but passes ALL captured groups to the closure.
+    private func replaceAllCaptures(_ input: String, pattern: String,
+                                    replacement: ([String]) -> String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return input
+        }
+        var result = input
+        let matches = regex.matches(in: result, range: NSRange(result.startIndex..., in: result))
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            var groups: [String] = []
+            for i in 1..<match.numberOfRanges {
+                if let r = Range(match.range(at: i), in: result) {
+                    groups.append(String(result[r]))
+                } else {
+                    groups.append("")
+                }
+            }
+            result.replaceSubrange(range, with: replacement(groups))
         }
         return result
     }
