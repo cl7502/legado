@@ -74,10 +74,17 @@ class ReaderViewModel: ObservableObject {
                 return
             }
 
-            // 2. 缓存为空则通过书源抓取目录
-            guard let tocUrl = book.tocUrl, !tocUrl.isEmpty else { return }
+            // 2. 缓存为空 — 先刷新 BookInfo 以执行 ruleBookInfoInit 并获取最新 tocUrl (ISSUE-021)
+            //    对标 Android WebBook.getChapterListAwait() 前置 getBookInfoAwait() 步骤
             let sources = try await db.getAllBookSources()
             guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
+
+            if source.ruleBookInfoInit != nil || source.ruleTocUrl != nil {
+                await refreshBookInfoForChapters(source: source)
+            }
+
+            // 3. 通过书源抓取目录
+            guard let tocUrl = book.tocUrl, !tocUrl.isEmpty else { return }
 
             var context = AnalyzeContext(source: source, baseUrl: tocUrl)
             let html = try await network.request(tocUrl, source: source)
@@ -158,6 +165,34 @@ class ReaderViewModel: ObservableObject {
               let resolved = URL(string: url, relativeTo: baseURL)
         else { return url }
         return resolved.absoluteString
+    }
+
+    /// ISSUE-021: Refresh BookInfo page before loading chapters.
+    /// Mirrors Android WebBook.getBookInfoAwait() — executes ruleBookInfoInit (side-effect JS)
+    /// and refreshes tocUrl from the book detail page so that dynamic URLs are not stale.
+    private func refreshBookInfoForChapters(source: BookSource) async {
+        do {
+            var context = AnalyzeContext(source: source, baseUrl: book.bookUrl)
+
+            // Execute ruleBookInfoInit (side-effect only — sets variables/cookies)
+            if let initRule = source.ruleBookInfoInit, !initRule.isEmpty {
+                var initCtx = context
+                _ = ruleExecutor.execute(initRule, in: &initCtx)
+                context.variables = initCtx.variables
+            }
+
+            let html = try await network.request(book.bookUrl, source: source)
+            context.result = html
+
+            // Refresh tocUrl from detail page
+            if let tocRaw = ruleExecutor.execute(source.ruleTocUrl ?? "", in: &context),
+               !tocRaw.isEmpty {
+                let resolved = resolveUrl(tocRaw, base: book.bookUrl)
+                book.tocUrl = resolved
+            }
+        } catch {
+            print("⚠️ [refreshBookInfo]: \(error.localizedDescription)")
+        }
     }
     
     func loadChapterContent(at index: Int) async {

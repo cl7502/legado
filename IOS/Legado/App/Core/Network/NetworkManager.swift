@@ -34,6 +34,21 @@ class NetworkManager {
         return try decodeResponse(response)
     }
 
+    /// GET request — returns (body, finalUrl) so callers can detect redirects (ISSUE-020).
+    func requestWithFinalUrl(
+        _ url: String,
+        headers: HTTPHeaders? = nil,
+        source: BookSource? = nil
+    ) async throws -> (body: String, finalUrl: String) {
+        let finalHeaders = mergeHeaders(base: source?.headerDictionary, extra: headers)
+        let req = session.request(url, method: .get, headers: finalHeaders)
+        let response = await req.serializingData().response
+        interceptor.processResponse(response)
+        let body = try decodeResponse(response)
+        let resolvedUrl = response.response?.url?.absoluteString ?? url
+        return (body, resolvedUrl)
+    }
+
     /// POST with raw string body (JSON or form).
     func requestPost(
         _ url: String,

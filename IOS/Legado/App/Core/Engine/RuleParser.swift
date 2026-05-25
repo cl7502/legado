@@ -11,6 +11,14 @@ enum RuleType {
 struct RuleSegment {
     let type: RuleType
     let content: String
+    // @put:{key:subRule} blocks extracted from this segment (ISSUE-013)
+    let putMap: [String: String]
+
+    init(type: RuleType, content: String, putMap: [String: String] = [:]) {
+        self.type = type
+        self.content = content
+        self.putMap = putMap
+    }
 }
 
 /// Rule chain parser — mirrors Android AnalyzeRule.splitSourceRule()
@@ -24,6 +32,12 @@ class RuleParser {
     private let jsPattern = try! NSRegularExpression(
         pattern: #"javascript:.+?(?:\n|$)|<js>[\w\W]+?</js>"#,
         options: []
+    )
+
+    // Matches @put:{key:subRule} blocks — extracted before type detection (ISSUE-013)
+    private static let putPattern = try! NSRegularExpression(
+        pattern: #"@put:\{[^}]+?\}"#,
+        options: [.caseInsensitive]
     )
 
     func parseChain(_ rule: String) -> [RuleSegment] {
@@ -67,62 +81,118 @@ class RuleParser {
         (s.hasPrefix("<js>") && s.hasSuffix("</js>"))
     }
 
-    private func parseSingle(_ rule: String) -> RuleSegment {
-        let trimmed = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Extract @put:{key:subRule} blocks from rule string.
+    /// Returns (cleanedRule, putMap).
+    private func extractPutMap(from rule: String) -> (String, [String: String]) {
+        var putMap: [String: String] = [:]
+        let ns = rule as NSString
+        let matches = Self.putPattern.matches(in: rule, range: NSRange(location: 0, length: ns.length))
+        guard !matches.isEmpty else { return (rule, putMap) }
 
-        // JS
+        var cleaned = rule
+        for match in matches.reversed() {
+            let fullMatch = ns.substring(with: match.range) // e.g. "@put:{bookId:div.book@data-id}"
+            let jsonStr = String(fullMatch.dropFirst(5))     // drop "@put:" → {bookId:div.book@data-id}
+            let parsed = parsePutContent(jsonStr)
+            putMap.merge(parsed) { _, new in new }
+            if let r = Range(match.range, in: cleaned) {
+                cleaned.removeSubrange(r)
+            }
+        }
+        return (cleaned.trimmingCharacters(in: .whitespacesAndNewlines), putMap)
+    }
+
+    /// Lenient JSON-like parser for @put content: {key:rule} or {"key":"rule"}
+    private func parsePutContent(_ jsonStr: String) -> [String: String] {
+        var s = jsonStr.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard s.hasPrefix("{") && s.hasSuffix("}") else { return [:] }
+
+        // Try standard JSON first
+        if let data = s.data(using: .utf8),
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+            return dict
+        }
+
+        // Lenient: add quotes to unquoted keys then retry
+        if let re = try? NSRegularExpression(pattern: #"(\w+)\s*:"#),
+           let data = re.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s),
+                                                  withTemplate: "\"$1\":").data(using: .utf8),
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+            return dict
+        }
+
+        // Fallback: simple first-colon split for single key-value pair
+        s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        if let colonIdx = s.firstIndex(of: ":") {
+            let key = s[..<colonIdx]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            let value = String(s[s.index(after: colonIdx)...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !key.isEmpty { return [key: value] }
+        }
+        return [:]
+    }
+
+    private func parseSingle(_ rule: String) -> RuleSegment {
+        var trimmed = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // JS — @put has no meaning inside JS blocks
         if isWholeJS(trimmed) {
             let code: String
             if trimmed.hasPrefix("javascript:") {
                 code = String(trimmed.dropFirst(11))
             } else {
-                // <js>...</js>
                 code = String(trimmed.dropFirst(4).dropLast(5))
             }
             return RuleSegment(type: .js, content: code)
         }
 
+        // Extract @put:{} blocks before type detection (ISSUE-013)
+        let (cleaned, putMap) = extractPutMap(from: trimmed)
+        trimmed = cleaned
+
         let lower = trimmed.lowercased()
 
         // Explicit XPath prefixes
         if lower.hasPrefix("@xpath:") {
-            return RuleSegment(type: .xpath, content: String(trimmed.dropFirst(7)))
+            return RuleSegment(type: .xpath, content: String(trimmed.dropFirst(7)), putMap: putMap)
         }
         if lower.hasPrefix("xpath:") {
-            return RuleSegment(type: .xpath, content: String(trimmed.dropFirst(6)))
+            return RuleSegment(type: .xpath, content: String(trimmed.dropFirst(6)), putMap: putMap)
         }
 
         // Explicit JSON prefixes
         if lower.hasPrefix("@json:") {
-            return RuleSegment(type: .json, content: String(trimmed.dropFirst(6)))
+            return RuleSegment(type: .json, content: String(trimmed.dropFirst(6)), putMap: putMap)
         }
         if lower.hasPrefix("json:") {
-            return RuleSegment(type: .json, content: String(trimmed.dropFirst(5)))
+            return RuleSegment(type: .json, content: String(trimmed.dropFirst(5)), putMap: putMap)
         }
 
         // @@ or @CSS: → force CSS (strip prefix)
         if trimmed.hasPrefix("@@") {
-            return RuleSegment(type: .defaultRule, content: String(trimmed.dropFirst(2)))
+            return RuleSegment(type: .defaultRule, content: String(trimmed.dropFirst(2)), putMap: putMap)
         }
         if lower.hasPrefix("@css:") {
-            return RuleSegment(type: .defaultRule, content: String(trimmed.dropFirst(5)))
+            return RuleSegment(type: .defaultRule, content: String(trimmed.dropFirst(5)), putMap: putMap)
         }
 
         // Auto-detect JSONPath: $. or $[
         if trimmed.hasPrefix("$.") || trimmed.hasPrefix("$[") {
-            return RuleSegment(type: .json, content: trimmed)
+            return RuleSegment(type: .json, content: trimmed, putMap: putMap)
         }
 
         // Auto-detect XPath: leading / but not //www (avoid mistaking URLs)
         if trimmed.hasPrefix("/") && !trimmed.hasPrefix("//www.") && !trimmed.hasPrefix("//m.") {
-            return RuleSegment(type: .xpath, content: trimmed)
+            return RuleSegment(type: .xpath, content: trimmed, putMap: putMap)
         }
 
         // Regex prefix :
         if trimmed.hasPrefix(":") {
-            return RuleSegment(type: .regex, content: String(trimmed.dropFirst(1)))
+            return RuleSegment(type: .regex, content: String(trimmed.dropFirst(1)), putMap: putMap)
         }
 
-        return RuleSegment(type: .defaultRule, content: trimmed)
+        return RuleSegment(type: .defaultRule, content: trimmed, putMap: putMap)
     }
 }

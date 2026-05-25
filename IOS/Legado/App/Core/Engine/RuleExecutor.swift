@@ -5,7 +5,8 @@ import Foundation
 /// Key behaviors preserved from Android:
 ///   • Rule chain: JS blocks split the chain; each non-JS part is one segment
 ///   • ## inside a segment: "rule##matchPattern##replacement[##replaceFirst]"
-///   • @put:{} / @get:{} variable storage (pre-parsed by RuleParser — not split on @)
+///   • @put:{key:subRule} variable store (per-segment, runs against current content)
+///   • @get:{varName} / {{jsExpr}} inline substitution before rule execution
 ///   • Intermediate result stays as Any? through the chain (JSON arrays, HTML elements)
 ///   • Last segment in executeList() returns a list; intermediate segments reduce to single value
 class RuleExecutor {
@@ -14,6 +15,12 @@ class RuleExecutor {
     private let jsEngine = LegadoJSEngine.shared
     private let htmlParser = HTMLParser.shared
     private let jsonEngine = JSONPathEngine.shared
+
+    // Matches @get:{varName} and {{jsExpr}} — same as Android evalPattern (ISSUE-013/014)
+    private static let evalPattern = try! NSRegularExpression(
+        pattern: #"@get:\{[^}]+?\}|\{\{[\w\W]*?\}\}"#,
+        options: [.caseInsensitive]
+    )
 
     // MARK: - Public API
 
@@ -47,10 +54,8 @@ class RuleExecutor {
             tmp.result = current
 
             if isLast {
-                // Last segment — produce a list
                 current = applySegmentList(segment, current: current, context: &tmp)
             } else {
-                // Intermediate — reduce to single value
                 current = applySegment(segment, current: current, context: &tmp)
             }
             context.variables = tmp.variables
@@ -62,7 +67,12 @@ class RuleExecutor {
     // MARK: - Internal segment execution
 
     private func applySegment(_ seg: RuleSegment, current: Any?, context: inout AnalyzeContext) -> Any? {
-        let (coreRule, replacePattern, replacement, replaceFirst) = splitHashHash(seg.content)
+        // ISSUE-013: Execute @put sub-rules against current content, store in variables
+        executePutMap(seg.putMap, current: current, context: &context)
+
+        // ISSUE-013/014: Expand @get:{} and {{jsExpr}} in the full content (before ## split)
+        let expandedContent = expandEval(seg.content, current: current, context: &context)
+        let (coreRule, replacePattern, replacement, replaceFirst) = splitHashHash(expandedContent)
         var result: Any?
 
         switch seg.type {
@@ -87,7 +97,6 @@ class RuleExecutor {
             result = applyRegexExtract(str, pattern: coreRule)
         }
 
-        // Apply ## regex replacement if present
         if !replacePattern.isEmpty, let str = stringify(result) {
             result = applyHashHashReplace(str, pattern: replacePattern,
                                           replacement: replacement, replaceFirst: replaceFirst)
@@ -96,14 +105,18 @@ class RuleExecutor {
     }
 
     private func applySegmentList(_ seg: RuleSegment, current: Any?, context: inout AnalyzeContext) -> Any? {
-        let (coreRule, replacePattern, replacement, replaceFirst) = splitHashHash(seg.content)
+        // ISSUE-013: Execute @put sub-rules
+        executePutMap(seg.putMap, current: current, context: &context)
+
+        // ISSUE-013/014: Expand @get:{} and {{jsExpr}}
+        let expandedContent = expandEval(seg.content, current: current, context: &context)
+        let (coreRule, replacePattern, replacement, replaceFirst) = splitHashHash(expandedContent)
         var result: Any?
 
         switch seg.type {
         case .js:
             context.result = current
             let jsResult = jsEngine.evaluateRule(coreRule, in: &context)
-            // JS may return comma-separated string or an array — try to preserve list
             if let str = jsResult {
                 result = str.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
             } else {
@@ -113,7 +126,6 @@ class RuleExecutor {
         case .json:
             let jsonStr = asString(current)
             result = jsonEngine.extract(json: jsonStr, path: coreRule)
-            // If result is a single value wrap in array; if already array keep it
             if let arr = result as? [Any] {
                 result = arr
             } else if let val = result {
@@ -137,7 +149,6 @@ class RuleExecutor {
             }
         }
 
-        // Apply ## replacement to each list element
         if !replacePattern.isEmpty {
             let arr = toStringArray(result)
             result = arr.map {
@@ -146,6 +157,68 @@ class RuleExecutor {
             }
         }
         return result
+    }
+
+    // MARK: - @put execution (ISSUE-013)
+
+    /// Execute each sub-rule in putMap against current content, store results in context.variables.
+    /// Mirrors Android AnalyzeRule.putRule().
+    private func executePutMap(_ putMap: [String: String], current: Any?, context: inout AnalyzeContext) {
+        guard !putMap.isEmpty else { return }
+        var tempCtx = context
+        tempCtx.result = current
+        for (key, subRule) in putMap {
+            let value = execute(subRule, in: &tempCtx) ?? ""
+            context.variables[key] = value
+        }
+        // Propagate any variables set by sub-rules' JS
+        context.variables.merge(tempCtx.variables) { _, new in new }
+    }
+
+    // MARK: - @get:{} / {{jsExpr}} expansion (ISSUE-013/014)
+
+    /// Substitute @get:{varName} and {{jsExpr}} occurrences in a rule string.
+    /// Mirrors Android SourceRule.makeUpRule() @get / {{}} handling.
+    private func expandEval(_ rule: String, current: Any?, context: inout AnalyzeContext) -> String {
+        guard rule.contains("@get:") || rule.contains("{{") else { return rule }
+
+        let matches = Self.evalPattern.matches(in: rule, range: NSRange(rule.startIndex..., in: rule))
+        guard !matches.isEmpty else { return rule }
+
+        var output = ""
+        var lastEnd = rule.startIndex
+
+        for match in matches {
+            guard let matchRange = Range(match.range, in: rule) else { continue }
+            output += rule[lastEnd..<matchRange.lowerBound]
+
+            let matchStr = String(rule[matchRange])
+            let lower = matchStr.lowercased()
+
+            if lower.hasPrefix("@get:{") && matchStr.hasSuffix("}") {
+                // @get:{varName} → context.variables[varName]
+                let varName = String(matchStr.dropFirst(6).dropLast(1))
+                let value = context.variables[varName]
+                output += value.map { "\($0)" } ?? ""
+
+            } else if matchStr.hasPrefix("{{") && matchStr.hasSuffix("}}") {
+                // {{jsExpr}} — evaluate expression with current result in scope
+                let expr = String(matchStr.dropFirst(2).dropLast(2))
+                var tempCtx = context
+                tempCtx.result = current
+                let evaluated = jsEngine.evaluateRule(expr, in: &tempCtx) ?? ""
+                context.variables = tempCtx.variables
+                output += evaluated
+
+            } else {
+                output += matchStr
+            }
+
+            lastEnd = matchRange.upperBound
+        }
+
+        output += rule[lastEnd...]
+        return output
     }
 
     // MARK: - ## regex replacement (Android SourceRule.makeUpRule split logic)
@@ -167,7 +240,6 @@ class RuleExecutor {
             let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
             let range = NSRange(text.startIndex..., in: text)
             if replaceFirst {
-                // replaceFirst: find first match, replace within that match only
                 if let match = regex.firstMatch(in: text, range: range) {
                     let matched = (text as NSString).substring(with: match.range)
                     let replaced = regex.stringByReplacingMatches(
@@ -175,7 +247,7 @@ class RuleExecutor {
                         withTemplate: replacement)
                     return (text as NSString).replacingCharacters(in: match.range, with: replaced)
                 }
-                return replacement  // no match → return replacement literal
+                return replacement
             } else {
                 return regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
             }
@@ -192,7 +264,6 @@ class RuleExecutor {
             let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
             let range = NSRange(text.startIndex..., in: text)
             if let match = regex.firstMatch(in: text, range: range) {
-                // Prefer capture group 1 if present
                 if match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: text) {
                     return String(text[r])
                 }

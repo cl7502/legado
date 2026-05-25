@@ -39,7 +39,7 @@ class BookInfoViewModel: ObservableObject {
 
             // ISSUE-025: ruleBookInfoInit 是初始化 JS（副作用），不是重定向 URL 规则
             // Android BookInfo.analyzeBookInfo() 中此规则只做变量/Cookie 初始化，返回值丢弃
-            var detailUrl = book.bookUrl
+            let detailUrl = book.bookUrl
             var initVariables: [String: Any] = [:]
             if let initRule = source.ruleBookInfoInit, !initRule.isEmpty {
                 var ctx = AnalyzeContext(source: source, baseUrl: book.bookUrl)

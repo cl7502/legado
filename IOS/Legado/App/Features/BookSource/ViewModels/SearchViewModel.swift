@@ -69,14 +69,29 @@ class SearchViewModel: ObservableObject {
             source.headerDictionary.forEach { reqHeaders[$0.key] = $0.value }
 
             let html: String
+            let finalUrl: String
+
             if parsed.method == "POST", let body = parsed.body {
                 html = try await network.requestPost(parsed.url, body: body,
                                                      source: source, headers: Alamofire.HTTPHeaders(reqHeaders))
+                finalUrl = parsed.url
             } else {
-                html = try await network.request(parsed.url, headers: Alamofire.HTTPHeaders(reqHeaders),
-                                                 source: source)
+                // Use requestWithFinalUrl to detect redirects for bookUrlPattern (ISSUE-020)
+                let result = try await network.requestWithFinalUrl(parsed.url,
+                                                                   headers: Alamofire.HTTPHeaders(reqHeaders),
+                                                                   source: source)
+                html = result.body
+                finalUrl = result.finalUrl
             }
             context.result = html
+
+            // ISSUE-020: If final URL matches bookUrlPattern, parse as BookInfo directly
+            if let pattern = source.bookUrlPattern, !pattern.isEmpty,
+               let regex = try? NSRegularExpression(pattern: pattern),
+               regex.firstMatch(in: finalUrl, range: NSRange(finalUrl.startIndex..., in: finalUrl)) != nil {
+                return parseAsBookInfo(html: html, bookUrl: finalUrl, parsedUrl: parsed.url,
+                                      source: source, context: context)
+            }
 
             guard let listRule = source.ruleSearchList, !listRule.isEmpty else { return [] }
             let items = ruleExecutor.executeList(listRule, in: &context)
@@ -113,6 +128,30 @@ class SearchViewModel: ObservableObject {
         guard let baseURL = URL(string: base),
               let resolved = URL(string: url, relativeTo: baseURL) else { return url }
         return resolved.absoluteString
+    }
+
+    /// ISSUE-020: Parse a book detail page as a SearchResult when finalUrl matches bookUrlPattern.
+    /// Mirrors Android BookList.analyzeBookList() → BookInfo path when bookUrlPattern matches.
+    nonisolated private func parseAsBookInfo(html: String, bookUrl: String, parsedUrl: String,
+                                              source: BookSource, context: AnalyzeContext) -> [SearchResult] {
+        var ctx = context
+        ctx.result = html
+        ctx.baseUrl = bookUrl
+
+        let name    = ruleExecutor.execute(source.ruleBookName    ?? "", in: &ctx) ?? ""
+        let author  = ruleExecutor.execute(source.ruleBookAuthor  ?? "", in: &ctx) ?? ""
+        guard !name.isEmpty else { return [] }
+
+        let coverRaw  = ruleExecutor.execute(source.ruleBookCoverUrl  ?? "", in: &ctx)
+        let kind      = ruleExecutor.execute(source.ruleBookKind      ?? "", in: &ctx)
+        let intro     = ruleExecutor.execute(source.ruleBookIntro     ?? "", in: &ctx)
+        let absCover  = coverRaw.map { resolveUrl($0, base: bookUrl) }
+
+        return [SearchResult(
+            name: name, author: author, bookUrl: bookUrl,
+            kind: kind, intro: intro, coverUrl: absCover,
+            origin: source.bookSourceUrl, originName: source.bookSourceName
+        )]
     }
 }
 

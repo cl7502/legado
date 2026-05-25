@@ -69,6 +69,21 @@ struct BookSource: Identifiable, Equatable {
     var enabledCookieJar: Bool = false
     var variableComment: String?
     var respondTime: Int64 = 0
+
+    // --- ISSUE-019: 补全 Android 书源缺失字段 ---
+    var enabledExplore: Bool = true          // 是否在发现页显示
+    var coverDecodeJs: String?               // 封面解密 JS（加密图片书源）
+    var exploreScreen: String?               // 发现筛选规则
+
+    // 搜索结果扩展字段
+    var ruleSearchIntro: String?             // 搜索结果摘要
+    var ruleSearchUpdateTime: String?        // 搜索结果更新时间
+    var ruleSearchWordCount: String?         // 搜索结果字数
+
+    // 目录扩展字段
+    var ruleChapterUpdateTime: String?       // 章节更新时间规则
+    var ruleTocPreUpdateJs: String?          // 目录预更新 JS
+    var ruleTocFormatJs: String?             // 目录格式化 JS
 }
 
 // MARK: - Codable（自定义实现，容忍缺失/类型错误的字段）
@@ -81,11 +96,14 @@ extension BookSource: Codable {
         case bookUrlPattern, jsLib
         case loginUrl, loginUi, loginCheckJs, concurrentRate, header
         case searchUrl, exploreUrl, enabledCookieJar, variableComment, respondTime
+        case enabledExplore, coverDecodeJs, exploreScreen
         case ruleSearchList, ruleSearchName, ruleSearchAuthor, ruleSearchKind
         case ruleSearchLastChapter, ruleSearchCoverUrl, ruleSearchNoteUrl
+        case ruleSearchIntro, ruleSearchUpdateTime, ruleSearchWordCount
         case ruleBookInfoInit, ruleBookName, ruleBookAuthor, ruleBookIntro
         case ruleBookKind, ruleBookLastChapter, ruleBookCoverUrl, ruleTocUrl
         case ruleTocList, ruleChapterName, ruleChapterUrl, ruleChapterVip, ruleTocNextUrl
+        case ruleChapterUpdateTime, ruleTocPreUpdateJs, ruleTocFormatJs
         case ruleContent, ruleContentNextUrl, ruleContentReplace
         case ruleExploreList, ruleExploreName, ruleExploreAuthor
         case ruleExploreKind, ruleExploreCoverUrl, ruleExploreNoteUrl
@@ -106,6 +124,7 @@ extension BookSource: Codable {
         weight          = (try? c.decodeIfPresent(Int.self,   forKey: .weight))          ?? 0
         enabledCookieJar = (try? c.decodeIfPresent(Bool.self, forKey: .enabledCookieJar)) ?? false
         respondTime     = (try? c.decodeIfPresent(Int64.self, forKey: .respondTime))     ?? 0
+        enabledExplore  = (try? c.decodeIfPresent(Bool.self,  forKey: .enabledExplore))  ?? true
 
         // 可选字符串字段
         bookSourceGroup   = try? c.decodeIfPresent(String.self, forKey: .bookSourceGroup)
@@ -120,6 +139,8 @@ extension BookSource: Codable {
         searchUrl         = try? c.decodeIfPresent(String.self, forKey: .searchUrl)
         exploreUrl        = try? c.decodeIfPresent(String.self, forKey: .exploreUrl)
         variableComment   = try? c.decodeIfPresent(String.self, forKey: .variableComment)
+        coverDecodeJs     = try? c.decodeIfPresent(String.self, forKey: .coverDecodeJs)
+        exploreScreen     = try? c.decodeIfPresent(String.self, forKey: .exploreScreen)
         ruleSearchList        = try? c.decodeIfPresent(String.self, forKey: .ruleSearchList)
         ruleSearchName        = try? c.decodeIfPresent(String.self, forKey: .ruleSearchName)
         ruleSearchAuthor      = try? c.decodeIfPresent(String.self, forKey: .ruleSearchAuthor)
@@ -127,6 +148,9 @@ extension BookSource: Codable {
         ruleSearchLastChapter = try? c.decodeIfPresent(String.self, forKey: .ruleSearchLastChapter)
         ruleSearchCoverUrl    = try? c.decodeIfPresent(String.self, forKey: .ruleSearchCoverUrl)
         ruleSearchNoteUrl     = try? c.decodeIfPresent(String.self, forKey: .ruleSearchNoteUrl)
+        ruleSearchIntro       = try? c.decodeIfPresent(String.self, forKey: .ruleSearchIntro)
+        ruleSearchUpdateTime  = try? c.decodeIfPresent(String.self, forKey: .ruleSearchUpdateTime)
+        ruleSearchWordCount   = try? c.decodeIfPresent(String.self, forKey: .ruleSearchWordCount)
         ruleBookInfoInit      = try? c.decodeIfPresent(String.self, forKey: .ruleBookInfoInit)
         ruleBookName          = try? c.decodeIfPresent(String.self, forKey: .ruleBookName)
         ruleBookAuthor        = try? c.decodeIfPresent(String.self, forKey: .ruleBookAuthor)
@@ -140,6 +164,9 @@ extension BookSource: Codable {
         ruleChapterUrl        = try? c.decodeIfPresent(String.self, forKey: .ruleChapterUrl)
         ruleChapterVip        = try? c.decodeIfPresent(String.self, forKey: .ruleChapterVip)
         ruleTocNextUrl        = try? c.decodeIfPresent(String.self, forKey: .ruleTocNextUrl)
+        ruleChapterUpdateTime = try? c.decodeIfPresent(String.self, forKey: .ruleChapterUpdateTime)
+        ruleTocPreUpdateJs    = try? c.decodeIfPresent(String.self, forKey: .ruleTocPreUpdateJs)
+        ruleTocFormatJs       = try? c.decodeIfPresent(String.self, forKey: .ruleTocFormatJs)
         ruleContent           = try? c.decodeIfPresent(String.self, forKey: .ruleContent)
         ruleContentNextUrl    = try? c.decodeIfPresent(String.self, forKey: .ruleContentNextUrl)
         ruleContentReplace    = try? c.decodeIfPresent(String.self, forKey: .ruleContentReplace)
