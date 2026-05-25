@@ -10,7 +10,7 @@ class JSONPathEngine {
 
     func extract(json: String, path: String) -> Any? {
         // Handle &&/|| combinators (Android RuleAnalyzer.splitRule logic)
-        if path.contains("&&") || path.contains("||") {
+        if path.contains("&&") || path.contains("||") || path.contains("%%") {
             return evalCombinator(json: json, path: path)
         }
         guard let root = parseJSON(json) else { return nil }
@@ -20,6 +20,26 @@ class JSONPathEngine {
     // MARK: - Combinator (&&, ||)
 
     private func evalCombinator(json: String, path: String) -> Any? {
+        // %% — round-robin interleave (mirrors Android AnalyzeByJSonPath L107-114)
+        if path.contains("%%") {
+            let parts = splitCombinator(path, sep: "%%")
+            let lists: [[Any]] = parts.map { part in
+                let r = extract(json: json, path: part.trimmed)
+                switch r {
+                case let arr as [Any]: return arr
+                case let v?:           return [v]
+                default:               return []
+                }
+            }
+            guard !lists.isEmpty else { return nil }
+            let maxLen = lists.map { $0.count }.max() ?? 0
+            var result: [Any] = []
+            for i in 0..<maxLen {
+                for list in lists where i < list.count { result.append(list[i]) }
+            }
+            return result.isEmpty ? nil : result
+        }
+
         if path.contains("||") {
             let parts = splitCombinator(path, sep: "||")
             for part in parts {
