@@ -46,12 +46,17 @@ struct ReaderTheme: Identifiable, Equatable {
 /// 阅读器持久化设置
 class ReaderSettings: ObservableObject {
     static let shared = ReaderSettings()
-    
-    @AppStorage("reader.fontSize") var fontSize: CGFloat = 18
-    @AppStorage("reader.lineSpacing") var lineSpacing: CGFloat = 8
-    @AppStorage("reader.sideMargin") var sideMargin: CGFloat = 20
-    @AppStorage("reader.themeId") var themeId: String = "parchment"
-    
+
+    // @AppStorage 不支持 CGFloat，改用 Double 存储，读取时转换
+    @AppStorage("reader.fontSize")    private var _fontSize: Double = 18
+    @AppStorage("reader.lineSpacing") private var _lineSpacing: Double = 8
+    @AppStorage("reader.sideMargin")  private var _sideMargin: Double = 20
+    @AppStorage("reader.themeId")     var themeId: String = "parchment"
+
+    var fontSize:    CGFloat { get { CGFloat(_fontSize) }    set { _fontSize    = Double(newValue) } }
+    var lineSpacing: CGFloat { get { CGFloat(_lineSpacing) } set { _lineSpacing = Double(newValue) } }
+    var sideMargin:  CGFloat { get { CGFloat(_sideMargin) }  set { _sideMargin  = Double(newValue) } }
+
     var currentTheme: ReaderTheme {
         ReaderTheme.allThemes.first { $0.id == themeId } ?? .parchment
     }

@@ -18,7 +18,11 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     @Published var selectedVoiceIdentifier: String = ""
     var availableVoices: [AVSpeechSynthesisVoice] = []
 
-    @AppStorage("tts.voiceIdentifier") var savedVoiceId: String = ""
+    // NSObject 子类不能使用 @AppStorage，改用 UserDefaults
+    var savedVoiceId: String {
+        get { UserDefaults.standard.string(forKey: "tts.voiceIdentifier") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "tts.voiceIdentifier") }
+    }
 
     private var onChapterFinish: (() -> Void)?
 

@@ -72,8 +72,8 @@ class DatabaseManager {
                 t.column("index", .integer).notNull()
                 t.column("bookUrl", .text).notNull()
                     .references("book", column: "bookUrl", onDelete: .cascade)
-                t.index(["bookUrl", "index"])
             }
+            try db.create(index: "idx_chapter_book_index", on: "book_chapter", columns: ["bookUrl", "index"])
             
             // 4. 净化规则表
             try db.create(table: "replace_rule") { t in
@@ -165,6 +165,14 @@ class DatabaseManager {
                 t.add(column: "pay",         .boolean).defaults(to: false)
                 t.add(column: "vip",         .boolean).defaults(to: false)
                 t.add(column: "updateTime",  .integer).defaults(to: 0)
+            }
+        }
+
+        // v5: 补充 replace_rule 缺失的 regex / scope 列，以及为 save/delete 所需的正确 id 支持
+        migrator.registerMigration("v5-replace-rule-columns") { db in
+            try db.alter(table: "replace_rule") { t in
+                t.add(column: "regex", .boolean).defaults(to: true)
+                t.add(column: "scope", .text)
             }
         }
 
@@ -265,8 +273,12 @@ extension DatabaseManager {
 
     func deleteReplaceRule(_ rule: ReplaceRule) async throws {
         try await dbPool.write { db in
-            try ReplaceRule.filter(Column("name") == rule.name && Column("pattern") == rule.pattern)
-                .deleteAll(db)
+            if let id = rule.id {
+                try ReplaceRule.filter(Column("id") == id).deleteAll(db)
+            } else {
+                try ReplaceRule.filter(Column("name") == rule.name && Column("pattern") == rule.pattern)
+                    .deleteAll(db)
+            }
         }
     }
 

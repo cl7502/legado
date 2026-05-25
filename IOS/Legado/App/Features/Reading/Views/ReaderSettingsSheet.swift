@@ -92,6 +92,6 @@ struct ReaderSettingsSheet: View {
 
             Spacer()
         }
-        .presentationDetents([.height(360)])
+        .frame(maxHeight: 380)
     }
 }

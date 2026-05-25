@@ -1,65 +1,73 @@
 import SwiftUI
 
-/// 发现（Explore）功能视图 — 三级导航：书源 → 分类 → 书单
+// MARK: - ISSUE-024 修复：三级导航各自持有独立 ViewModel
+// 原实现三级视图共用同一 ExploreViewModel，loadBooks() 触发 @Published 变更时，
+// 父层 categoryView 的 .task 被重新触发 → categories = [] → 导航栈闪退。
+// 修复：每级视图创建独立 @StateObject，互不观察彼此状态。
+
+// MARK: - 第一级：书源列表
+
 struct ExploreView: View {
-    @StateObject private var viewModel = ExploreViewModel()
+    @StateObject private var vm = ExploreSourcesViewModel()
 
     var body: some View {
-        NavigationStack {
-            sourceListView
-                .navigationTitle("发现")
-                .task { await viewModel.loadSources() }
+        NavigationView {
+            List(vm.sources) { source in
+                NavigationLink(source.bookSourceName) {
+                    ExploreCategoryView(source: source)
+                }
+            }
+            .navigationTitle("发现")
+            .overlay {
+                if vm.isLoading {
+                    ProgressView("加载书源...")
+                } else if vm.sources.isEmpty {
+                    ContentUnavailableView(
+                        "暂无发现书源",
+                        systemImage: "safari",
+                        description: Text("请先在书源管理中导入支持发现功能的书源")
+                    )
+                }
+            }
+            .task { await vm.loadSources() }
         }
     }
+}
 
-    // MARK: 第一级：书源列表
+// MARK: - 第二级：分类列表（独立 ViewModel，与书单层解耦）
 
-    private var sourceListView: some View {
-        List(viewModel.sources) { source in
-            NavigationLink(source.bookSourceName) {
-                categoryView(for: source)
-                    .task { await viewModel.loadCategories(source: source) }
-            }
-        }
-        .overlay {
-            if viewModel.isLoadingSources {
-                ProgressView("加载书源...")
-            } else if viewModel.sources.isEmpty {
-                ContentUnavailableView(
-                    "暂无发现书源",
-                    systemImage: "safari",
-                    description: Text("请先在书源管理中导入支持发现功能的书源")
-                )
-            }
-        }
-    }
+struct ExploreCategoryView: View {
+    let source: BookSource
+    @StateObject private var vm = ExploreCategoryViewModel()
 
-    // MARK: 第二级：分类列表
-
-    @ViewBuilder
-    private func categoryView(for source: BookSource) -> some View {
-        List(viewModel.categories) { category in
+    var body: some View {
+        List(vm.categories) { category in
             NavigationLink(category.title) {
-                bookListView(source: source, category: category)
-                    .task { await viewModel.loadBooks(source: source, url: category.url) }
+                ExploreBookListView(source: source, category: category)
             }
         }
         .navigationTitle(source.bookSourceName)
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
-            if viewModel.isLoadingCategories {
+            if vm.isLoading {
                 ProgressView("加载分类...")
-            } else if viewModel.categories.isEmpty {
-                ContentUnavailableView("暂无分类", systemImage: "list.bullet")
+            } else if vm.categories.isEmpty {
+                ContentUnavailableView("暂无分类", systemImage: "list.bullet", description: Text(""))
             }
         }
+        .task { await vm.loadCategories(source: source) }
     }
+}
 
-    // MARK: 第三级：书单
+// MARK: - 第三级：书单（独立 ViewModel，不影响上两级）
 
-    @ViewBuilder
-    private func bookListView(source: BookSource, category: ExploreCategory) -> some View {
-        List(viewModel.books) { book in
+struct ExploreBookListView: View {
+    let source: BookSource
+    let category: ExploreCategory
+    @StateObject private var vm = ExploreBookListViewModel()
+
+    var body: some View {
+        List(vm.books) { book in
             NavigationLink {
                 BookInfoView(viewModel: BookInfoViewModel(searchResult: book))
             } label: {
@@ -69,18 +77,19 @@ struct ExploreView: View {
         .navigationTitle(category.title)
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
-            if viewModel.isLoadingBooks {
+            if vm.isLoading {
                 ProgressView("加载书单...")
-            } else if !viewModel.bookLoadError.isEmpty {
+            } else if !vm.loadError.isEmpty {
                 ContentUnavailableView(
                     "加载失败",
                     systemImage: "exclamationmark.triangle",
-                    description: Text(viewModel.bookLoadError)
+                    description: Text(vm.loadError)
                 )
-            } else if viewModel.books.isEmpty {
-                ContentUnavailableView("暂无书籍", systemImage: "books.vertical")
+            } else if vm.books.isEmpty {
+                ContentUnavailableView("暂无书籍", systemImage: "books.vertical", description: Text(""))
             }
         }
+        .task { await vm.loadBooks(source: source, url: category.url) }
     }
 }
 
@@ -115,111 +124,146 @@ private struct ExploreBookRow: View {
     }
 }
 
-// MARK: - ViewModel
+// MARK: - ViewModels（三级各自独立）
 
 @MainActor
-class ExploreViewModel: ObservableObject {
+class ExploreSourcesViewModel: ObservableObject {
     @Published var sources: [BookSource] = []
-    @Published var categories: [ExploreCategory] = []
-    @Published var books: [SearchResult] = []
-
-    @Published var isLoadingSources = false
-    @Published var isLoadingCategories = false
-    @Published var isLoadingBooks = false
-    @Published var bookLoadError = ""
-
+    @Published var isLoading = false
     private let db = DatabaseManager.shared
-    private let network = NetworkManager.shared
-    private let ruleExecutor = RuleExecutor.shared
-
-    // MARK: 加载有发现功能的书源
 
     func loadSources() async {
-        isLoadingSources = true
-        defer { isLoadingSources = false }
+        isLoading = true
+        defer { isLoading = false }
         do {
             let all = try await db.getAllBookSources()
+            // 要求同时有 exploreUrl 和 ruleExploreList，否则无法解析书单
             sources = all.filter {
-                guard let url = $0.exploreUrl else { return false }
-                return !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let hasUrl  = ($0.exploreUrl ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                let hasRule = ($0.ruleExploreList ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                return hasUrl && hasRule
             }
         } catch {
-            print("❌ [ExploreVM] loadSources: \(error)")
+            print("❌ [ExploreSourcesVM] \(error)")
         }
     }
+}
 
-    // MARK: 解析书源分类
+@MainActor
+class ExploreCategoryViewModel: ObservableObject {
+    @Published var categories: [ExploreCategory] = []
+    @Published var isLoading = false
 
     func loadCategories(source: BookSource) async {
-        isLoadingCategories = true
-        categories = []
-        defer { isLoadingCategories = false }
+        isLoading = true
+        defer { isLoading = false }
 
         guard let raw = source.exploreUrl,
               !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        // 尝试解析 JSON 数组格式 [{"title":"...","url":"..."}]
+        // 1. JSON 数组格式：[{"title":"...","url":"..."}]
         if let data = raw.data(using: .utf8),
            let arr = try? JSONDecoder().decode([ExploreCategory].self, from: data) {
             categories = arr
             return
         }
 
-        // 退化为单一 URL，title = "全部"
+        // 2. 换行分隔格式（Android 常用）：
+        //    "分类名::http://..." 或 "分类名,http://..." 或 纯 URL（每行一个）
+        let lines = raw.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        if lines.count > 1 || lines.first?.contains("::") == true || lines.first?.contains(",http") == true {
+            categories = lines.compactMap { line -> ExploreCategory? in
+                if line.contains("::") {
+                    let parts = line.components(separatedBy: "::")
+                    let title = parts[0].trimmingCharacters(in: .whitespaces)
+                    let url   = parts.dropFirst().joined(separator: "::").trimmingCharacters(in: .whitespaces)
+                    guard !url.isEmpty else { return nil }
+                    return ExploreCategory(title: title.isEmpty ? "全部" : title, url: url)
+                } else if let commaRange = line.range(of: ",http") {
+                    let title = String(line[line.startIndex..<commaRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                    let url   = String(line[commaRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+                    let fullUrl = "http" + url  // restore dropped "http" prefix
+                    return ExploreCategory(title: title.isEmpty ? "全部" : title, url: fullUrl)
+                } else if line.hasPrefix("http") {
+                    return ExploreCategory(title: "全部", url: line)
+                }
+                return nil
+            }
+            if !categories.isEmpty { return }
+        }
+
+        // 3. 退化：单一 URL
         categories = [ExploreCategory(title: "全部", url: raw)]
     }
+}
 
-    // MARK: 加载书单
+@MainActor
+class ExploreBookListViewModel: ObservableObject {
+    @Published var books: [SearchResult] = []
+    @Published var isLoading = false
+    @Published var loadError = ""
+    private let network = NetworkManager.shared
+    private let ruleExecutor = RuleExecutor.shared
 
     func loadBooks(source: BookSource, url: String) async {
-        isLoadingBooks = true
+        isLoading = true
         books = []
-        bookLoadError = ""
-        defer { isLoadingBooks = false }
+        loadError = ""
+        defer { isLoading = false }
+
+        let listRule = source.ruleExploreList ?? ""
+        guard !listRule.isEmpty else {
+            loadError = "书源未配置 ruleExploreList"
+            return
+        }
 
         do {
-            let html = try await network.fetchString(url: url, headers: source.headerDictionary)
+            // exploreUrl 可能含 {{page}} 等模板变量，必须先走 AnalyzeUrl 替换，
+            // 否则 URLSession 收到非法 URL 报 "Unsupported URL"
+            let parsed = AnalyzeUrl.parse(url, variables: ["page": "1"])
+            let requestUrl = parsed.url
 
-            let listRule = source.ruleExploreList ?? ""
-            guard !listRule.isEmpty else {
-                bookLoadError = "书源未配置 ruleExploreList"
-                return
+            let html: String
+            if parsed.method == "POST", let body = parsed.body {
+                html = try await network.requestPost(requestUrl, body: body, source: source)
+            } else {
+                html = try await network.request(requestUrl, source: source)
             }
 
-            let context = AnalyzeContext(content: html, baseUrl: url, source: source)
-            let items = try await ruleExecutor.getElements(rule: listRule, context: context)
+            var parseCtx = AnalyzeContext(source: source, baseUrl: requestUrl)
+            parseCtx.result = html
+            let items = ruleExecutor.executeList(listRule, in: &parseCtx)
 
             var results: [SearchResult] = []
             for item in items {
-                let itemCtx = AnalyzeContext(content: item, baseUrl: url, source: source)
-                let name = (try? await ruleExecutor.getString(
-                    rule: source.ruleExploreName ?? "", context: itemCtx)) ?? ""
-                let author = (try? await ruleExecutor.getString(
-                    rule: source.ruleExploreAuthor ?? "", context: itemCtx)) ?? ""
-                let bookUrl = (try? await ruleExecutor.getString(
-                    rule: source.ruleExploreNoteUrl ?? "", context: itemCtx)) ?? ""
-                let coverUrl = (try? await ruleExecutor.getString(
-                    rule: source.ruleExploreCoverUrl ?? "", context: itemCtx))
-                let kind = (try? await ruleExecutor.getString(
-                    rule: source.ruleExploreKind ?? "", context: itemCtx))
+                var itemCtx = AnalyzeContext(source: source, baseUrl: requestUrl)
+                itemCtx.result = item
+
+                let name    = ruleExecutor.execute(source.ruleExploreName    ?? "", in: &itemCtx) ?? ""
+                let author  = ruleExecutor.execute(source.ruleExploreAuthor  ?? "", in: &itemCtx) ?? ""
+                let bookUrl = ruleExecutor.execute(source.ruleExploreNoteUrl ?? "", in: &itemCtx) ?? ""
+                let coverUrl = ruleExecutor.execute(source.ruleExploreCoverUrl ?? "", in: &itemCtx)
+                let kind    = ruleExecutor.execute(source.ruleExploreKind    ?? "", in: &itemCtx)
 
                 guard !name.isEmpty, !bookUrl.isEmpty else { continue }
 
-                results.append(SearchResult(
-                    name: name,
-                    author: author,
-                    bookUrl: bookUrl,
-                    kind: kind,
-                    intro: nil,
-                    coverUrl: coverUrl,
-                    origin: source.bookSourceUrl,
-                    originName: source.bookSourceName
-                ))
+                var result = SearchResult()
+                result.name = name
+                result.author = author
+                result.bookUrl = bookUrl
+                result.kind = kind
+                result.coverUrl = coverUrl
+                result.origin = source.bookSourceUrl
+                result.originName = source.bookSourceName
+                results.append(result)
             }
             books = results
         } catch {
-            bookLoadError = error.localizedDescription
-            print("❌ [ExploreVM] loadBooks: \(error)")
+            loadError = error.localizedDescription
+            print("❌ [ExploreBookListVM] \(error)")
         }
     }
 }

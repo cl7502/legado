@@ -45,10 +45,10 @@ class ReaderViewModel: ObservableObject {
     func startTTS() {
         guard let content = chapterContents[currentChapterIndex] else { return }
         isTTSEnabled = true
-        
+
         ttsManager.speak(content, bookName: book.name, chapterTitle: chapters[currentChapterIndex].title) { [weak self] in
-            // 连读逻辑：章节结束自动下一章
-            self?.nextChapter()
+            // 连读逻辑：章节结束自动切到下一章（不是下一页）
+            self?.nextChapterOnly()
             self?.startTTS()
         }
     }
@@ -306,7 +306,7 @@ class ReaderViewModel: ObservableObject {
         prevChapterOnly()
     }
 
-    private func nextChapterOnly() {
+    func nextChapterOnly() {
         guard currentChapterIndex < chapters.count - 1 else { return }
         currentChapterIndex += 1
         currentPageIndex = 0

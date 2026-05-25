@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import Alamofire
 
 /// 搜索业务逻辑
 @MainActor
@@ -52,7 +53,8 @@ class SearchViewModel: ObservableObject {
 
     // MARK: - Private
 
-    private func searchInSource(_ query: String, source: BookSource) async -> [SearchResult] {
+    // nonisolated：脱离 @MainActor，使 TaskGroup 中的搜索任务真正并发执行
+    nonisolated private func searchInSource(_ query: String, source: BookSource) async -> [SearchResult] {
         guard let template = source.searchUrl else { return [] }
 
         // 解析搜索 URL 模板 — 支持 GET/POST 及 {{key}}、{{page}} 变量
@@ -62,11 +64,17 @@ class SearchViewModel: ObservableObject {
         do {
             var context = AnalyzeContext(source: source, baseUrl: parsed.url)
 
+            // Merge per-request headers from AnalyzeUrl with source headers
+            var reqHeaders = parsed.headers
+            source.headerDictionary.forEach { reqHeaders[$0.key] = $0.value }
+
             let html: String
-            if let body = parsed.body {
-                html = try await network.requestPost(parsed.url, body: body, source: source)
+            if parsed.method == "POST", let body = parsed.body {
+                html = try await network.requestPost(parsed.url, body: body,
+                                                     source: source, headers: Alamofire.HTTPHeaders(reqHeaders))
             } else {
-                html = try await network.request(parsed.url, source: source)
+                html = try await network.request(parsed.url, headers: Alamofire.HTTPHeaders(reqHeaders),
+                                                 source: source)
             }
             context.result = html
 
@@ -100,7 +108,7 @@ class SearchViewModel: ObservableObject {
         }
     }
 
-    private func resolveUrl(_ url: String, base: String) -> String {
+    nonisolated private func resolveUrl(_ url: String, base: String) -> String {
         if url.hasPrefix("http") { return url }
         guard let baseURL = URL(string: base),
               let resolved = URL(string: url, relativeTo: baseURL) else { return url }
@@ -108,16 +116,31 @@ class SearchViewModel: ObservableObject {
     }
 }
 
-/// URL 模板解析器 — 支持 {{key}}、{{page}}、{{variable.*}} 及 POST body
+/// URL template parser — mirrors Android AnalyzeUrl logic.
+///
+/// Supports:
+///   • {{key}} / {{page}} variable substitution (with noEncode() variant)
+///   • {1,2,3} page-based URL switching (Android page pattern)
+///   • URL option JSON:  http://...url, {"method":"POST","body":"...","headers":{...}}
+///   • @POST@ separator
+///   • charset / headers / body from option JSON
 struct AnalyzeUrl {
     let url: String
-    let body: String?      // 非 nil 则用 POST
+    let body: String?
     let headers: [String: String]
+    let method: String  // "GET" or "POST"
+
+    init(url: String, body: String? = nil, headers: [String: String] = [:], method: String = "GET") {
+        self.url = url
+        self.body = body
+        self.headers = headers
+        self.method = method
+    }
 
     static func parse(_ template: String, variables: [String: String] = [:]) -> AnalyzeUrl {
         var tmpl = template.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // 替换所有 {{varName}} 占位符（先替换再检测 POST 格式）
+        // 1. Replace {{varName}} / {{page}} placeholders
         for (key, value) in variables {
             let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
             tmpl = tmpl.replacingOccurrences(of: "{{\(key)}}", with: encoded)
@@ -125,25 +148,93 @@ struct AnalyzeUrl {
             tmpl = tmpl.replacingOccurrences(of: "{{\(key),noEncode()}}", with: value)
         }
 
-        // @POST@ 分隔符格式：http://... @POST@ {body}
+        // 2. {1,2,3} page-switching pattern: p1→choice1, p2→choice2, ...
+        let page = Int(variables["page"] ?? "1") ?? 1
+        if let pagePattern = try? NSRegularExpression(pattern: #"\{([^{}]+(?:,[^{}]+)+)\}"#) {
+            let ns = tmpl as NSString
+            let matches = pagePattern.matches(in: tmpl, range: NSRange(location: 0, length: ns.length))
+            for match in matches.reversed() {
+                guard let r = Range(match.range, in: tmpl),
+                      let inner = Range(match.range(at: 1), in: tmpl) else { continue }
+                let choices = tmpl[inner].components(separatedBy: ",")
+                let idx = min(page - 1, choices.count - 1)
+                tmpl.replaceSubrange(r, with: choices[idx].trimmingCharacters(in: .whitespaces))
+            }
+        }
+
+        // 3. @POST@ separator
         if tmpl.contains("@POST@") {
             let parts = tmpl.components(separatedBy: "@POST@")
             if parts.count >= 2 {
-                return AnalyzeUrl(url: parts[0].trimmingCharacters(in: .whitespaces),
-                                  body: parts[1].trimmingCharacters(in: .whitespaces),
-                                  headers: [:])
+                return AnalyzeUrl(url: parts[0].trimmed, body: parts[1].trimmed,
+                                  headers: [:], method: "POST")
             }
         }
 
-        // 逗号分隔格式：http://..., {body}
-        if let commaIdx = tmpl.firstIndex(of: ",") {
-            let urlPart  = String(tmpl[..<commaIdx]).trimmingCharacters(in: .whitespaces)
-            let bodyPart = String(tmpl[tmpl.index(after: commaIdx)...]).trimmingCharacters(in: .whitespaces)
-            if urlPart.lowercased().hasPrefix("http"), bodyPart.hasPrefix("{") {
-                return AnalyzeUrl(url: urlPart, body: bodyPart, headers: [:])
+        // 4. URL option JSON:  url, {"method":...,"body":...,"headers":...}
+        //    Android: the first , after the URL splits url from option JSON
+        if let commaIdx = findOptionComma(in: tmpl) {
+            let urlPart  = String(tmpl[..<commaIdx]).trimmed
+            let optPart  = String(tmpl[tmpl.index(after: commaIdx)...]).trimmed
+
+            if urlPart.lowercased().hasPrefix("http") {
+                if optPart.hasPrefix("{") {
+                    // Try to parse as URL option JSON
+                    if let opt = parseOptionJSON(optPart) {
+                        return AnalyzeUrl(url: urlPart,
+                                          body: opt.body,
+                                          headers: opt.headers,
+                                          method: opt.method)
+                    }
+                    // Plain POST body
+                    return AnalyzeUrl(url: urlPart, body: optPart, headers: [:], method: "POST")
+                }
             }
         }
 
-        return AnalyzeUrl(url: tmpl, body: nil, headers: [:])
+        return AnalyzeUrl(url: tmpl, body: nil, headers: [:], method: "GET")
     }
+
+    // Find the first comma that is NOT inside a {{ }} or < > or [ ] block
+    private static func findOptionComma(in s: String) -> String.Index? {
+        var depth = 0
+        var i = s.startIndex
+        while i < s.endIndex {
+            let ch = s[i]
+            if ch == "{" || ch == "[" || ch == "<" { depth += 1 }
+            else if ch == "}" || ch == "]" || ch == ">" { depth = max(0, depth - 1) }
+            else if ch == "," && depth == 0 { return i }
+            i = s.index(after: i)
+        }
+        return nil
+    }
+
+    private struct UrlOption {
+        var method: String = "GET"
+        var body: String? = nil
+        var headers: [String: String] = [:]
+    }
+
+    private static func parseOptionJSON(_ json: String) -> UrlOption? {
+        guard let data = json.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+
+        var opt = UrlOption()
+        if let m = dict["method"] as? String { opt.method = m.uppercased() }
+        if let b = dict["body"] {
+            if let bs = b as? String { opt.body = bs }
+            else if let bd = try? JSONSerialization.data(withJSONObject: b),
+                    let bs = String(data: bd, encoding: .utf8) { opt.body = bs }
+        }
+        if let h = dict["headers"] as? [String: Any] {
+            opt.headers = h.compactMapValues { "\($0)" }
+        }
+        // charset field (used to set request encoding — noted but not applied here)
+        return opt
+    }
+}
+
+private extension String {
+    var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }

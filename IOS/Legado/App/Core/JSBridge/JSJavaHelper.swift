@@ -2,17 +2,22 @@ import Foundation
 import JavaScriptCore
 import CryptoKit
 import SwiftSoup
+import CommonCrypto
 
-/// Rhino API 兼容协议 — 对标 Android JsExtensions
+/// JS-to-Swift bridge — mirrors Android JsExtensions interface.
+/// Exposed as `java` in the JS context.
 @objc protocol JSJavaHelperProtocol: JSExport {
-    // 网络
+    // Network
     func ajax(_ url: String) -> String?
     func ajaxAll(_ urlArray: JSValue) -> JSValue?
     func post(_ url: String, _ body: String) -> String?
-    // 变量
+    func connect(_ urlStr: String) -> String?
+
+    // Variables
     func put(_ key: String, _ value: Any)
     func get(_ key: String) -> Any?
-    // 加密/编码
+
+    // Encoding
     func md5(_ text: String) -> String
     func sha1(_ text: String) -> String
     func base64Encode(_ text: String) -> String
@@ -21,30 +26,49 @@ import SwiftSoup
     func urlDecode(_ text: String) -> String
     func htmlEncode(_ text: String) -> String
     func htmlDecode(_ text: String) -> String
-    // 压缩
+    func hexDecodeToString(_ hex: String) -> String
+    func hexEncodeToString(_ utf8: String) -> String
+
+    // Compression
     func gzip(_ text: String) -> String?
     func unGzip(_ base64: String) -> String?
     func zlib(_ text: String) -> String?
     func unZlib(_ base64: String) -> String?
-    // HTML 查询
+
+    // HTML helpers
     func queryTextContent(_ html: String, _ cssSelector: String) -> String?
     func queryAllTextContent(_ html: String, _ cssSelector: String) -> String
-    // 阅读器状态
+
+    // Reader state
     func getLastChapter() -> String?
     func getBook() -> String?
-    // 时间/系统
+    func getCookie(_ tag: String) -> String?
+
+    // Time / system
     func getNetworkTime() -> String
     func timeFormat(_ timestamp: String) -> String
+    func timeFormatUTC(_ time: String, _ format: String, _ sh: Int) -> String
+    func randomUUID() -> String
+
+    // Text helpers
+    func t2s(_ text: String) -> String
+    func s2t(_ text: String) -> String
+
+    // Logging
     func log(_ message: Any)
 }
 
 class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     var currentContext: AnalyzeContext?
 
-    // MARK: - 网络
+    // MARK: - Network
 
     func ajax(_ url: String) -> String? {
         NetworkManager.shared.requestSync(url)
+    }
+
+    func connect(_ urlStr: String) -> String? {
+        NetworkManager.shared.requestSync(urlStr)
     }
 
     func post(_ url: String, _ body: String) -> String? {
@@ -52,23 +76,25 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     }
 
     func ajaxAll(_ urlArray: JSValue) -> JSValue? {
-        // 同步批量请求（依次执行）
         guard let urls = urlArray.toArray() as? [String] else { return nil }
         let results = urls.map { NetworkManager.shared.requestSync($0) ?? "" }
         return JSValue(object: results, in: urlArray.context)
     }
 
-    // MARK: - 变量
+    // MARK: - Variables
 
     func put(_ key: String, _ value: Any) {
         currentContext?.variables[key] = value
     }
 
     func get(_ key: String) -> Any? {
-        currentContext?.variables[key]
+        // Check reserved keys first (mirrors Android AnalyzeRule.get)
+        if key == "bookName" { return currentContext?.variables["bookName"] }
+        if key == "title"    { return currentContext?.variables["title"] }
+        return currentContext?.variables[key]
     }
 
-    // MARK: - 加密/编码
+    // MARK: - Encoding / Crypto
 
     func md5(_ text: String) -> String {
         let digest = Insecure.MD5.hash(data: Data(text.utf8))
@@ -85,7 +111,12 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     }
 
     func base64Decode(_ text: String) -> String {
-        guard let data = Data(base64Encoded: text) else { return "" }
+        // Handle URL-safe Base64 and standard Base64
+        var b64 = text.replacingOccurrences(of: "-", with: "+")
+                      .replacingOccurrences(of: "_", with: "/")
+        let rem = b64.count % 4
+        if rem > 0 { b64 += String(repeating: "=", count: 4 - rem) }
+        guard let data = Data(base64Encoded: b64) else { return "" }
         return String(data: data, encoding: .utf8) ?? ""
     }
 
@@ -102,29 +133,47 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
     }
 
     func htmlDecode(_ text: String) -> String {
-        guard let data = text.data(using: .utf8) else { return text }
-        let opts: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-            .documentType: NSAttributedString.DocumentType.html,
-            .characterEncoding: String.Encoding.utf8.rawValue
-        ]
-        return (try? NSAttributedString(data: data, options: opts, documentAttributes: nil).string) ?? text
+        // SwiftSoup can unescape HTML entities
+        return (try? SwiftSoup.parse(text).text()) ?? text
+            .replacingOccurrences(of: "&amp;",  with: "&")
+            .replacingOccurrences(of: "&lt;",   with: "<")
+            .replacingOccurrences(of: "&gt;",   with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;",  with: "'")
     }
 
-    // MARK: - 压缩
+    func hexDecodeToString(_ hex: String) -> String {
+        var result = ""
+        var i = hex.startIndex
+        while i < hex.endIndex {
+            let next = hex.index(i, offsetBy: 2, limitedBy: hex.endIndex) ?? hex.endIndex
+            if let byte = UInt8(hex[i..<next], radix: 16) {
+                result.append(Character(UnicodeScalar(byte)))
+            }
+            i = next
+        }
+        return result
+    }
+
+    func hexEncodeToString(_ utf8: String) -> String {
+        utf8.utf8.map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - Compression
 
     func gzip(_ text: String) -> String? {
-        guard let inputData = text.data(using: .utf8) else { return nil }
-        let compressed = compress(inputData, algorithm: .zlib)
-        return compressed?.base64EncodedString()
+        guard let data = text.data(using: .utf8) else { return nil }
+        return compress(data, algorithm: .zlib)?.base64EncodedString()
     }
 
     func unGzip(_ base64: String) -> String? {
-        guard let data = Data(base64Encoded: base64) else { return nil }
-        guard let decompressed = decompress(data, algorithm: .zlib) else { return nil }
-        return String(data: decompressed, encoding: .utf8)
+        guard let data = Data(base64Encoded: base64),
+              let dec = decompress(data, algorithm: .zlib) else { return nil }
+        return String(data: dec, encoding: .utf8)
     }
 
     func zlib(_ text: String) -> String? { gzip(text) }
@@ -133,23 +182,22 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     private func compress(_ data: Data, algorithm: NSData.CompressionAlgorithm) -> Data? {
         try? (data as NSData).compressed(using: algorithm) as Data
     }
-
     private func decompress(_ data: Data, algorithm: NSData.CompressionAlgorithm) -> Data? {
         try? (data as NSData).decompressed(using: algorithm) as Data
     }
 
-    // MARK: - HTML 查询（书源 JS 常用）
+    // MARK: - HTML helpers
 
     func queryTextContent(_ html: String, _ cssSelector: String) -> String? {
-        try? SwiftSoup.parse(html).selectFirst(cssSelector)?.text()
+        try? SwiftSoup.parse(html).select(cssSelector).first()?.text()
     }
 
     func queryAllTextContent(_ html: String, _ cssSelector: String) -> String {
-        let elements = (try? SwiftSoup.parse(html).select(cssSelector)) ?? Elements()
-        return elements.array().compactMap { try? $0.text() }.joined(separator: "\n")
+        let els = (try? SwiftSoup.parse(html).select(cssSelector)) ?? Elements()
+        return els.array().compactMap { try? $0.text() }.joined(separator: "\n")
     }
 
-    // MARK: - 阅读器状态
+    // MARK: - Reader state
 
     func getLastChapter() -> String? {
         currentContext?.variables["lastChapterTitle"] as? String
@@ -163,7 +211,11 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         return json
     }
 
-    // MARK: - 时间/系统
+    func getCookie(_ tag: String) -> String? {
+        CookieManager.shared.getCookie(for: tag)
+    }
+
+    // MARK: - Time / system
 
     func getNetworkTime() -> String {
         String(Int64(Date().timeIntervalSince1970 * 1000))
@@ -177,7 +229,26 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         return fmt.string(from: date)
     }
 
+    func timeFormatUTC(_ time: String, _ format: String, _ sh: Int) -> String {
+        guard let ms = Double(time) else { return time }
+        let date = Date(timeIntervalSince1970: ms / 1000)
+        let fmt = DateFormatter()
+        fmt.dateFormat = format.isEmpty ? "yyyy-MM-dd HH:mm:ss" : format
+        fmt.timeZone = TimeZone(secondsFromGMT: sh * 3600)
+        return fmt.string(from: date)
+    }
+
+    func randomUUID() -> String { UUID().uuidString }
+
+    // MARK: - Chinese conversion (simplified ↔ traditional)
+    // Full CC-CEDICT conversion not available without a library;
+    // these stubs return unchanged text — sufficient for sources that don't rely on conversion.
+    func t2s(_ text: String) -> String { text }
+    func s2t(_ text: String) -> String { text }
+
+    // MARK: - Logging
+
     func log(_ message: Any) {
-        print("📖 [JS Log]: \(message)")
+        print("📖 [JS]: \(message)")
     }
 }

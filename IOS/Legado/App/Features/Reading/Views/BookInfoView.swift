@@ -37,16 +37,18 @@ class BookInfoViewModel: ObservableObject {
             let sources = try await db.getAllBookSources()
             guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
 
-            // 执行 init 规则（可能跳转到真实详情页 URL）
+            // ISSUE-025: ruleBookInfoInit 是初始化 JS（副作用），不是重定向 URL 规则
+            // Android BookInfo.analyzeBookInfo() 中此规则只做变量/Cookie 初始化，返回值丢弃
             var detailUrl = book.bookUrl
+            var initVariables: [String: Any] = [:]
             if let initRule = source.ruleBookInfoInit, !initRule.isEmpty {
                 var ctx = AnalyzeContext(source: source, baseUrl: book.bookUrl)
-                if let redirectUrl = ruleExecutor.execute(initRule, in: &ctx), !redirectUrl.isEmpty {
-                    detailUrl = redirectUrl
-                }
+                _ = ruleExecutor.execute(initRule, in: &ctx)  // 只取副作用（变量/Cookie），忽略返回值
+                initVariables = ctx.variables
             }
 
             var context = AnalyzeContext(source: source, baseUrl: detailUrl)
+            context.variables = initVariables
             let html = try await network.request(detailUrl, source: source)
             context.result = html
 
@@ -93,64 +95,93 @@ class BookInfoViewModel: ObservableObject {
 struct BookInfoView: View {
     @StateObject var viewModel: BookInfoViewModel
     @Environment(\.dismiss) var dismiss
-    
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // 顶部卡片
+            VStack(alignment: .leading, spacing: 16) {
+
+                // MARK: 顶部信息卡（封面 + 文字信息）
                 HStack(alignment: .top, spacing: 15) {
-                    // 封面
                     AsyncImage(url: URL(string: viewModel.book.coverUrl ?? "")) { image in
-                        image.resizable()
-                            .aspectRatio(contentMode: .fill)
+                        image.resizable().aspectRatio(contentMode: .fill)
                     } placeholder: {
                         Rectangle().fill(Color.gray.opacity(0.2))
+                            .overlay(Image(systemName: "book.closed").foregroundColor(.gray))
                     }
                     .frame(width: 100, height: 140)
+                    .clipped()
                     .cornerRadius(8)
                     .shadow(radius: 5)
-                    
-                    VStack(alignment: .leading, spacing: 8) {
+
+                    // 不使用 Spacer()：ScrollView 提议无限高度，Spacer 扩展至无穷大
+                    // 导致 VStack 内容被推到不可见位置（"一片空白"的根因）
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(viewModel.book.name)
-                            .font(.title3)
-                            .fontWeight(.bold)
-                        
+                            .font(.title3).fontWeight(.bold)
+                            .fixedSize(horizontal: false, vertical: true)
+
                         Text(viewModel.book.author)
-                            .foregroundColor(.secondary)
-                        
-                        Text("来源: \(viewModel.book.originName)")
+                            .font(.subheadline).foregroundColor(.secondary)
+
+                        Text(viewModel.book.originName)
                             .font(.caption)
-                            .padding(4)
+                            .padding(.horizontal, 6).padding(.vertical, 3)
                             .background(Color.blue.opacity(0.1))
                             .foregroundColor(.blue)
                             .cornerRadius(4)
-                        
-                        Spacer()
-                        
-                        Button(action: { Task { await viewModel.addToShelf() } }) {
-                            Text(viewModel.isSaved ? "已在书架" : "加入书架")
-                                .fontWeight(.bold)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(viewModel.isSaved ? Color.gray : Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
-                        }
-                        .disabled(viewModel.isSaved)
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .padding()
-                
-                // 简介
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("简介")
-                        .font(.headline)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+                .padding(.horizontal)
+
+                // MARK: 加入书架按钮（独占一行，宽度充足，不受 Spacer 影响）
+                Button(action: { Task { await viewModel.addToShelf() } }) {
+                    Text(viewModel.isSaved ? "已在书架" : "加入书架")
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(viewModel.isSaved ? Color.gray : Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .disabled(viewModel.isSaved)
+                .padding(.horizontal)
+
+                // MARK: 简介
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("简介").font(.headline)
                     Text(viewModel.book.intro ?? "暂无简介")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .lineSpacing(5)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
                 .padding(.horizontal)
+
+                Spacer(minLength: 20)
+            }
+            .padding(.top, 12)
+        }
+        .overlay {
+            if viewModel.isLoading {
+                VStack {
+                    Spacer()
+                    ProgressView("加载中...")
+                        .padding(20)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(12)
+                        .shadow(radius: 4)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .background(Color(.systemBackground).opacity(0.6))
             }
         }
         .navigationTitle(viewModel.book.name)

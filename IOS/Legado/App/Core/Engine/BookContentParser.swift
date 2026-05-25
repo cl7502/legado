@@ -1,60 +1,126 @@
 import Foundation
+import SwiftSoup
 
-/// 正文解析调度器
-/// 目标：协调 获取 -> CSS 净化 -> 正则净化 -> 格式化 的全流程
+/// Book content parser — mirrors Android BookContent.analyzeContent()
+///
+/// Flow:
+///   1. Apply content rule → extract HTML fragment
+///   2. Convert HTML to readable plain text (preserving line breaks)
+///   3. Apply source-level replaceRegex (ruleContentReplace field)
+///   4. Apply user ReplaceRules
+///   5. Apply basic formatting (trim, indent)
 class BookContentParser {
     static let shared = BookContentParser()
-    
+
     private let ruleExecutor = RuleExecutor.shared
-    private let htmlParser = HTMLParser.shared
     private let contentProcessor = ContentProcessor.shared
-    
-    /// 解析并净化章节内容
-    /// - Parameters:
-    ///   - rawHtml: 网页源码
-    ///   - rule: 书源的正文规则
-    ///   - context: 解析上下文
-    ///   - replaceRules: 净化规则列表
-    /// - Returns: 最终可阅读的正文
+
+    /// Parse and clean chapter content.
     func parseContent(
         _ rawHtml: String,
         rule: String,
         context: inout AnalyzeContext,
         replaceRules: [ReplaceRule] = []
     ) -> String {
-        // 1. 设置当前结果
         context.result = rawHtml
-        
-        // 2. 提取正文 (初步提取，通常返回 HTML 片段)
-        // 注意：Legado 的正文规则可能包含需要删除的选择器，例如 "id.content@html"
-        guard let extractedHtml = ruleExecutor.execute(rule, in: &context) else {
+
+        // 1. Extract content via rule
+        guard let extracted = ruleExecutor.execute(rule, in: &context), !extracted.isEmpty else {
+            // Fallback: try body text if rule is empty or fails
+            if rule.isEmpty {
+                return processText(rawHtml, source: context.source, replaceRules: replaceRules)
+            }
             return "正文解析失败"
         }
-        
-        // 3. CSS 级别净化 (根据书源定义的待删除规则，此逻辑常在规则字符串中以 - 开头)
-        // 这里我们先实现基础的全局净化
-        var cleanedHtml = extractedHtml
-        
-        // 4. 将 HTML 转换为纯文本，并保留换行
-        // 模拟 Android 的逻辑，将 <p>, <br> 转换为换行符
-        let textContent = htmlToPlainText(cleanedHtml)
-        
-        // 5. 正则净化与格式化
-        return contentProcessor.process(textContent, with: replaceRules)
+
+        return processText(extracted, source: context.source, replaceRules: replaceRules)
     }
-    
-    /// 简易 HTML 转纯文本 (处理换行)
-    private func htmlToPlainText(_ html: String) -> String {
-        // 简单粗暴但有效的方法：处理 <br> 和 <p>
-        var text = html.replacingOccurrences(of: "<br/?>", with: "\n", options: .regularExpression, range: nil)
-        text = text.replacingOccurrences(of: "</p>", with: "\n", options: .caseInsensitive, range: nil)
-        text = text.replacingOccurrences(of: "<p>", with: "", options: .caseInsensitive, range: nil)
-        
-        // 使用 SwiftSoup 去除剩余所有标签
-        do {
-            return try SwiftSoup.clean(text, .none()) ?? ""
-        } catch {
-            return text
+
+    // MARK: - Internal pipeline
+
+    private func processText(_ html: String, source: BookSource, replaceRules: [ReplaceRule]) -> String {
+        // 2. HTML → plain text
+        var text = htmlToPlainText(html)
+
+        // 3. Source-level replaceRegex (ruleContentReplace field on book source)
+        if let srcReplace = source.ruleContentReplace, !srcReplace.isEmpty {
+            text = applySourceReplace(text, rule: srcReplace)
         }
+
+        // 4. User replace rules
+        text = contentProcessor.process(text, with: replaceRules)
+
+        return text
+    }
+
+    /// Apply source-level content replace rule (Android: contentRule.replaceRegex).
+    /// Format mirrors Android ReplaceRule format: patterns separated by newline,
+    /// each entry is "pattern##replacement" (regex if starts with /).
+    private func applySourceReplace(_ text: String, rule: String) -> String {
+        var result = text
+        let entries = rule.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        for entry in entries where !entry.isEmpty {
+            let parts = entry.components(separatedBy: "##")
+            let pattern     = parts[0]
+            let replacement = parts.count > 1 ? parts[1] : ""
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) {
+                let range = NSRange(result.startIndex..., in: result)
+                result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: replacement)
+            } else {
+                result = result.replacingOccurrences(of: pattern, with: replacement)
+            }
+        }
+        return result
+    }
+
+    /// HTML → plain text.
+    /// Mirrors Android HtmlFormatter.formatKeepImg() behaviour:
+    ///   • <p>, <div>, <br> → newline
+    ///   • Trim each line, remove empty lines
+    ///   • Indent each paragraph with two ideographic spaces (Android default)
+    func htmlToPlainText(_ html: String) -> String {
+        guard !html.isEmpty else { return "" }
+
+        // If it looks like plain text (no tags), skip HTML parsing
+        if !html.contains("<") {
+            return formatLines(html.components(separatedBy: .newlines))
+        }
+
+        do {
+            let doc = try SwiftSoup.parse(html)
+            // Remove script/style nodes
+            try doc.select("script, style, head").remove()
+
+            // Convert block elements to newline markers before text extraction
+            let blockTags = ["p", "div", "br", "li", "h1", "h2", "h3", "h4", "h5", "h6",
+                             "blockquote", "tr", "dt", "dd", "article", "section"]
+            for tag in blockTags {
+                for el in try doc.select(tag).array() {
+                    try el.before("\n")
+                    try el.after("\n")
+                }
+            }
+
+            let rawText = try doc.body()?.text() ?? ""
+            // body().text() already collapses whitespace; split on the \n markers we injected
+            let lines = rawText.components(separatedBy: "\n")
+            return formatLines(lines)
+        } catch {
+            // Fallback regex-based stripping
+            var text = html
+            text = text.replacingOccurrences(of: "<br[^>]*>", with: "\n", options: .regularExpression)
+            text = text.replacingOccurrences(of: "</p>|</div>|</li>", with: "\n",
+                                              options: [.regularExpression, .caseInsensitive])
+            text = text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            return formatLines(text.components(separatedBy: .newlines))
+        }
+    }
+
+    private func formatLines(_ lines: [String]) -> String {
+        let trimmed = lines
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        // Android default indent: two ideographic spaces (　　)
+        return trimmed.map { "　　" + $0 }.joined(separator: "\n\n")
     }
 }

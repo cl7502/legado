@@ -26,12 +26,26 @@ struct SimulationPagingView: UIViewControllerRepresentable {
         let currentVC = uiViewController.viewControllers?.first as? PhysicalPageViewController
         let desiredIndex = viewModel.currentPageIndex
 
-        guard currentVC?.pageIndex != desiredIndex else { return }
+        // 计算目标页的期望内容，用于检测分页完成后内容变化
+        let expectedContent: String
+        if viewModel.currentPages.isEmpty {
+            expectedContent = viewModel.chapterContents[viewModel.currentChapterIndex] ?? "正在加载..."
+        } else {
+            let clamped = max(0, min(desiredIndex, viewModel.currentPages.count - 1))
+            expectedContent = viewModel.currentPages[clamped]
+        }
+
+        // 如果页码相同且内容也相同，无需重新渲染
+        if currentVC?.pageIndex == desiredIndex && currentVC?.content == expectedContent {
+            return
+        }
 
         let direction: UIPageViewController.NavigationDirection =
             (currentVC?.pageIndex ?? 0) < desiredIndex ? .forward : .reverse
         let nextVC = context.coordinator.makePageVC(at: desiredIndex)
-        uiViewController.setViewControllers([nextVC], direction: direction, animated: true)
+        // 仅在页码真正改变时启用动画，内容刷新时不动画
+        let animated = currentVC?.pageIndex != desiredIndex
+        uiViewController.setViewControllers([nextVC], direction: direction, animated: animated)
     }
 
     func makeCoordinator() -> Coordinator {

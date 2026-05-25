@@ -34,6 +34,8 @@ struct MainTabView: View {
                 }
                 .tag(3)
         }
+        // ISSUE-026: 确保背景延伸到全面屏 SafeArea 区域，消除黑边
+        .background(Color(.systemBackground).ignoresSafeArea())
     }
 }
 
