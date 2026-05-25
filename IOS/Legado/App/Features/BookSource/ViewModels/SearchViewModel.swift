@@ -74,7 +74,13 @@ class SearchViewModel: ObservableObject {
             let html: String
             let finalUrl: String
 
-            if parsed.method == "POST", let body = parsed.body {
+            if parsed.webView {
+                // ISSUE-010: Anti-scraping sources — render via headless WKWebView
+                html = (try? await HeadlessWebViewLoader.fetch(urlString: parsed.url,
+                                                                headers: reqHeaders,
+                                                                injectJs: parsed.webJs)) ?? ""
+                finalUrl = parsed.url
+            } else if parsed.method == "POST", let body = parsed.body {
                 html = try await network.requestPost(parsed.url, body: body,
                                                      source: source, headers: Alamofire.HTTPHeaders(reqHeaders))
                 finalUrl = parsed.url

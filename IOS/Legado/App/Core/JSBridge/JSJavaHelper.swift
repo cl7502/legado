@@ -19,7 +19,10 @@ import CommonCrypto
 
     // Encoding
     func md5(_ text: String) -> String
+    func md5Encode16(_ text: String) -> String
     func sha1(_ text: String) -> String
+    func sha256(_ text: String) -> String
+    func sha512(_ text: String) -> String
     func base64Encode(_ text: String) -> String
     func base64Decode(_ text: String) -> String
     func urlEncode(_ text: String) -> String
@@ -28,6 +31,15 @@ import CommonCrypto
     func htmlDecode(_ text: String) -> String
     func hexDecodeToString(_ hex: String) -> String
     func hexEncodeToString(_ utf8: String) -> String
+
+    // HMAC
+    func hmacSha256(_ data: String, _ key: String) -> String
+    func hmacSha1(_ data: String, _ key: String) -> String
+    func hmacMd5(_ data: String, _ key: String) -> String
+
+    // AES
+    func aesEncrypt(_ data: String, _ key: String, _ iv: String, _ mode: String) -> String
+    func aesDecrypt(_ base64Data: String, _ key: String, _ iv: String, _ mode: String) -> String
 
     // Compression
     func gzip(_ text: String) -> String?
@@ -43,6 +55,7 @@ import CommonCrypto
     func getLastChapter() -> String?
     func getBook() -> String?
     func getCookie(_ tag: String) -> String?
+    func setCookie(_ tag: String, _ value: String)
 
     // Time / system
     func getNetworkTime() -> String
@@ -101,8 +114,25 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         return digest.map { String(format: "%02hhx", $0) }.joined()
     }
 
+    func md5Encode16(_ text: String) -> String {
+        let full = md5(text)
+        let start = full.index(full.startIndex, offsetBy: 8)
+        let end = full.index(full.startIndex, offsetBy: 24)
+        return String(full[start..<end])
+    }
+
     func sha1(_ text: String) -> String {
         let digest = Insecure.SHA1.hash(data: Data(text.utf8))
+        return digest.map { String(format: "%02hhx", $0) }.joined()
+    }
+
+    func sha256(_ text: String) -> String {
+        let digest = SHA256.hash(data: Data(text.utf8))
+        return digest.map { String(format: "%02hhx", $0) }.joined()
+    }
+
+    func sha512(_ text: String) -> String {
+        let digest = SHA512.hash(data: Data(text.utf8))
         return digest.map { String(format: "%02hhx", $0) }.joined()
     }
 
@@ -163,7 +193,77 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         utf8.utf8.map { String(format: "%02x", $0) }.joined()
     }
 
-    // MARK: - Compression
+    // MARK: - HMAC (CommonCrypto)
+
+    func hmacSha256(_ data: String, _ key: String) -> String {
+        hmac(data: data, key: key, algorithm: CCHmacAlgorithm(kCCHmacAlgSHA256), digestLen: CC_SHA256_DIGEST_LENGTH)
+    }
+
+    func hmacSha1(_ data: String, _ key: String) -> String {
+        hmac(data: data, key: key, algorithm: CCHmacAlgorithm(kCCHmacAlgSHA1), digestLen: CC_SHA1_DIGEST_LENGTH)
+    }
+
+    func hmacMd5(_ data: String, _ key: String) -> String {
+        hmac(data: data, key: key, algorithm: CCHmacAlgorithm(kCCHmacAlgMD5), digestLen: CC_MD5_DIGEST_LENGTH)
+    }
+
+    private func hmac(data: String, key: String, algorithm: CCHmacAlgorithm, digestLen: Int32) -> String {
+        let keyBytes = Array(key.utf8)
+        let msgBytes = Array(data.utf8)
+        var out = [UInt8](repeating: 0, count: Int(digestLen))
+        CCHmac(algorithm, keyBytes, keyBytes.count, msgBytes, msgBytes.count, &out)
+        return out.map { String(format: "%02hhx", $0) }.joined()
+    }
+
+    // MARK: - AES (CommonCrypto)
+    // mode string: "CBC/PKCS5Padding", "ECB/PKCS5Padding", etc.
+
+    func aesEncrypt(_ data: String, _ key: String, _ iv: String, _ mode: String) -> String {
+        guard let dataBytes = data.data(using: .utf8),
+              let keyBytes = key.data(using: .utf8) else { return "" }
+        let ivBytes = iv.data(using: .utf8) ?? Data(repeating: 0, count: kCCBlockSizeAES128)
+        let opts = aesOptions(mode)
+        return aesCrypt(.encrypt, data: dataBytes, key: keyBytes, iv: ivBytes, opts: opts)?
+            .base64EncodedString() ?? ""
+    }
+
+    func aesDecrypt(_ base64Data: String, _ key: String, _ iv: String, _ mode: String) -> String {
+        guard let dataBytes = Data(base64Encoded: base64Data),
+              let keyBytes = key.data(using: .utf8) else { return "" }
+        let ivBytes = iv.data(using: .utf8) ?? Data(repeating: 0, count: kCCBlockSizeAES128)
+        let opts = aesOptions(mode)
+        return aesCrypt(.decrypt, data: dataBytes, key: keyBytes, iv: ivBytes, opts: opts)
+            .flatMap { String(data: $0, encoding: .utf8) } ?? ""
+    }
+
+    private func aesOptions(_ mode: String) -> CCOptions {
+        let upper = mode.uppercased()
+        let ecb = upper.contains("ECB") ? CCOptions(kCCOptionECBMode) : 0
+        return CCOptions(kCCOptionPKCS7Padding) | ecb
+    }
+
+    private func aesCrypt(_ op: CCOperation, data: Data, key: Data, iv: Data, opts: CCOptions) -> Data? {
+        let keyLen = key.count
+        guard keyLen == 16 || keyLen == 24 || keyLen == 32 else { return nil }
+        let bufSize = data.count + kCCBlockSizeAES128
+        var out = Data(count: bufSize)
+        var outLen = 0
+        let status: CCCryptorStatus = key.withUnsafeBytes { kp in
+            iv.withUnsafeBytes { ip in
+                data.withUnsafeBytes { dp in
+                    out.withUnsafeMutableBytes { op2 in
+                        CCCrypt(op, CCAlgorithm(kCCAlgorithmAES), opts,
+                                kp.baseAddress, keyLen,
+                                ip.baseAddress,
+                                dp.baseAddress, data.count,
+                                op2.baseAddress, bufSize,
+                                &outLen)
+                    }
+                }
+            }
+        }
+        return status == kCCSuccess ? out.prefix(outLen) : nil
+    }
 
     func gzip(_ text: String) -> String? {
         guard let data = text.data(using: .utf8) else { return nil }
@@ -213,6 +313,10 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
 
     func getCookie(_ tag: String) -> String? {
         CookieManager.shared.getCookie(for: tag)
+    }
+
+    func setCookie(_ tag: String, _ value: String) {
+        CookieManager.shared.saveCookie(forTag: tag, value: value)
     }
 
     // MARK: - Time / system

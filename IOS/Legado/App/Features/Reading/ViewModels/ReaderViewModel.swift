@@ -102,7 +102,6 @@ class ReaderViewModel: ObservableObject {
             var context = AnalyzeContext(source: source, baseUrl: effectiveTocUrl)
             context.book = book
             let html = try await network.request(effectiveTocUrl, source: source)
-            let html = try await network.request(effectiveTocUrl, source: source)
             context.result = html
 
             let listRule = source.ruleTocList ?? ""
