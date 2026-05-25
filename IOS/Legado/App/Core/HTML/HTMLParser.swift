@@ -41,6 +41,11 @@ class HTMLParser {
             return parts.compactMap { xpathText(html, xpath: $0.trimmed) }.first
         }
 
+        // Primary: libxml2 full XPath 1.0
+        if let result = LibXMLXPath.shared.evaluateToString(xpath, html: html) {
+            return result.isEmpty ? nil : result
+        }
+        // Fallback: CSS conversion (handles edge cases where libxml2 returns nothing)
         let (css, attrName) = xpathToCSS(xpath)
         guard !css.isEmpty else { return nil }
         do {
@@ -75,6 +80,11 @@ class HTMLParser {
             return []
         }
 
+        // Primary: libxml2 full XPath 1.0
+        let libxmlResults = LibXMLXPath.shared.evaluateToHTMLList(xpath, html: html)
+        if !libxmlResults.isEmpty { return libxmlResults }
+
+        // Fallback: CSS conversion
         let (css, _) = xpathToCSS(xpath)
         guard !css.isEmpty else { return [] }
         do {
