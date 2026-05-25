@@ -169,6 +169,18 @@ class NetworkManager {
         return result
     }
 
+    /// Synchronous raw-data fetch (for binary assets such as TTF fonts in JS bridge).
+    func requestSyncData(_ url: String) -> Data? {
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: Data?
+        session.request(url, method: .get).responseData { resp in
+            result = resp.data
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 30)
+        return result
+    }
+
     // MARK: - Helpers
 
     private func mergeHeaders(base: [String: String]?, extra: HTTPHeaders?) -> HTTPHeaders {

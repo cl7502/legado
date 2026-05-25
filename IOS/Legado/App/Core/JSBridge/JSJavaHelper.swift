@@ -51,6 +51,10 @@ import CommonCrypto
     func queryTextContent(_ html: String, _ cssSelector: String) -> String?
     func queryAllTextContent(_ html: String, _ cssSelector: String) -> String
 
+    // Font decryption (ISSUE-016)
+    func queryTTF(_ str: String) -> QueryTTFProxy?
+    func replaceFont(_ text: String, _ errorTTF: JSValue, _ correctTTF: JSValue) -> String
+
     // Reader state
     func getLastChapter() -> String?
     func getBook() -> String?
@@ -297,7 +301,36 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         return els.array().compactMap { try? $0.text() }.joined(separator: "\n")
     }
 
-    // MARK: - Reader state
+    // MARK: - Font decryption (ISSUE-016)
+
+    func queryTTF(_ str: String) -> QueryTTFProxy? {
+        let data: Data?
+        let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased().hasPrefix("http") {
+            data = NetworkManager.shared.requestSyncData(trimmed)
+        } else {
+            // Try standard then URL-safe base64
+            var b64 = trimmed.replacingOccurrences(of: "-", with: "+")
+                              .replacingOccurrences(of: "_", with: "/")
+            let rem = b64.count % 4
+            if rem > 0 { b64 += String(repeating: "=", count: 4 - rem) }
+            data = Data(base64Encoded: b64)
+        }
+        guard let fontData = data, !fontData.isEmpty else { return nil }
+        return QueryTTFProxy(QueryTTF(data: fontData))
+    }
+
+    func replaceFont(_ text: String, _ errorTTF: JSValue, _ correctTTF: JSValue) -> String {
+        guard let errProxy = errorTTF.toObject() as? QueryTTFProxy,
+              let corProxy = correctTTF.toObject() as? QueryTTFProxy
+        else { return text }
+        return text.unicodeScalars.map { scalar -> String in
+            let ch = Character(scalar)
+            let glyph = errProxy.ttf.glyphId(for: ch)
+            if glyph == 0 { return String(scalar) }
+            return corProxy.ttf.char(forGlyphId: glyph).map { String($0) } ?? String(scalar)
+        }.joined()
+    }
 
     func getLastChapter() -> String? {
         currentContext?.variables["lastChapterTitle"] as? String
@@ -360,4 +393,15 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     func log(_ message: Any) {
         print("📖 [JS]: \(message)")
     }
+}
+
+// MARK: - QueryTTFProxy — JSExport wrapper for QueryTTF (ISSUE-016)
+
+/// Opaque token passed between `queryTTF()` and `replaceFont()` in JS book sources.
+/// Exposed as a JS object so JS code can write:  `java.replaceFont(text, java.queryTTF(url), ...)`.
+@objc protocol QueryTTFProxyProtocol: JSExport {}
+
+@objc final class QueryTTFProxy: NSObject, QueryTTFProxyProtocol {
+    let ttf: QueryTTF
+    init(_ ttf: QueryTTF) { self.ttf = ttf }
 }
