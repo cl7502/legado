@@ -42,6 +42,9 @@ class BookContentParser {
         // 2. HTML → plain text
         var text = htmlToPlainText(html)
 
+        // 2b. HTML entity 反转义 (mirrors Android StringEscapeUtils.unescapeHtml4)
+        text = htmlUnescape(text)
+
         // 3. Source-level replaceRegex (ruleContentReplace field on book source)
         if let srcReplace = source.ruleContentReplace, !srcReplace.isEmpty {
             text = applySourceReplace(text, rule: srcReplace)
@@ -122,5 +125,56 @@ class BookContentParser {
             .filter { !$0.isEmpty }
         // Android default indent: two ideographic spaces (　　)
         return trimmed.map { "　　" + $0 }.joined(separator: "\n\n")
+    }
+}
+
+// MARK: - HTML entity unescaping
+
+private extension BookContentParser {
+    /// Decode HTML named and numeric entities — mirrors Android StringEscapeUtils.unescapeHtml4().
+    func htmlUnescape(_ text: String) -> String {
+        guard text.contains("&") else { return text }
+        var result = text
+        let named: [(String, String)] = [
+            ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
+            ("&apos;", "'"), ("&nbsp;", "\u{00A0}"),
+            ("&ldquo;", "\u{201C}"), ("&rdquo;", "\u{201D}"),
+            ("&lsquo;", "\u{2018}"), ("&rsquo;", "\u{2019}"),
+            ("&mdash;", "\u{2014}"), ("&ndash;", "\u{2013}"),
+            ("&hellip;", "\u{2026}"), ("&copy;", "\u{00A9}"),
+            ("&reg;", "\u{00AE}"),   ("&trade;", "\u{2122}"),
+            ("&times;", "\u{00D7}"), ("&divide;", "\u{00F7}"),
+            ("&euro;", "\u{20AC}"),  ("&pound;", "\u{00A3}"),
+            ("&yen;", "\u{00A5}"),   ("&cent;", "\u{00A2}"),
+            ("&bull;", "\u{2022}"),  ("&middot;", "\u{00B7}"),
+            ("&laquo;", "\u{00AB}"), ("&raquo;", "\u{00BB}"),
+        ]
+        for (entity, replacement) in named {
+            result = result.replacingOccurrences(of: entity, with: replacement,
+                                                 options: .caseInsensitive)
+        }
+        guard result.contains("&#") else { return result }
+        // Numeric entities: &#NNN; (decimal) and &#xHH; (hex)
+        if let re = try? NSRegularExpression(pattern: "&#(x[0-9a-fA-F]+|[0-9]+);",
+                                             options: .caseInsensitive) {
+            let ns = result as NSString
+            let matches = re.matches(in: result,
+                                     range: NSRange(location: 0, length: ns.length)).reversed()
+            for m in matches {
+                guard let numRange = Range(m.range(at: 1), in: result),
+                      let fullRange = Range(m.range, in: result) else { continue }
+                let numStr = String(result[numRange])
+                let codePoint: UInt32
+                if numStr.lowercased().hasPrefix("x") {
+                    codePoint = UInt32(numStr.dropFirst(), radix: 16) ?? 0
+                } else {
+                    codePoint = UInt32(numStr) ?? 0
+                }
+                if codePoint > 0, let scalar = Unicode.Scalar(codePoint) {
+                    result.replaceSubrange(fullRange, with: String(Character(scalar)))
+                }
+            }
+        }
+        return result
     }
 }
