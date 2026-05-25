@@ -57,8 +57,11 @@ class SearchViewModel: ObservableObject {
     nonisolated private func searchInSource(_ query: String, source: BookSource) async -> [SearchResult] {
         guard let template = source.searchUrl else { return [] }
 
-        // 解析搜索 URL 模板 — 支持 GET/POST 及 {{key}}、{{page}} 变量
-        let parsed = AnalyzeUrl.parse(template, variables: ["key": query, "page": "1"])
+        // 解析搜索 URL 模板 — 支持 GET/POST 及 {{key}}、{{page}} 变量、@js: 前置块
+        var baseCtx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
+        baseCtx.searchKey = query
+        let parsed = AnalyzeUrl.parse(template, variables: ["key": query, "page": "1"],
+                                      context: baseCtx)
         guard !parsed.url.isEmpty else { return [] }
 
         do {
@@ -158,39 +161,55 @@ class SearchViewModel: ObservableObject {
 /// URL template parser — mirrors Android AnalyzeUrl logic.
 ///
 /// Supports:
+///   • @js: prefix — execute JS to produce dynamic URL
 ///   • {{key}} / {{page}} variable substitution (with noEncode() variant)
+///   • {{jsExpr}} inline JS evaluation when context provided
 ///   • {1,2,3} page-based URL switching (Android page pattern)
-///   • URL option JSON:  http://...url, {"method":"POST","body":"...","headers":{...}}
+///   • URL option JSON:  http://...url, {"method":"POST","body":"...","headers":{...},"charset":"...","retry":N,"webView":true,"webJs":"..."}
 ///   • @POST@ separator
-///   • charset / headers / body from option JSON
 struct AnalyzeUrl {
     let url: String
     let body: String?
     let headers: [String: String]
     let method: String  // "GET" or "POST"
+    let charset: String?
+    let retry: Int
+    let webView: Bool
+    let webJs: String?
 
-    init(url: String, body: String? = nil, headers: [String: String] = [:], method: String = "GET") {
+    init(url: String, body: String? = nil, headers: [String: String] = [:],
+         method: String = "GET", charset: String? = nil, retry: Int = 0,
+         webView: Bool = false, webJs: String? = nil) {
         self.url = url
         self.body = body
         self.headers = headers
         self.method = method
+        self.charset = charset
+        self.retry = retry
+        self.webView = webView
+        self.webJs = webJs
     }
 
-    static func parse(_ template: String, variables: [String: String] = [:]) -> AnalyzeUrl {
+    static func parse(_ template: String, variables: [String: String] = [:],
+                      context: AnalyzeContext? = nil) -> AnalyzeUrl {
         var tmpl = template.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // 1. Replace {{varName}} / {{page}} placeholders
-        for (key, value) in variables {
-            let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
-            tmpl = tmpl.replacingOccurrences(of: "{{\(key)}}", with: encoded)
-            tmpl = tmpl.replacingOccurrences(of: "{{\(key), noEncode()}}", with: value)
-            tmpl = tmpl.replacingOccurrences(of: "{{\(key),noEncode()}}", with: value)
+        // 0. @js: prefix — execute JS to get the dynamic URL (Android AnalyzeUrl L140-155)
+        if tmpl.hasPrefix("@js:") || tmpl.lowercased().hasPrefix("javascript:") {
+            let jsCode: String
+            if tmpl.hasPrefix("@js:") { jsCode = String(tmpl.dropFirst(4)) }
+            else { jsCode = String(tmpl.dropFirst(11)) }
+            if var ctx = context {
+                for (k, v) in variables { ctx.variables[k] = v }
+                if let result = LegadoJSEngine.shared.evaluateRule(jsCode, in: &ctx),
+                   !result.isEmpty {
+                    tmpl = result
+                }
+            }
         }
-        // 清除所有未被替换的 {{...}} 占位符（含 { } 的 URL 会被 URLSession 拒绝 → Unsupported URL）
-        if let re = try? NSRegularExpression(pattern: #"\{\{[^}]*\}\}"#) {
-            let ns = tmpl as NSString
-            tmpl = re.stringByReplacingMatches(in: tmpl, range: NSRange(location: 0, length: ns.length), withTemplate: "")
-        }
+
+        // 1. Replace {{varName}} / {{page}} placeholders; evaluate {{jsExpr}} when context given
+        tmpl = resolveTemplateVars(tmpl, variables: variables, context: context)
 
         // 2. {1,2,3} page-switching pattern: p1→choice1, p2→choice2, ...
         let page = Int(variables["page"] ?? "1") ?? 1
@@ -215,28 +234,69 @@ struct AnalyzeUrl {
             }
         }
 
-        // 4. URL option JSON:  url, {"method":...,"body":...,"headers":...}
-        //    Android: the first , after the URL splits url from option JSON
+        // 4. URL option JSON:  url, {"method":...,"body":...,"headers":...,"charset":...,"retry":N,...}
         if let commaIdx = findOptionComma(in: tmpl) {
             let urlPart  = String(tmpl[..<commaIdx]).trimmed
             let optPart  = String(tmpl[tmpl.index(after: commaIdx)...]).trimmed
 
             if urlPart.lowercased().hasPrefix("http") {
                 if optPart.hasPrefix("{") {
-                    // Try to parse as URL option JSON
                     if let opt = parseOptionJSON(optPart) {
-                        return AnalyzeUrl(url: urlPart,
-                                          body: opt.body,
-                                          headers: opt.headers,
-                                          method: opt.method)
+                        return AnalyzeUrl(url: urlPart, body: opt.body, headers: opt.headers,
+                                          method: opt.method, charset: opt.charset,
+                                          retry: opt.retry, webView: opt.webView, webJs: opt.webJs)
                     }
-                    // Plain POST body
                     return AnalyzeUrl(url: urlPart, body: optPart, headers: [:], method: "POST")
                 }
             }
         }
 
         return AnalyzeUrl(url: tmpl, body: nil, headers: [:], method: "GET")
+    }
+
+    // MARK: - Template variable resolution
+
+    private static func resolveTemplateVars(_ tmpl: String, variables: [String: String],
+                                            context: AnalyzeContext?) -> String {
+        var result = tmpl
+        // Named variable substitution: {{key}} / {{key, noEncode()}}
+        for (key, value) in variables {
+            let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+            result = result.replacingOccurrences(of: "{{\(key)}}", with: encoded)
+            result = result.replacingOccurrences(of: "{{\(key), noEncode()}}", with: value)
+            result = result.replacingOccurrences(of: "{{\(key),noEncode()}}", with: value)
+        }
+        // {{jsExpr}} — evaluate when we have a context; otherwise strip to avoid Unsupported URL
+        guard result.contains("{{") else { return result }
+        if var ctx = context {
+            for (k, v) in variables { ctx.variables[k] = v }
+            result = evaluateInlineJS(result, context: &ctx)
+        } else {
+            // Strip unresolved {{...}} so URLSession doesn't reject the URL
+            if let re = try? NSRegularExpression(pattern: #"\{\{[^}]*\}\}"#) {
+                let ns = result as NSString
+                result = re.stringByReplacingMatches(in: result,
+                                                     range: NSRange(location: 0, length: ns.length),
+                                                     withTemplate: "")
+            }
+        }
+        return result
+    }
+
+    private static func evaluateInlineJS(_ tmpl: String, context: inout AnalyzeContext) -> String {
+        guard let re = try? NSRegularExpression(pattern: #"\{\{([\s\S]*?)\}\}"#) else { return tmpl }
+        let ns = tmpl as NSString
+        let matches = re.matches(in: tmpl, range: NSRange(location: 0, length: ns.length)).reversed()
+        var result = tmpl
+        for m in matches {
+            guard let fullRange = Range(m.range, in: result),
+                  let exprRange = Range(m.range(at: 1), in: result) else { continue }
+            let expr = String(result[exprRange])
+            // Plain variable name → already substituted; evaluate as JS expression
+            let jsResult = LegadoJSEngine.shared.evaluateRule(expr, in: &context) ?? ""
+            result.replaceSubrange(fullRange, with: jsResult)
+        }
+        return result
     }
 
     // Find the first comma that is NOT inside a {{ }} or < > or [ ] block
@@ -257,6 +317,10 @@ struct AnalyzeUrl {
         var method: String = "GET"
         var body: String? = nil
         var headers: [String: String] = [:]
+        var charset: String? = nil
+        var retry: Int = 0
+        var webView: Bool = false
+        var webJs: String? = nil
     }
 
     private static func parseOptionJSON(_ json: String) -> UrlOption? {
@@ -274,7 +338,11 @@ struct AnalyzeUrl {
         if let h = dict["headers"] as? [String: Any] {
             opt.headers = h.compactMapValues { "\($0)" }
         }
-        // charset field (used to set request encoding — noted but not applied here)
+        if let c = dict["charset"] as? String { opt.charset = c }
+        if let r = dict["retry"] as? Int { opt.retry = r }
+        if let wv = dict["webView"] as? Bool { opt.webView = wv }
+        else if let wv = dict["webView"] as? Int { opt.webView = wv != 0 }
+        if let wj = dict["webJs"] as? String { opt.webJs = wj }
         return opt
     }
 }
