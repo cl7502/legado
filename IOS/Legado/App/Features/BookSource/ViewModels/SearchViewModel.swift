@@ -147,6 +147,11 @@ struct AnalyzeUrl {
             tmpl = tmpl.replacingOccurrences(of: "{{\(key), noEncode()}}", with: value)
             tmpl = tmpl.replacingOccurrences(of: "{{\(key),noEncode()}}", with: value)
         }
+        // 清除所有未被替换的 {{...}} 占位符（含 { } 的 URL 会被 URLSession 拒绝 → Unsupported URL）
+        if let re = try? NSRegularExpression(pattern: #"\{\{[^}]*\}\}"#) {
+            let ns = tmpl as NSString
+            tmpl = re.stringByReplacingMatches(in: tmpl, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+        }
 
         // 2. {1,2,3} page-switching pattern: p1→choice1, p2→choice2, ...
         let page = Int(variables["page"] ?? "1") ?? 1

@@ -164,8 +164,8 @@ struct BookInfoView: View {
                 .background(Color(.secondarySystemBackground))
                 .cornerRadius(12)
                 .padding(.horizontal)
-
-                Spacer(minLength: 20)
+                // Spacer(minLength:) 在 ScrollView 内会使 VStack 无限高→内容消失，改用底部 padding
+                .padding(.bottom, 20)
             }
             .padding(.top, 12)
         }
