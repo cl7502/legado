@@ -85,9 +85,24 @@ class ReaderViewModel: ObservableObject {
 
             // 3. 通过书源抓取目录
             guard let tocUrl = book.tocUrl, !tocUrl.isEmpty else { return }
+            var effectiveTocUrl = tocUrl
 
-            var context = AnalyzeContext(source: source, baseUrl: tocUrl)
-            let html = try await network.request(tocUrl, source: source)
+            // preUpdateJs — execute before TOC fetch; result (if HTTP URL) replaces tocUrl
+            // mirrors Android BookChapterList.runPreUpdateJs() L211-223
+            if let preUpdateJs = source.ruleTocPreUpdateJs, !preUpdateJs.isEmpty {
+                var jsCtx = AnalyzeContext(source: source, baseUrl: effectiveTocUrl)
+                jsCtx.book = book
+                if let newUrl = ruleExecutor.execute(preUpdateJs, in: &jsCtx),
+                   !newUrl.isEmpty, newUrl != effectiveTocUrl {
+                    effectiveTocUrl = newUrl
+                    book.tocUrl = newUrl
+                }
+            }
+
+            var context = AnalyzeContext(source: source, baseUrl: effectiveTocUrl)
+            context.book = book
+            let html = try await network.request(effectiveTocUrl, source: source)
+            let html = try await network.request(effectiveTocUrl, source: source)
             context.result = html
 
             let listRule = source.ruleTocList ?? ""
@@ -114,13 +129,13 @@ class ReaderViewModel: ObservableObject {
             }
 
             // 第一页
-            appendChapterItems(items, baseCtx: context, pageBaseUrl: tocUrl)
+            appendChapterItems(items, baseCtx: context, pageBaseUrl: effectiveTocUrl)
 
             // P1-A: 循环抓取目录后续页 (ruleTocNextUrl)
             if let nextUrlRule = source.ruleTocNextUrl, !nextUrlRule.isEmpty {
-                var visitedUrls = Set<String>([tocUrl])
+                var visitedUrls = Set<String>([effectiveTocUrl])
                 var pageHtml = html
-                var pageBaseUrl = tocUrl
+                var pageBaseUrl = effectiveTocUrl
                 let maxTocPages = 50
 
                 for _ in 0..<maxTocPages {
@@ -140,6 +155,22 @@ class ReaderViewModel: ObservableObject {
 
                     pageHtml = nextHtml
                     pageBaseUrl = nextUrl
+                }
+            }
+
+            // formatJs — apply JS formatter to each chapter title
+            // mirrors Android BookChapterList formatJs loop L134-151
+            if let formatJs = source.ruleTocFormatJs, !formatJs.isEmpty {
+                fetched = fetched.map { chapter in
+                    var jsCtx = AnalyzeContext(source: source, baseUrl: chapter.url)
+                    jsCtx.result = chapter.title
+                    jsCtx.book = book
+                    if let formatted = ruleExecutor.execute(formatJs, in: &jsCtx),
+                       !formatted.isEmpty {
+                        return Chapter(url: chapter.url, title: formatted,
+                                       index: chapter.index, bookUrl: chapter.bookUrl)
+                    }
+                    return chapter
                 }
             }
 
