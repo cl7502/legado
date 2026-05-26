@@ -118,7 +118,11 @@ class RuleExecutor {
             context.result = current
             let jsResult = jsEngine.evaluateRule(coreRule, in: &context)
             if let str = jsResult {
-                result = str.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                // Android AnalyzeRule.getStringList (L228): splits JS String result on \n.
+                // Arrays are already \n-joined by LegadoJSEngine before arriving here.
+                result = str.components(separatedBy: "\n")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
             } else {
                 result = []
             }

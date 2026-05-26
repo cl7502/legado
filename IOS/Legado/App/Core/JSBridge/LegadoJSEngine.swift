@@ -181,6 +181,21 @@ class LegadoJSEngine {
 
             if jsValue?.isUndefined == true || jsValue?.isNull == true {
                 resultString = nil
+            } else if jsValue?.isArray == true {
+                // Android Rhino returns actual Java arrays from JS; JavaScriptCore converts
+                // arrays to comma-separated strings via toString(). Normalise to newline-
+                // separated so RuleExecutor.applySegmentList can split on \n (matching Android).
+                if let arr = jsValue?.toArray() {
+                    let joined = arr
+                        .compactMap { item -> String? in
+                            let s = "\(item)"
+                            return (s == "undefined" || s == "null") ? nil : s
+                        }
+                        .joined(separator: "\n")
+                    resultString = joined.isEmpty ? nil : joined
+                } else {
+                    resultString = jsValue?.toString()
+                }
             } else {
                 resultString = jsValue?.toString()
             }
