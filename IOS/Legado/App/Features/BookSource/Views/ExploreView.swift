@@ -201,6 +201,9 @@ class ExploreCategoryViewModel: ObservableObject {
                     return ExploreCategory(title: title.isEmpty ? "全部" : title, url: fullUrl)
                 } else if line.hasPrefix("http") {
                     return ExploreCategory(title: "全部", url: line)
+                } else if line.hasPrefix("/") || line.hasPrefix("./") {
+                    // Relative path — resolve against source at request time
+                    return ExploreCategory(title: "全部", url: line)
                 }
                 return nil
             }
@@ -238,12 +241,13 @@ class ExploreBookListViewModel: ObservableObject {
             var parseCtx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
             parseCtx.variables["page"] = "1"
             let parsed = AnalyzeUrl.parse(url, variables: ["page": "1"], context: parseCtx)
-            let requestUrl = parsed.url
 
-            // Guard: if URL is still non-http after JS evaluation, report clearly rather than
-            // crashing with "Unsupported URL" from URLSession.
+            // Resolve relative URLs (e.g. "/novel/class/xuanhuan") against the source base URL.
+            // Android AnalyzeUrl always resolves paths against the source domain.
+            let requestUrl = resolveUrl(parsed.url, base: source.bookSourceUrl)
+
             guard requestUrl.lowercased().hasPrefix("http") else {
-                loadError = "无效的发现 URL（非 http）: \(url)"
+                loadError = "无效的发现 URL（非 http 且无法解析）: \(url)"
                 return
             }
 
@@ -286,6 +290,19 @@ class ExploreBookListViewModel: ObservableObject {
             loadError = error.localizedDescription
             print("❌ [ExploreBookListVM] \(error)")
         }
+    }
+
+    private func resolveUrl(_ path: String, base: String) -> String {
+        if path.lowercased().hasPrefix("http") { return path }
+        // Protocol-relative: "//example.com/path"
+        if path.hasPrefix("//") {
+            let scheme = base.hasPrefix("https") ? "https:" : "http:"
+            return scheme + path
+        }
+        guard let baseURL = URL(string: base),
+              let resolved = URL(string: path, relativeTo: baseURL)
+        else { return path }
+        return resolved.absoluteString
     }
 }
 
