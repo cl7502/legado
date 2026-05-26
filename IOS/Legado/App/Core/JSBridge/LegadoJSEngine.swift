@@ -92,9 +92,41 @@ class LegadoJSEngine {
         context.setObject(ctx.searchKey as AnyObject,
                           forKeyedSubscript: "key" as (NSCopying & NSObjectProtocol))
 
+        // nextChapterUrl (Android AnalyzeRule:786) — used by JS rules to build pagination
+        let nextChapterUrl = ctx.variables["nextChapterUrl"] as? String ?? ""
+        context.setObject(nextChapterUrl as AnyObject,
+                          forKeyedSubscript: "nextChapterUrl" as (NSCopying & NSObjectProtocol))
+        // rssArticle (Android AnalyzeRule:787) — RSS not implemented on iOS; bind empty string
+        context.setObject("" as AnyObject,
+                          forKeyedSubscript: "rssArticle" as (NSCopying & NSObjectProtocol))
+
         // cookie proxy
         context.setObject(JSCookieProxy(),
                           forKeyedSubscript: "cookie" as (NSCopying & NSObjectProtocol))
+
+        // cache shim (Android AnalyzeRule:778 binds CacheManager as `cache`)
+        // Wraps java.getFromCacheObject / java.setToCacheObject so JS sources can call
+        // cache.get(key), cache.put(key, value, time), cache.getOrPut(key, getter, time).
+        let cacheShim = """
+        var cache = {
+            get: function(key) {
+                var v = java.getFromCacheObject(key);
+                return (v === null || v === undefined) ? '' : v;
+            },
+            put: function(key, value, time) {
+                java.setToCacheObject(key, value);
+                return value;
+            },
+            getOrPut: function(key, getter, time) {
+                var v = java.getFromCacheObject(key);
+                if (v !== null && v !== undefined && v !== '') return v;
+                var nv = getter();
+                java.setToCacheObject(key, nv);
+                return nv;
+            }
+        };
+        """
+        context.evaluateScript(cacheShim)
 
         // Minimal $ shim — guards against sources whose jsLib failed to define $
         // before our real jsLib eval runs. Real $ should be overwritten by jsLib.

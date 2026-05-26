@@ -360,6 +360,9 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
               let corProxy = correctTTF.toObject() as? QueryTTFProxy
         else { return text }
         return text.unicodeScalars.map { scalar -> String in
+            // Skip control chars, space, and non-BMP scalars — mirrors Android isBlankUnicode check
+            let v = scalar.value
+            guard v > 0x20 && v <= 0xFFFF else { return String(scalar) }
             let ch = Character(scalar)
             let glyph = errProxy.ttf.glyphId(for: ch)
             if glyph == 0 { return String(scalar) }

@@ -270,9 +270,12 @@ struct AnalyzeUrl {
                                             context: AnalyzeContext?) -> String {
         var result = tmpl
         // Named variable substitution: {{key}} / {{key, noEncode()}}
+        // Use raw value for substitution — URL encoding is applied at the transport layer.
+        // Encoding here breaks POST body JSON (e.g. "hello world" → "hello%20world"
+        // inside a JSON string value is wrong). Alamofire/URLSession handles query-param
+        // encoding automatically at request time.
         for (key, value) in variables {
-            let encoded = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
-            result = result.replacingOccurrences(of: "{{\(key)}}", with: encoded)
+            result = result.replacingOccurrences(of: "{{\(key)}}", with: value)
             result = result.replacingOccurrences(of: "{{\(key), noEncode()}}", with: value)
             result = result.replacingOccurrences(of: "{{\(key),noEncode()}}", with: value)
         }
