@@ -12,10 +12,16 @@ import CommonCrypto
     func ajaxAll(_ urlArray: JSValue) -> JSValue?
     func post(_ url: String, _ body: String) -> String?
     func connect(_ urlStr: String) -> String?
+    func connectWithoutCookie(_ urlStr: String) -> String?
 
     // Variables
     func put(_ key: String, _ value: Any)
     func get(_ key: String) -> Any?
+
+    // Cross-evaluation object cache (mirrors Android JsExtensions.getFromCacheObject)
+    func getFromCacheObject(_ key: String) -> Any?
+    func setToCacheObject(_ key: String, _ value: Any)
+    func clearCacheObjects()
 
     // Encoding
     func md5(_ text: String) -> String
@@ -78,6 +84,10 @@ import CommonCrypto
 class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     var currentContext: AnalyzeContext?
 
+    // Cross-evaluation object cache — mirrors Android JsExtensions cacheMap.
+    // Keyed by sourceUrl so different sources don't share cache entries.
+    private var cacheObjects: [String: Any] = [:]
+
     // MARK: - Network
 
     func ajax(_ url: String) -> String? {
@@ -85,6 +95,11 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     }
 
     func connect(_ urlStr: String) -> String? {
+        NetworkManager.shared.requestSync(urlStr)
+    }
+
+    // Android alias — same as connect() on iOS (no separate cookie jar to bypass)
+    func connectWithoutCookie(_ urlStr: String) -> String? {
         NetworkManager.shared.requestSync(urlStr)
     }
 
@@ -109,6 +124,26 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         if key == "bookName" { return currentContext?.variables["bookName"] }
         if key == "title"    { return currentContext?.variables["title"] }
         return currentContext?.variables[key]
+    }
+
+    // MARK: - Cross-evaluation object cache (mirrors Android JsExtensions cacheMap)
+    // Used by book sources to pass parsed HTML/JSON between rule evaluations within
+    // one parsing session without re-fetching. javaHelper is a singleton so these
+    // persist across evaluateRule calls for the lifetime of the app.
+
+    func getFromCacheObject(_ key: String) -> Any? {
+        let cacheKey = "\(currentContext?.source.bookSourceUrl ?? ""):\(key)"
+        return cacheObjects[cacheKey]
+    }
+
+    func setToCacheObject(_ key: String, _ value: Any) {
+        let cacheKey = "\(currentContext?.source.bookSourceUrl ?? ""):\(key)"
+        cacheObjects[cacheKey] = value
+    }
+
+    func clearCacheObjects() {
+        let prefix = currentContext?.source.bookSourceUrl ?? ""
+        cacheObjects = cacheObjects.filter { !$0.key.hasPrefix("\(prefix):") }
     }
 
     // MARK: - Encoding / Crypto

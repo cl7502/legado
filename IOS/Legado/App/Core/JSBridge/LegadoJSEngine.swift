@@ -5,88 +5,110 @@ import JavaScriptCore
 class LegadoJSEngine {
     static let shared = LegadoJSEngine()
 
-    private let context: JSContext
+    // javaHelper is shared; its per-evaluation state (currentContext, cacheObjects)
+    // is set before each evaluation call on the serial queue.
     private let javaHelper: JSJavaHelper
-    // 串行队列：所有 JS 执行在同一线程上依次进行，避免 JSContext 竞态
+    // Serial queue: all JS evaluations happen sequentially on one thread.
     let queue = DispatchQueue(label: "com.legado.jsengine", qos: .userInteractive)
 
     init() {
-        self.context = JSContext()
         self.javaHelper = JSJavaHelper()
-        setupContext()
     }
 
-    private func setupContext() {
+    // MARK: - Fresh-context factory
+
+    /// Build a fresh JSContext loaded with all standard globals.
+    /// A new context per evaluateRule call is the key isolation mechanism:
+    /// it prevents let/const declarations in one source's script from
+    /// polluting the next evaluation (Android uses a new Rhino scope per eval).
+    private func makeFreshContext(ctx: AnalyzeContext) -> JSContext {
+        let context = JSContext()!
+
         context.exceptionHandler = { _, exception in
             print("❌ [JS Error]: \(exception?.toString() ?? "unknown")")
         }
-        context.setObject(javaHelper, forKeyedSubscript: "java" as (NSCopying & NSObjectProtocol))
-        context.setObject("", forKeyedSubscript: "baseUrl" as (NSCopying & NSObjectProtocol))
+
+        // java bridge
+        context.setObject(javaHelper,
+                          forKeyedSubscript: "java" as (NSCopying & NSObjectProtocol))
+
+        // Standard globals (mirror Android AnalyzeRule bindings)
+        context.setObject(ctx.baseUrl as AnyObject,
+                          forKeyedSubscript: "baseUrl" as (NSCopying & NSObjectProtocol))
+        if let res = ctx.result as? String {
+            context.setObject(res as AnyObject,
+                              forKeyedSubscript: "result" as (NSCopying & NSObjectProtocol))
+        }
+
+        // book
+        if let book = ctx.book {
+            let d: [String: Any] = [
+                "name": book.name, "author": book.author,
+                "bookUrl": book.bookUrl, "origin": book.origin,
+                "tocUrl": book.tocUrl ?? "", "variable": book.variable ?? "",
+            ]
+            context.setObject(d as AnyObject,
+                              forKeyedSubscript: "book" as (NSCopying & NSObjectProtocol))
+        }
+
+        // chapter
+        if let ch = ctx.chapter {
+            let d: [String: Any] = [
+                "title": ch.title, "url": ch.url, "index": ch.index,
+            ]
+            context.setObject(d as AnyObject,
+                              forKeyedSubscript: "chapter" as (NSCopying & NSObjectProtocol))
+        }
+
+        // source
+        let srcDict: [String: Any] = [
+            "bookSourceName":  ctx.source.bookSourceName,
+            "bookSourceUrl":   ctx.source.bookSourceUrl,
+            "bookSourceGroup": ctx.source.bookSourceGroup ?? "",
+            "bookSourceType":  ctx.source.bookSourceType,
+        ]
+        context.setObject(srcDict as AnyObject,
+                          forKeyedSubscript: "source" as (NSCopying & NSObjectProtocol))
+
+        // page / key
+        context.setObject(ctx.page as AnyObject,
+                          forKeyedSubscript: "page" as (NSCopying & NSObjectProtocol))
+        context.setObject(ctx.searchKey as AnyObject,
+                          forKeyedSubscript: "key" as (NSCopying & NSObjectProtocol))
+
+        // cookie proxy
+        context.setObject(JSCookieProxy(),
+                          forKeyedSubscript: "cookie" as (NSCopying & NSObjectProtocol))
+
+        return context
     }
 
-    /// 执行规则脚本（线程安全）
+    // MARK: - Public API
+
+    /// Execute a JS rule script and return the result string.
     func evaluateRule(_ script: String, in analyzeContext: inout AnalyzeContext) -> String? {
-        // 将 inout 值复制出来，因为闭包不能捕获 inout
         var ctx = analyzeContext
         var resultString: String?
 
         queue.sync { [weak self] in
             guard let self = self else { return }
 
+            // Bind the helper to the current evaluation context
             self.javaHelper.currentContext = ctx
-            self.context.setObject(ctx.baseUrl as AnyObject,
-                                   forKeyedSubscript: "baseUrl" as (NSCopying & NSObjectProtocol))
-            if let res = ctx.result as? String {
-                self.context.setObject(res as AnyObject,
-                                       forKeyedSubscript: "result" as (NSCopying & NSObjectProtocol))
+
+            // Fresh JSContext — zero pollution from previous evaluations
+            let context = self.makeFreshContext(ctx: ctx)
+
+            // Load source jsLib utility functions BEFORE the rule script.
+            // Android evaluates jsLib once per source engine; we re-eval per call
+            // (acceptable overhead, guarantees isolation).
+            if let jsLib = ctx.source.jsLib, !jsLib.isEmpty {
+                context.evaluateScript(jsLib)
             }
 
-            // MARK: JS context bindings (mirrors Android AnalyzeRule L776-786)
+            let jsValue = context.evaluateScript(script)
 
-            // book — serialised as plain dict so JS can read book.name etc.
-            if let book = ctx.book {
-                let bookDict: [String: Any] = [
-                    "name": book.name, "author": book.author,
-                    "bookUrl": book.bookUrl, "origin": book.origin,
-                    "tocUrl": book.tocUrl ?? "",
-                    "variable": book.variable ?? "",
-                ]
-                self.context.setObject(bookDict as AnyObject,
-                                       forKeyedSubscript: "book" as (NSCopying & NSObjectProtocol))
-            }
-
-            // chapter
-            if let chapter = ctx.chapter {
-                let chapDict: [String: Any] = [
-                    "title": chapter.title, "url": chapter.url, "index": chapter.index,
-                ]
-                self.context.setObject(chapDict as AnyObject,
-                                       forKeyedSubscript: "chapter" as (NSCopying & NSObjectProtocol))
-            }
-
-            // source
-            let sourceDict: [String: Any] = [
-                "bookSourceName": ctx.source.bookSourceName,
-                "bookSourceUrl": ctx.source.bookSourceUrl,
-                "bookSourceGroup": ctx.source.bookSourceGroup ?? "",
-                "bookSourceType": ctx.source.bookSourceType,
-            ]
-            self.context.setObject(sourceDict as AnyObject,
-                                   forKeyedSubscript: "source" as (NSCopying & NSObjectProtocol))
-
-            // page / key
-            self.context.setObject(ctx.page as AnyObject,
-                                   forKeyedSubscript: "page" as (NSCopying & NSObjectProtocol))
-            self.context.setObject(ctx.searchKey as AnyObject,
-                                   forKeyedSubscript: "key" as (NSCopying & NSObjectProtocol))
-
-            // cookie proxy — exposes getCookie(tag)/setCookie(tag,value) to JS
-            let cookieProxy = JSCookieProxy()
-            self.context.setObject(cookieProxy,
-                                   forKeyedSubscript: "cookie" as (NSCopying & NSObjectProtocol))
-
-            let jsValue = self.context.evaluateScript(script)
-            // 写回变量（JS 内通过 java.put/java.get 修改的变量）
+            // Propagate variables written by java.put() back to caller
             ctx.variables = self.javaHelper.currentContext?.variables ?? [:]
 
             if jsValue?.isUndefined == true || jsValue?.isNull == true {
@@ -96,7 +118,6 @@ class LegadoJSEngine {
             }
         }
 
-        // 把 JS 修改的变量写回原始 inout 上下文
         analyzeContext.variables = ctx.variables
         return resultString
     }
@@ -106,9 +127,8 @@ class LegadoJSEngine {
 
 @objc private class JSCookieProxy: NSObject {
     @objc func getCookie(_ tag: String) -> String {
-        return CookieManager.shared.getCookie(for: tag) ?? ""
+        CookieManager.shared.getCookie(for: tag) ?? ""
     }
-
     @objc func setCookie(_ tag: String, _ value: String) {
         CookieManager.shared.saveCookie(for: tag, cookieString: value)
     }
