@@ -154,6 +154,9 @@ class BookSourceImporter {
             flat["ruleSearchLastChapter"] = rs["lastChapter"]
             flat["ruleSearchCoverUrl"]    = rs["coverUrl"]
             flat["ruleSearchNoteUrl"]     = rs["bookUrl"]
+            flat["ruleSearchIntro"]       = rs["intro"]
+            flat["ruleSearchUpdateTime"]  = rs["updateTime"]
+            flat["ruleSearchWordCount"]   = rs["wordCount"]
             flat.removeValue(forKey: "ruleSearch")
         }
 
@@ -172,11 +175,14 @@ class BookSourceImporter {
 
         // ruleToc → ruleToc*/ruleChapter* 扁平字段
         if let toc = obj["ruleToc"] as? [String: Any] {
-            flat["ruleTocList"]      = toc["chapterList"]
-            flat["ruleChapterName"]  = toc["chapterName"]
-            flat["ruleChapterUrl"]   = toc["chapterUrl"]
-            flat["ruleChapterVip"]   = toc["isVolume"]    // isVolume = vip chapter marker
-            flat["ruleTocNextUrl"]   = toc["nextTocUrl"]
+            flat["ruleTocList"]           = toc["chapterList"]
+            flat["ruleChapterName"]       = toc["chapterName"]
+            flat["ruleChapterUrl"]        = toc["chapterUrl"]
+            flat["ruleChapterVip"]        = toc["isVolume"]    // isVolume = vip chapter marker
+            flat["ruleTocNextUrl"]        = toc["nextTocUrl"]
+            flat["ruleChapterUpdateTime"] = toc["updateTime"]
+            flat["ruleTocPreUpdateJs"]    = toc["preUpdateJs"]
+            flat["ruleTocFormatJs"]       = toc["formatJs"]
             flat.removeValue(forKey: "ruleToc")
         }
 

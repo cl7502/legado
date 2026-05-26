@@ -114,15 +114,19 @@ class SearchViewModel: ObservableObject {
                 let bookUrl = ruleExecutor.execute(source.ruleSearchNoteUrl ?? "", in: &ctx) ?? ""
                 guard !name.isEmpty, !bookUrl.isEmpty else { return nil }
 
-                let coverUrl = ruleExecutor.execute(source.ruleSearchCoverUrl ?? "", in: &ctx)
-                let kind     = ruleExecutor.execute(source.ruleSearchKind    ?? "", in: &ctx)
+                let coverUrl      = ruleExecutor.execute(source.ruleSearchCoverUrl   ?? "", in: &ctx)
+                let kind          = ruleExecutor.execute(source.ruleSearchKind       ?? "", in: &ctx)
+                let intro         = ruleExecutor.execute(source.ruleSearchIntro      ?? "", in: &ctx)
+                let latestChapter = ruleExecutor.execute(source.ruleSearchLastChapter ?? "", in: &ctx)
+                let wordCount     = ruleExecutor.execute(source.ruleSearchWordCount  ?? "", in: &ctx)
 
                 let absBookUrl = resolveUrl(bookUrl, base: parsed.url)
                 let absCover   = coverUrl.map { resolveUrl($0, base: parsed.url) }
 
                 return SearchResult(
                     name: name, author: author, bookUrl: absBookUrl,
-                    kind: kind, intro: nil, coverUrl: absCover,
+                    kind: kind, intro: intro, coverUrl: absCover,
+                    wordCount: wordCount, latestChapter: latestChapter,
                     origin: source.bookSourceUrl, originName: source.bookSourceName
                 )
             }
