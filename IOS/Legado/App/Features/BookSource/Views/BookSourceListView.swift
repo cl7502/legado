@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 书源管理界面
 struct BookSourceListView: View {
@@ -116,12 +117,24 @@ private struct PasteJSONSheet: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                Text("粘贴 Legado 标准格式的 JSON 字符串（单个或数组）")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack {
+                    Text("粘贴 Legado 标准格式的 JSON（单个或数组）")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    // Explicit paste button — reads UIPasteboard on user tap,
+                    // bypasses iOS 16+ pasteboard permission prompt reliably.
+                    Button {
+                        if let s = UIPasteboard.general.string, !s.isEmpty {
+                            text = s
+                        }
+                    } label: {
+                        Label("从剪贴板粘贴", systemImage: "doc.on.clipboard")
+                            .font(.caption)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
 
                 TextEditor(text: $text)
                     .font(.system(.body, design: .monospaced))
