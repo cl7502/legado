@@ -147,14 +147,37 @@ class HTMLParser {
     }
 
     private func getStringListSingle(_ html: String, query: String) -> [String] {
-        let (selector, attr) = splitSelectorAttr(query)
-        guard !selector.isEmpty else { return [] }
+        // Android AnalyzeByJSoup.getResultList():
+        // Split rule on @ (respecting brackets) → navigate through CSS selectors,
+        // extract content/attribute from the LAST segment.
+        // e.g. "div.list@div.item@a@href" → select div.list → within: div.item → a → attr(href)
+        let parts = splitOnAt(query)
+        guard !parts.isEmpty, !parts[0].isEmpty else { return [] }
+
         do {
             let doc = try SwiftSoup.parse(html)
-            let elements = try doc.select(selector)
-            if elements.isEmpty() { return [] }
-            return elements.array().compactMap { el -> String? in
-                try? extractAttr(el, attr: attr)
+
+            if parts.count == 1 {
+                let elements = try doc.select(parts[0])
+                return elements.array().compactMap { try? $0.text() }.filter { !$0.isEmpty }
+            }
+
+            // Navigate through all segments except the last
+            var elList: [Element] = (try? doc.select(parts[0]).array()) ?? []
+            for i in 1..<(parts.count - 1) {
+                var next: [Element] = []
+                for el in elList {
+                    let sub = (try? el.select(parts[i])) ?? Elements()
+                    next.append(contentsOf: sub.array())
+                }
+                elList = next
+            }
+
+            // Final segment: attribute / content keyword
+            let lastRule = parts.last!
+            return elList.compactMap { el -> String? in
+                let v = try? extractAttr(el, attr: lastRule.isEmpty ? nil : lastRule)
+                return v?.isEmpty == false ? v : nil
             }
         } catch { return [] }
     }
@@ -188,17 +211,42 @@ class HTMLParser {
     }
 
     private func getElementsListSingle(_ html: String, query: String) -> [String] {
-        let (selector, attr) = splitSelectorAttr(query)
-        guard !selector.isEmpty else { return [] }
+        // Same multi-step @ navigation as getStringListSingle, but returns outerHTML
+        // of the final elements (for downstream field-rule parsing).
+        // If the last segment is an attribute keyword, extracts attribute strings instead.
+        let parts = splitOnAt(query)
+        guard !parts.isEmpty, !parts[0].isEmpty else { return [] }
+
         do {
             let doc = try SwiftSoup.parse(html)
-            let elements = try doc.select(selector)
-            if let attr = attr {
-                // attr extraction requested → return string values
-                return elements.array().compactMap { try? extractAttr($0, attr: attr) }
+
+            if parts.count == 1 {
+                let elements = try doc.select(parts[0])
+                return elements.array().compactMap { try? $0.outerHtml() }
             }
-            // No attr → return outerHTML of each element for downstream parsing
-            return elements.array().compactMap { try? $0.outerHtml() }
+
+            // Determine if the last part is attribute extraction or further CSS navigation
+            let lastPart = parts.last!
+            let extractsAttr = isAttributeKeyword(lastPart)
+            let navParts = extractsAttr ? Array(parts.dropLast()) : parts
+
+            var elList: [Element] = (try? doc.select(navParts[0]).array()) ?? []
+            for i in 1..<navParts.count {
+                var next: [Element] = []
+                for el in elList {
+                    let sub = (try? el.select(navParts[i])) ?? Elements()
+                    next.append(contentsOf: sub.array())
+                }
+                elList = next
+            }
+
+            if extractsAttr {
+                return elList.compactMap { el -> String? in
+                    let v = try? extractAttr(el, attr: lastPart)
+                    return v?.isEmpty == false ? v : nil
+                }
+            }
+            return elList.compactMap { try? $0.outerHtml() }
         } catch { return [] }
     }
 
@@ -347,6 +395,43 @@ class HTMLParser {
         return result
     }
 
+    /// Split on `@` that are NOT inside square brackets `[...]`.
+    /// Mirrors Android RuleAnalyzer.splitRule("@") which skips @ inside predicates.
+    /// e.g. "div[class*='x']@a@href" → ["div[class*='x']", "a", "href"]
+    private func splitOnAt(_ query: String) -> [String] {
+        var parts: [String] = []
+        var current = ""
+        var depth = 0
+        for ch in query {
+            switch ch {
+            case "[": depth += 1; current.append(ch)
+            case "]": depth = max(0, depth - 1); current.append(ch)
+            case "@" where depth == 0:
+                let p = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !p.isEmpty { parts.append(p) }
+                current = ""
+            default:
+                current.append(ch)
+            }
+        }
+        let last = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !last.isEmpty { parts.append(last) }
+        return parts
+    }
+
+    /// Returns true when the string should be interpreted as an extraction directive
+    /// (attribute name or content keyword) rather than a CSS selector.
+    /// Mirrors Android AnalyzeByJSoup.getResultLast() known-keyword check.
+    private func isAttributeKeyword(_ s: String) -> Bool {
+        let known: Set<String> = ["text", "html", "outerhtml", "textnodes", "all", "raw"]
+        if known.contains(s.lowercased()) { return true }
+        // Pure alphanumeric + hyphen/underscore without CSS structural chars → attribute
+        let cssSpecial = CharacterSet(charactersIn: ".#[] >+~:(),'\"/\\*=^$|")
+        return !s.isEmpty &&
+               s.unicodeScalars.allSatisfy { !cssSpecial.contains($0) } &&
+               s.unicodeScalars.first.map { CharacterSet.letters.contains($0) } == true
+    }
+
     /// Split  "selector@attr"  into  (selector, attr?).
     /// Only splits on the LAST @, and only if what follows looks like an attribute name.
     private func splitSelectorAttr(_ query: String) -> (String, String?) {
@@ -376,8 +461,14 @@ class HTMLParser {
         guard let attr = attr else { return try element.text() }
         switch attr.lowercased() {
         case "text":      return try element.text()
+        case "textnodes": // Android: direct text nodes only (no children)
+            let texts = element.textNodes().map { $0.text().trimmingCharacters(in: .whitespaces) }
+                                           .filter { !$0.isEmpty }
+            return texts.isEmpty ? nil : texts.joined(separator: "\n")
         case "html":      return try element.html()
         case "outerhtml": return try element.outerHtml()
+        case "raw":       return try element.outerHtml()
+        case "all":       return try element.text()
         default:
             let v = try element.attr(attr)
             return v.isEmpty ? nil : v
