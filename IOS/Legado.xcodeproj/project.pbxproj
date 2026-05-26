@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		0C11DA470551673E80043DF1 /* JSONPathEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886B2604AAAF3D48A1EBEEAF /* JSONPathEngine.swift */; };
 		0E2583963C526A553517E813 /* RuleExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB76FF5ED2833C59D25F9956 /* RuleExecutor.swift */; };
+		AA000002AA000002AA000002 /* LibXMLXPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000001AA000001AA000001 /* LibXMLXPath.swift */; };
+		BB000002BB000002BB000002 /* HeadlessWebViewLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000001BB000001BB000001 /* HeadlessWebViewLoader.swift */; };
+		CC000002CC000002CC000002 /* QueryTTF.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000001CC000001CC000001 /* QueryTTF.swift */; };
 		17EABFDE74A91843DA479BBE /* BookSourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58A64AE613625A1A6F5060F0 /* BookSourceListView.swift */; };
 		1FBB4996EDF285553CA8187D /* ReaderSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC05B10A239C4AA6842C5BD /* ReaderSettingsSheet.swift */; };
 		1FE555CCB62E2E222C04B331 /* ExploreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4219C4F1F814AB2E7305C338 /* ExploreView.swift */; };
@@ -81,6 +84,9 @@
 		84BC7BDFD6B447FCD7D9A2AB /* Chapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chapter.swift; sourceTree = "<group>"; };
 		885E8B7FEE8690B2AA0D5CFA /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		886B2604AAAF3D48A1EBEEAF /* JSONPathEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONPathEngine.swift; sourceTree = "<group>"; };
+		AA000001AA000001AA000001 /* LibXMLXPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibXMLXPath.swift; sourceTree = "<group>"; };
+		BB000001BB000001BB000001 /* HeadlessWebViewLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadlessWebViewLoader.swift; sourceTree = "<group>"; };
+		CC000001CC000001CC000001 /* QueryTTF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryTTF.swift; sourceTree = "<group>"; };
 		89268F6F757AD9196F8CB3DB /* JSJavaHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSJavaHelper.swift; sourceTree = "<group>"; };
 		95A1D606AB2B011D4984E62D /* DatabaseModels+GRDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DatabaseModels+GRDB.swift"; sourceTree = "<group>"; };
 		9A2A311A73EF5520A2B486B7 /* CookieManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieManager.swift; sourceTree = "<group>"; };
@@ -174,6 +180,7 @@
 			isa = PBXGroup;
 			children = (
 				F31A2B5F540D9EE97E8BA2C3 /* HTMLParser.swift */,
+				AA000001AA000001AA000001 /* LibXMLXPath.swift */,
 			);
 			path = HTML;
 			sourceTree = "<group>";
@@ -203,6 +210,7 @@
 				78D94DE81601D33C9A1B35B2 /* EncodingHelper.swift */,
 				5F66B313E91F18FD0A376B6A /* LegadoInterceptor.swift */,
 				F0091378AF4BF45D59B0F484 /* NetworkManager.swift */,
+				BB000001BB000001BB000001 /* HeadlessWebViewLoader.swift */,
 			);
 			path = Network;
 			sourceTree = "<group>";
@@ -331,6 +339,7 @@
 				8017363C311E54E27D84BABD /* BookContentParser.swift */,
 				CE8EB23FB0C645A06EBA365A /* ContentProcessor.swift */,
 				886B2604AAAF3D48A1EBEEAF /* JSONPathEngine.swift */,
+				CC000001CC000001CC000001 /* QueryTTF.swift */,
 				DB76FF5ED2833C59D25F9956 /* RuleExecutor.swift */,
 				D6648BAB2AAF499DEE7B3B5A /* RuleParser.swift */,
 			);
@@ -425,13 +434,16 @@
 				2AAD0EF819101DDD1F0AFAE0 /* EncodingHelper.swift in Sources */,
 				1FE555CCB62E2E222C04B331 /* ExploreView.swift in Sources */,
 				E65F4DD892DB561CAFBECDA4 /* HTMLParser.swift in Sources */,
+				AA000002AA000002AA000002 /* LibXMLXPath.swift in Sources */,
 				DBB0AB382ECEE822F0D9F2AA /* JSJavaHelper.swift in Sources */,
 				0C11DA470551673E80043DF1 /* JSONPathEngine.swift in Sources */,
+				CC000002CC000002CC000002 /* QueryTTF.swift in Sources */,
 				90DA9985EE3F61CD58AF5191 /* LegadoApp.swift in Sources */,
 				392ED90561607C60B02B557F /* LegadoInterceptor.swift in Sources */,
 				E515B4CB92EDFB43E08D7492 /* LegadoJSEngine.swift in Sources */,
 				61A4EE526EA5DB73C341015F /* MainTabView.swift in Sources */,
 				E24B8ECC6C7967780CB7A4DC /* NetworkManager.swift in Sources */,
+				BB000002BB000002BB000002 /* HeadlessWebViewLoader.swift in Sources */,
 				9CEEB9DA39A2A0AB59EFF287 /* ReaderSettings.swift in Sources */,
 				1FBB4996EDF285553CA8187D /* ReaderSettingsSheet.swift in Sources */,
 				65B095D9DBDFADE24A9BAE8E /* ReaderView.swift in Sources */,

@@ -227,7 +227,7 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
               let keyBytes = key.data(using: .utf8) else { return "" }
         let ivBytes = iv.data(using: .utf8) ?? Data(repeating: 0, count: kCCBlockSizeAES128)
         let opts = aesOptions(mode)
-        return aesCrypt(.encrypt, data: dataBytes, key: keyBytes, iv: ivBytes, opts: opts)?
+        return aesCrypt(CCOperation(kCCEncrypt), data: dataBytes, key: keyBytes, iv: ivBytes, opts: opts)?
             .base64EncodedString() ?? ""
     }
 
@@ -236,7 +236,7 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
               let keyBytes = key.data(using: .utf8) else { return "" }
         let ivBytes = iv.data(using: .utf8) ?? Data(repeating: 0, count: kCCBlockSizeAES128)
         let opts = aesOptions(mode)
-        return aesCrypt(.decrypt, data: dataBytes, key: keyBytes, iv: ivBytes, opts: opts)
+        return aesCrypt(CCOperation(kCCDecrypt), data: dataBytes, key: keyBytes, iv: ivBytes, opts: opts)
             .flatMap { String(data: $0, encoding: .utf8) } ?? ""
     }
 
