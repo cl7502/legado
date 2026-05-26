@@ -176,6 +176,21 @@ class DatabaseManager {
             }
         }
 
+        // v6: book_source 补充 ISSUE-019 新增字段（enabledExplore / coverDecodeJs 等）
+        migrator.registerMigration("v6-book-source-issue019") { db in
+            try db.alter(table: "book_source") { t in
+                t.add(column: "enabledExplore",       .boolean).defaults(to: true)
+                t.add(column: "coverDecodeJs",        .text)
+                t.add(column: "exploreScreen",        .text)
+                t.add(column: "ruleSearchIntro",      .text)
+                t.add(column: "ruleSearchUpdateTime", .text)
+                t.add(column: "ruleSearchWordCount",  .text)
+                t.add(column: "ruleChapterUpdateTime",.text)
+                t.add(column: "ruleTocPreUpdateJs",   .text)
+                t.add(column: "ruleTocFormatJs",      .text)
+            }
+        }
+
         return migrator
     }
 }
