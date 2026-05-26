@@ -66,6 +66,11 @@ class BookInfoViewModel: ObservableObject {
             if let tocRaw = ruleExecutor.execute(source.ruleTocUrl ?? "", in: &context), !tocRaw.isEmpty {
                 book.tocUrl = resolveUrl(tocRaw, base: detailUrl)
             }
+            // Android convention: if no ruleTocUrl produces a value, the detail page IS the TOC page.
+            // Without this fallback, loadChapters() silently returns and the reader stays blank.
+            if (book.tocUrl ?? "").isEmpty {
+                book.tocUrl = book.bookUrl
+            }
 
         } catch {
             print("❌ [Detail Error]: \(error)")

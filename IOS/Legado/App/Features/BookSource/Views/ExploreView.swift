@@ -158,8 +158,20 @@ class ExploreCategoryViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        guard let raw = source.exploreUrl,
-              !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let rawInput = source.exploreUrl,
+              !rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        // If exploreUrl starts with @js:, evaluate it first to get the real URL/content.
+        // Android AnalyzeUrl evaluates @js: prefix before any further URL processing.
+        var raw = rawInput
+        let trimmed = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("@js:") || trimmed.lowercased().hasPrefix("javascript:") {
+            let ctx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
+            let parsed = AnalyzeUrl.parse(raw, context: ctx)
+            if parsed.url.lowercased().hasPrefix("http") {
+                raw = parsed.url
+            }
+        }
 
         // 1. JSON 数组格式：[{"title":"...","url":"..."}]
         if let data = raw.data(using: .utf8),
@@ -221,10 +233,19 @@ class ExploreBookListViewModel: ObservableObject {
         }
 
         do {
-            // exploreUrl 可能含 {{page}} 等模板变量，必须先走 AnalyzeUrl 替换，
-            // 否则 URLSession 收到非法 URL 报 "Unsupported URL"
-            let parsed = AnalyzeUrl.parse(url, variables: ["page": "1"])
+            // exploreUrl may contain @js: prefix or {{page}} template variables.
+            // Providing a context allows JS expressions to be evaluated (mirrors Android AnalyzeUrl).
+            var parseCtx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
+            parseCtx.variables["page"] = "1"
+            let parsed = AnalyzeUrl.parse(url, variables: ["page": "1"], context: parseCtx)
             let requestUrl = parsed.url
+
+            // Guard: if URL is still non-http after JS evaluation, report clearly rather than
+            // crashing with "Unsupported URL" from URLSession.
+            guard requestUrl.lowercased().hasPrefix("http") else {
+                loadError = "无效的发现 URL（非 http）: \(url)"
+                return
+            }
 
             let html: String
             if parsed.method == "POST", let body = parsed.body {
@@ -233,9 +254,9 @@ class ExploreBookListViewModel: ObservableObject {
                 html = try await network.request(requestUrl, source: source)
             }
 
-            var parseCtx = AnalyzeContext(source: source, baseUrl: requestUrl)
-            parseCtx.result = html
-            let items = ruleExecutor.executeList(listRule, in: &parseCtx)
+            var htmlCtx = AnalyzeContext(source: source, baseUrl: requestUrl)
+            htmlCtx.result = html
+            let items = ruleExecutor.executeList(listRule, in: &htmlCtx)
 
             var results: [SearchResult] = []
             for item in items {

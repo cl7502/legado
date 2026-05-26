@@ -84,8 +84,17 @@ class ReaderViewModel: ObservableObject {
             }
 
             // 3. 通过书源抓取目录
-            guard let tocUrl = book.tocUrl, !tocUrl.isEmpty else { return }
-            var effectiveTocUrl = tocUrl
+            // Android convention: if tocUrl is absent, the book detail page is also the TOC page.
+            // Covers books saved before the loadDetails() tocUrl-fallback fix was applied.
+            var effectiveTocUrl: String
+            if let tocUrl = book.tocUrl, !tocUrl.isEmpty {
+                effectiveTocUrl = tocUrl
+            } else if !book.bookUrl.isEmpty {
+                effectiveTocUrl = book.bookUrl
+                book.tocUrl = book.bookUrl
+            } else {
+                return
+            }
 
             // preUpdateJs — execute before TOC fetch; result (if HTTP URL) replaces tocUrl
             // mirrors Android BookChapterList.runPreUpdateJs() L211-223
