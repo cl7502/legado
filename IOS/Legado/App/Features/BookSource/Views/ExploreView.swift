@@ -139,6 +139,7 @@ class ExploreSourcesViewModel: ObservableObject {
             let all = try await db.getAllBookSources()
             // 要求同时有 exploreUrl 和 ruleExploreList，否则无法解析书单
             sources = all.filter {
+                guard $0.enabled else { return false }
                 let hasUrl  = ($0.exploreUrl ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 let hasRule = ($0.ruleExploreList ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 return hasUrl && hasRule
