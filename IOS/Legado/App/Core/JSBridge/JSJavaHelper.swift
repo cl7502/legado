@@ -7,15 +7,16 @@ import CommonCrypto
 /// JS-to-Swift bridge — mirrors Android JsExtensions interface.
 /// Exposed as `java` in the JS context.
 @objc protocol JSJavaHelperProtocol: JSExport {
-    // Network
+    // Network — url may be "http://...,{options}" (same as AnalyzeUrl option format)
     func ajax(_ url: String) -> String?
     func ajaxAll(_ urlArray: JSValue) -> JSValue?
     func post(_ url: String, _ body: String) -> String?
     func connect(_ urlStr: String) -> String?
     func connectWithoutCookie(_ urlStr: String) -> String?
 
-    // Variables
-    func put(_ key: String, _ value: Any)
+    // Variables — put() returns the value so it can be used inline in JS:
+    //   java.ajax(url + ',' + java.put("headers", JSON.stringify({...})))
+    func put(_ key: String, _ value: Any) -> Any
     func get(_ key: String) -> Any?
 
     // Cross-evaluation object cache (mirrors Android JsExtensions.getFromCacheObject)
@@ -89,18 +90,21 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     private var cacheObjects: [String: Any] = [:]
 
     // MARK: - Network
+    // Android ajax()/connect() pass the URL string through AnalyzeUrl, so
+    // "http://api.example.com/list,{\"headers\":{...}}" correctly attaches
+    // request headers. We replicate that by parsing with AnalyzeUrl.parse().
 
     func ajax(_ url: String) -> String? {
-        NetworkManager.shared.requestSync(url)
+        requestWithOptions(url)
     }
 
     func connect(_ urlStr: String) -> String? {
-        NetworkManager.shared.requestSync(urlStr)
+        requestWithOptions(urlStr)
     }
 
-    // Android alias — same as connect() on iOS (no separate cookie jar to bypass)
+    // Android alias — same implementation on iOS
     func connectWithoutCookie(_ urlStr: String) -> String? {
-        NetworkManager.shared.requestSync(urlStr)
+        requestWithOptions(urlStr)
     }
 
     func post(_ url: String, _ body: String) -> String? {
@@ -109,14 +113,32 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
 
     func ajaxAll(_ urlArray: JSValue) -> JSValue? {
         guard let urls = urlArray.toArray() as? [String] else { return nil }
-        let results = urls.map { NetworkManager.shared.requestSync($0) ?? "" }
+        let results = urls.map { requestWithOptions($0) ?? "" }
         return JSValue(object: results, in: urlArray.context)
+    }
+
+    /// Parse URL option format ("url,{headers/method/body}") and make request.
+    /// Mirrors Android AnalyzeUrl(urlStr, source=source).getStrResponse().body
+    private func requestWithOptions(_ rawUrl: String) -> String? {
+        let ctx = currentContext
+        let parsed = AnalyzeUrl.parse(rawUrl, context: ctx)
+        let reqUrl = parsed.url
+        guard !reqUrl.isEmpty else { return nil }
+        let headers: [String: String]? = parsed.headers.isEmpty ? nil : parsed.headers
+        if parsed.method == "POST", let body = parsed.body {
+            return NetworkManager.shared.requestSync(reqUrl, method: "POST", body: body, headers: headers)
+        }
+        return NetworkManager.shared.requestSync(reqUrl, headers: headers)
     }
 
     // MARK: - Variables
 
-    func put(_ key: String, _ value: Any) {
+    // Returns value so JS can use put() inline:
+    //   java.ajax(url + ',' + java.put("headers", JSON.stringify({...})))
+    @discardableResult
+    func put(_ key: String, _ value: Any) -> Any {
         currentContext?.variables[key] = value
+        return value
     }
 
     func get(_ key: String) -> Any? {

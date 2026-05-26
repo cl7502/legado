@@ -184,7 +184,10 @@ class RuleParser {
         }
 
         // Auto-detect XPath: leading / but not //www (avoid mistaking URLs)
-        if trimmed.hasPrefix("/") && !trimmed.hasPrefix("//www.") && !trimmed.hasPrefix("//m.") {
+        // Exclude URL templates (containing {{...}}) — those expand to literal URL values,
+        // not XPath expressions. e.g. /novel/{{$.novelId}}?isSearch=1 is a URL template.
+        if trimmed.hasPrefix("/") && !trimmed.hasPrefix("//www.") && !trimmed.hasPrefix("//m.")
+            && !trimmed.contains("{{") {
             return RuleSegment(type: .xpath, content: trimmed, putMap: putMap)
         }
 

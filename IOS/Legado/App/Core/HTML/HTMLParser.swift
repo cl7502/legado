@@ -154,6 +154,16 @@ class HTMLParser {
         let parts = splitOnAt(query)
         guard !parts.isEmpty, !parts[0].isEmpty else { return [] }
 
+        // URL path detection: if the single-part rule looks like a URL/path with a query
+        // string, treat it as a literal URL value rather than a CSS selector.
+        // This handles URL templates like "/novel/123?isSearch=1" that expand to book URLs.
+        if parts.count == 1 {
+            let q = parts[0]
+            if (q.hasPrefix("/") || q.hasPrefix("http")) && q.contains("?") {
+                return [q]
+            }
+        }
+
         do {
             let doc = try SwiftSoup.parse(html)
 

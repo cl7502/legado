@@ -206,13 +206,23 @@ class RuleExecutor {
                 output += value.map { "\($0)" } ?? ""
 
             } else if matchStr.hasPrefix("{{") && matchStr.hasSuffix("}}") {
-                // {{jsExpr}} — evaluate expression with current result in scope
+                // {{jsExpr}} — evaluate expression with current result in scope.
+                // Special case: if the expression looks like a JSONPath ($.x / $[x]),
+                // evaluate it as JSONPath on current result rather than as JS.
+                // This matches Android Legado behavior where {{$.novelId}} in a URL
+                // template extracts the field from the current JSON item.
                 let expr = String(matchStr.dropFirst(2).dropLast(2))
-                var tempCtx = context
-                tempCtx.result = current
-                let evaluated = jsEngine.evaluateRule(expr, in: &tempCtx) ?? ""
-                context.variables = tempCtx.variables
-                output += evaluated
+                if expr.hasPrefix("$.") || expr.hasPrefix("$[") {
+                    let jsonStr = asString(current)
+                    let extracted = jsonEngine.extract(json: jsonStr, path: expr)
+                    output += stringify(extracted) ?? ""
+                } else {
+                    var tempCtx = context
+                    tempCtx.result = current
+                    let evaluated = jsEngine.evaluateRule(expr, in: &tempCtx) ?? ""
+                    context.variables = tempCtx.variables
+                    output += evaluated
+                }
 
             } else {
                 output += matchStr
@@ -286,6 +296,9 @@ class RuleExecutor {
     private func asString(_ value: Any?) -> String {
         switch value {
         case let s as String: return s
+        case let v? where JSONSerialization.isValidJSONObject(v):
+            return (try? JSONSerialization.data(withJSONObject: v))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "\(v)"
         case let v?:          return "\(v)"
         default:              return ""
         }
@@ -296,8 +309,17 @@ class RuleExecutor {
         case nil:             return nil
         case let s as String: return s.isEmpty ? nil : s
         case let arr as [Any]:
-            let joined = arr.map { "\($0)" }.joined(separator: "\n")
+            // Serialize each element to JSON if possible, else string-interpolate
+            let joined = arr.map { el -> String in
+                if JSONSerialization.isValidJSONObject(el),
+                   let d = try? JSONSerialization.data(withJSONObject: el),
+                   let j = String(data: d, encoding: .utf8) { return j }
+                return "\(el)"
+            }.joined(separator: "\n")
             return joined.isEmpty ? nil : joined
+        case let v? where JSONSerialization.isValidJSONObject(v):
+            return (try? JSONSerialization.data(withJSONObject: v))
+                .flatMap { String(data: $0, encoding: .utf8) }
         case let v?:          return "\(v)"
         }
     }
@@ -305,9 +327,22 @@ class RuleExecutor {
     private func toStringArray(_ value: Any?) -> [String] {
         switch value {
         case nil:               return []
-        case let arr as [Any]:  return arr.map { "\($0)" }
+        case let arr as [Any]:
+            return arr.map { el -> String in
+                if let s = el as? String { return s }
+                // Serialize JSON objects/arrays to valid JSON string
+                // (not Swift's "\(dict)" which produces invalid JSON notation)
+                if JSONSerialization.isValidJSONObject(el),
+                   let d = try? JSONSerialization.data(withJSONObject: el),
+                   let j = String(data: d, encoding: .utf8) { return j }
+                return "\(el)"
+            }
         case let s as String:   return s.isEmpty ? [] : [s]
-        case let v?:            return ["\(v)"]
+        case let v?:
+            if JSONSerialization.isValidJSONObject(v),
+               let d = try? JSONSerialization.data(withJSONObject: v),
+               let j = String(data: d, encoding: .utf8) { return [j] }
+            return ["\(v)"]
         }
     }
 }

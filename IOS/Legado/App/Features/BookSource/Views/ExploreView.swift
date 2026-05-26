@@ -177,8 +177,14 @@ class ExploreCategoryViewModel: ObservableObject {
         // 1. JSON 数组格式：[{"title":"...","url":"..."}]
         if let data = raw.data(using: .utf8),
            let arr = try? JSONDecoder().decode([ExploreCategory].self, from: data) {
-            categories = arr
-            return
+            // Filter section headers with empty URLs and trim whitespace in titles
+            categories = arr.compactMap { cat -> ExploreCategory? in
+                let u = cat.url.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !u.isEmpty else { return nil }
+                let t = cat.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                return ExploreCategory(title: t.isEmpty ? "全部" : t, url: u)
+            }
+            if !categories.isEmpty { return }
         }
 
         // 2. 换行分隔格式（Android 常用）：
@@ -241,14 +247,9 @@ class ExploreBookListViewModel: ObservableObject {
         }
 
         do {
-            // exploreUrl may contain @js: prefix or {{page}} template variables.
-            // Providing a context allows JS expressions to be evaluated (mirrors Android AnalyzeUrl).
             var parseCtx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
             parseCtx.variables["page"] = "1"
             let parsed = AnalyzeUrl.parse(url, variables: ["page": "1"], context: parseCtx)
-
-            // Resolve relative URLs (e.g. "/novel/class/xuanhuan") against the source base URL.
-            // Android AnalyzeUrl always resolves paths against the source domain.
             let requestUrl = resolveUrl(parsed.url, base: source.bookSourceUrl)
 
             guard requestUrl.lowercased().hasPrefix("http") else {
@@ -283,9 +284,9 @@ class ExploreBookListViewModel: ObservableObject {
                 var result = SearchResult()
                 result.name = name
                 result.author = author
-                result.bookUrl = bookUrl
+                result.bookUrl = resolveUrl(bookUrl, base: requestUrl)
                 result.kind = kind
-                result.coverUrl = coverUrl
+                result.coverUrl = coverUrl.map { resolveUrl($0, base: requestUrl) }
                 result.origin = source.bookSourceUrl
                 result.originName = source.bookSourceName
                 results.append(result)
