@@ -30,40 +30,61 @@ class BookSourceViewModel: ObservableObject {
     }
     
     /// 从远程 URL 下载并导入书源 (P2-D)
-    func importFromURL(_ urlString: String) async -> Int {
-        guard let url = URL(string: urlString.trimmingCharacters(in: .whitespacesAndNewlines)),
-              urlString.lowercased().hasPrefix("http") else {
-            print("❌ [Import Error]: Invalid URL — \(urlString)")
-            return 0
-        }
+    /// Returns (count, errorMessage). errorMessage is empty on success.
+    func importFromURL(_ urlString: String) async -> (Int, String) {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return (0, "URL 不能为空") }
+        guard trimmed.lowercased().hasPrefix("http") else { return (0, "URL 必须以 http 或 https 开头") }
+        guard let url = URL(string: trimmed) else { return (0, "URL 格式无效：\(trimmed)") }
+
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            guard let jsonString = String(data: data, encoding: .utf8) else { return 0 }
-            let newSources = BookSourceImporter().parse(jsonString)
-            guard !newSources.isEmpty else { return 0 }
-            try await db.saveBookSources(newSources)
-            await loadSources()
-            return newSources.count
+            let (data, response) = try await URLSession.shared.data(from: url)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard statusCode == 0 || (200..<300).contains(statusCode) else {
+                return (0, "服务器返回错误：HTTP \(statusCode)")
+            }
+            guard !data.isEmpty else { return (0, "服务器返回空数据") }
+
+            // Use EncodingHelper to handle GBK/GB18030 responses from Chinese servers
+            guard let jsonString = EncodingHelper.shared.decode(data) else {
+                return (0, "无法解码服务器响应（非 UTF-8/GBK 编码）")
+            }
+
+            let (count, error) = importFromJSONString(jsonString)
+            if count > 0 {
+                try await db.saveBookSources(BookSourceImporter().parse(jsonString))
+                await loadSources()
+                return (count, "")
+            }
+            return (0, error.isEmpty ? "JSON 解析成功但未找到有效书源" : error)
         } catch {
-            print("❌ [Import Error]: \(error)")
-            return 0
+            let msg = error.localizedDescription
+            if msg.contains("App Transport Security") || msg.contains("cleartext") {
+                return (0, "网络被 ATS 拦截（HTTP 链接）：\(msg)")
+            }
+            return (0, "网络请求失败：\(msg)")
         }
     }
 
     /// 批量导入书源 (支持 JSON 字符串)
-    func importFromJSON(_ jsonString: String) async -> Int {
-        let importer = BookSourceImporter()
-        let newSources = importer.parse(jsonString)
-        guard !newSources.isEmpty else { return 0 }
-        
+    /// Returns (count, errorMessage). errorMessage is empty on success.
+    func importFromJSON(_ jsonString: String) async -> (Int, String) {
+        let (count, error) = importFromJSONString(jsonString)
+        guard count > 0 else { return (0, error) }
         do {
-            try await db.saveBookSources(newSources)
+            try await db.saveBookSources(BookSourceImporter().parse(jsonString))
             await loadSources()
-            return newSources.count
+            return (count, "")
         } catch {
-            print("❌ [Import Error]: \(error)")
-            return 0
+            return (0, "数据库保存失败：\(error.localizedDescription)")
         }
+    }
+
+    /// Internal: parse and diagnose without saving.
+    private func importFromJSONString(_ jsonString: String) -> (Int, String) {
+        let importer = BookSourceImporter()
+        let (sources, diagnosis) = importer.parseWithDiagnosis(jsonString)
+        return (sources.count, diagnosis)
     }
     
     /// 删除书源
@@ -86,59 +107,86 @@ class BookSourceViewModel: ObservableObject {
 /// 书源导入解析器 — 支持 Android 嵌套 JSON 格式
 class BookSourceImporter {
     func parse(_ jsonString: String) -> [BookSource] {
+        parseWithDiagnosis(jsonString).0
+    }
+
+    /// Parse and return (sources, humanReadableError). Error is "" on success.
+    func parseWithDiagnosis(_ jsonString: String) -> ([BookSource], String) {
         guard let data = jsonString.data(using: .utf8) else {
-            print("❌ [Import] UTF-8 encode failed")
-            return []
+            return ([], "JSON 字符串无法转 UTF-8 Data")
         }
 
         // 解析顶层 JSON 结构
         let rawObjects: [[String: Any]]
         do {
-            if let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            let top = try JSONSerialization.jsonObject(with: data)
+            if let arr = top as? [[String: Any]] {
                 rawObjects = arr
-            } else if let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                rawObjects = [obj]
+            } else if let obj = top as? [String: Any] {
+                // Check common Android wrapper keys before treating as a single source
+                if let inner = obj["bookSourceList"] as? [[String: Any]] {
+                    rawObjects = inner
+                } else if let inner = obj["sources"] as? [[String: Any]] {
+                    rawObjects = inner
+                } else if let inner = obj["data"] as? [[String: Any]] {
+                    rawObjects = inner
+                } else {
+                    rawObjects = [obj]
+                }
             } else {
-                print("❌ [Import] Unexpected JSON root type (expected Array or Object)")
-                return []
+                return ([], "JSON 根类型不正确（期望数组或对象，实际得到 \(type(of: try JSONSerialization.jsonObject(with: data)))）")
             }
         } catch {
-            print("❌ [Import] JSON parse error: \(error)")
-            return []
+            return ([], "JSON 解析失败：\(error.localizedDescription)")
+        }
+
+        guard !rawObjects.isEmpty else {
+            return ([], "JSON 解析为空数组")
         }
 
         // 将 Android 嵌套格式展平
         let flattened = rawObjects.map { flattenAndroidFormat($0) }
         guard let flatData = try? JSONSerialization.data(withJSONObject: flattened) else {
-            print("❌ [Import] Re-encode flattened objects failed")
-            return []
+            return ([], "展平后的数据无法重新序列化")
         }
 
         let decoder = JSONDecoder()
 
         // 先尝试整批解码（快速路径）
         if let sources = try? decoder.decode([BookSource].self, from: flatData), !sources.isEmpty {
-            print("✅ [Import] Batch decode OK: \(sources.count) sources")
-            return sources.filter { !$0.bookSourceUrl.isEmpty }
+            let valid = sources.filter { !$0.bookSourceUrl.isEmpty }
+            if !valid.isEmpty {
+                print("✅ [Import] Batch OK: \(valid.count)/\(sources.count) sources")
+                return (valid, "")
+            }
         }
 
         // 整批失败 → 逐条解码，跳过有问题的条目
-        print("⚠️ [Import] Batch decode failed, trying item-by-item...")
         var results: [BookSource] = []
+        var itemErrors: [String] = []
         for (i, flat) in flattened.enumerated() {
             guard let itemData = try? JSONSerialization.data(withJSONObject: flat) else { continue }
             do {
                 let source = try decoder.decode(BookSource.self, from: itemData)
                 if !source.bookSourceUrl.isEmpty {
                     results.append(source)
+                } else {
+                    let name = flat["bookSourceName"] as? String ?? "?"
+                    itemErrors.append("第\(i+1)条'\(name)'：bookSourceUrl 为空")
                 }
             } catch {
                 let name = flat["bookSourceName"] as? String ?? "?"
-                print("⚠️ [Import] Item \(i) '\(name)' failed: \(error)")
+                itemErrors.append("第\(i+1)条'\(name)'解码失败：\(error.localizedDescription)")
             }
         }
-        print("✅ [Import] Item-by-item result: \(results.count)/\(flattened.count) sources")
-        return results
+
+        if !results.isEmpty {
+            print("✅ [Import] Item-by-item: \(results.count)/\(flattened.count)")
+            return (results, "")
+        }
+
+        let detail = itemErrors.prefix(3).joined(separator: "；")
+        return ([], "共 \(flattened.count) 条书源全部解码失败。前几条原因：\(detail)")
     }
 
     // 将 Android BookSource JSON（嵌套规则对象）转换为 iOS 扁平字段

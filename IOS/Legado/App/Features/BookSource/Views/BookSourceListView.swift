@@ -72,8 +72,10 @@ struct BookSourceListView: View {
             .sheet(isPresented: $showingPasteSheet) {
                 PasteJSONSheet(text: $pasteText) { json in
                     Task {
-                        let count = await viewModel.importFromJSON(json)
-                        importResultMessage = count > 0 ? "成功导入 \(count) 个书源" : "导入失败，请检查 JSON 格式"
+                        let (count, error) = await viewModel.importFromJSON(json)
+                        importResultMessage = count > 0
+                            ? "成功导入 \(count) 个书源"
+                            : "导入失败：\(error.isEmpty ? "未找到有效书源" : error)"
                         showingImportResult = true
                     }
                 }
@@ -84,8 +86,10 @@ struct BookSourceListView: View {
                 Button("取消", role: .cancel) { }
                 Button("导入") {
                     Task {
-                        let count = await viewModel.importFromURL(importURLText)
-                        importResultMessage = count > 0 ? "成功导入 \(count) 个书源" : "导入失败，请检查 URL 或网络"
+                        let (count, error) = await viewModel.importFromURL(importURLText)
+                        importResultMessage = count > 0
+                            ? "成功导入 \(count) 个书源"
+                            : "导入失败：\(error.isEmpty ? "未知错误" : error)"
                         showingImportResult = true
                         importURLText = ""
                     }
