@@ -212,6 +212,10 @@ class ExploreCategoryViewModel: ObservableObject {
 
         // 3. 退化：单一 URL
         categories = [ExploreCategory(title: "全部", url: raw)]
+
+        // Deduplicate — identical title+url pairs cause SwiftUI "duplicate ID" faults
+        var seen = Set<String>()
+        categories = categories.filter { seen.insert($0.id).inserted }
     }
 }
 
@@ -309,7 +313,9 @@ class ExploreBookListViewModel: ObservableObject {
 // MARK: - 数据模型
 
 struct ExploreCategory: Codable, Identifiable {
-    var id: String { url }
+    // Use title+url as ID so that two categories with the same URL but different
+    // titles are treated as distinct. Prevents the SwiftUI "duplicate ID" warning.
+    var id: String { "\(title)|\(url)" }
     var title: String
     var url: String
 }

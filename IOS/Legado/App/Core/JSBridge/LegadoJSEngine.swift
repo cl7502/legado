@@ -32,13 +32,27 @@ class LegadoJSEngine {
         context.setObject(javaHelper,
                           forKeyedSubscript: "java" as (NSCopying & NSObjectProtocol))
 
-        // Standard globals (mirror Android AnalyzeRule bindings)
+        // result / src — Android always binds these even when nil (avoids ReferenceError).
+        // We convert non-String values (JSON objects) to their JSON string representation.
+        let resultStr: String
+        if let s = ctx.result as? String {
+            resultStr = s
+        } else if let obj = ctx.result,
+                  let data = try? JSONSerialization.data(withJSONObject: obj),
+                  let json = String(data: data, encoding: .utf8) {
+            resultStr = json
+        } else {
+            resultStr = ""
+        }
+        context.setObject(resultStr as AnyObject,
+                          forKeyedSubscript: "result" as (NSCopying & NSObjectProtocol))
+        // Android also exposes content as `src`
+        context.setObject(resultStr as AnyObject,
+                          forKeyedSubscript: "src" as (NSCopying & NSObjectProtocol))
+
+        // baseUrl
         context.setObject(ctx.baseUrl as AnyObject,
                           forKeyedSubscript: "baseUrl" as (NSCopying & NSObjectProtocol))
-        if let res = ctx.result as? String {
-            context.setObject(res as AnyObject,
-                              forKeyedSubscript: "result" as (NSCopying & NSObjectProtocol))
-        }
 
         // book
         if let book = ctx.book {
@@ -51,13 +65,15 @@ class LegadoJSEngine {
                               forKeyedSubscript: "book" as (NSCopying & NSObjectProtocol))
         }
 
-        // chapter
+        // chapter + title (Android binds both)
         if let ch = ctx.chapter {
             let d: [String: Any] = [
                 "title": ch.title, "url": ch.url, "index": ch.index,
             ]
             context.setObject(d as AnyObject,
                               forKeyedSubscript: "chapter" as (NSCopying & NSObjectProtocol))
+            context.setObject(ch.title as AnyObject,
+                              forKeyedSubscript: "title" as (NSCopying & NSObjectProtocol))
         }
 
         // source
@@ -79,6 +95,26 @@ class LegadoJSEngine {
         // cookie proxy
         context.setObject(JSCookieProxy(),
                           forKeyedSubscript: "cookie" as (NSCopying & NSObjectProtocol))
+
+        // Minimal $ shim — guards against sources whose jsLib failed to define $
+        // before our real jsLib eval runs. Real $ should be overwritten by jsLib.
+        let dollarShim = """
+        if (typeof $ === 'undefined') {
+            var $ = function(sel) {
+                var h = (typeof result !== 'undefined') ? result : '';
+                return {
+                    text: function() { return java.queryAllTextContent(h, sel) || ''; },
+                    attr: function(n) { return java.queryTextContent(h, sel + '@' + n) || ''; },
+                    html: function() { return java.queryTextContent(h, sel) || ''; },
+                    find: function(c) { return $(sel + ' ' + c); },
+                    first: function() { return this; },
+                    last:  function() { return this; },
+                    eq:    function() { return this; }
+                };
+            };
+        }
+        """
+        context.evaluateScript(dollarShim)
 
         return context
     }
