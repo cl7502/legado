@@ -240,7 +240,14 @@ class ReaderViewModel: ObservableObject {
     
     func loadChapterContent(at index: Int) async {
         guard index < chapters.count else { return }
-        if chapterContents[index] != nil { return } // 已加载
+
+        // 已缓存：若是当前章节且 currentPages 为空（如刚切章），直接重分页即可
+        if chapterContents[index] != nil {
+            if index == currentChapterIndex && currentPages.isEmpty {
+                paginateCurrentChapter()
+            }
+            return
+        }
         
         let chapter = chapters[index]
         
@@ -299,6 +306,9 @@ class ReaderViewModel: ObservableObject {
             }
         } catch {
             self.chapterContents[index] = "加载失败: \(error.localizedDescription)"
+            if index == currentChapterIndex && currentPages.isEmpty {
+                paginateCurrentChapter()  // 即便失败也显示错误文字，不卡在转圈
+            }
         }
     }
     

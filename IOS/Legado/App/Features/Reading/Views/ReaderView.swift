@@ -86,16 +86,19 @@ struct ReaderView: View {
         }
     }
 
-    // MARK: 滚动模式
+    // MARK: 滚动模式（连续正文 + 章节底部导航按钮）
     private var scrollModeView: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: settings.paragraphSpacing) {
+                // 章节标题
                 Text(currentChapterTitle)
                     .font(.system(size: settings.fontSize + 6, weight: .bold))
                     .foregroundColor(settings.currentTheme.textColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 8)
 
-                let fullContent = viewModel.chapterContents[viewModel.currentChapterIndex] ?? ""
+                // 正文内容
+                let fullContent = viewModel.chapterContents[viewModel.currentChapterIndex] ?? "加载中..."
                 ForEach(paragraphs(fullContent), id: \.self) { para in
                     Text(applyTraditional(para))
                         .font(.system(size: settings.fontSize))
@@ -104,6 +107,35 @@ struct ReaderView: View {
                         .foregroundColor(settings.currentTheme.textColor)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+
+                // 章节底部导航（滚动模式专用）
+                Divider().padding(.vertical, 16)
+                HStack {
+                    if viewModel.currentChapterIndex > 0 {
+                        Button {
+                            viewModel.jumpToChapter(viewModel.currentChapterIndex - 1)
+                        } label: {
+                            Label("上一章", systemImage: "chevron.left")
+                                .font(.system(size: settings.fontSize - 2))
+                                .foregroundColor(settings.currentTheme.textColor.opacity(0.7))
+                        }
+                    }
+                    Spacer()
+                    Text("\(viewModel.currentChapterIndex + 1) / \(viewModel.chapters.count)章")
+                        .font(.system(size: settings.fontSize - 4))
+                        .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
+                    Spacer()
+                    if viewModel.currentChapterIndex < viewModel.chapters.count - 1 {
+                        Button {
+                            viewModel.jumpToChapter(viewModel.currentChapterIndex + 1)
+                        } label: {
+                            Label("下一章", systemImage: "chevron.right")
+                                .font(.system(size: settings.fontSize - 2))
+                                .foregroundColor(settings.currentTheme.textColor.opacity(0.7))
+                        }
+                    }
+                }
+                .padding(.bottom, 40)
             }
             .padding(.horizontal, settings.sideMargin)
             .padding(.top, settings.topMargin)
@@ -116,13 +148,13 @@ struct ReaderView: View {
         GeometryReader { geo in
             HStack(spacing: 0) {
                 Color.clear.contentShape(Rectangle())
-                    .onTapGesture { viewModel.prevPage() }
+                    .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { viewModel.prevPage() } }
                     .frame(width: geo.size.width / 3)
                 Color.clear.contentShape(Rectangle())
                     .onTapGesture { withAnimation { viewModel.showingMenu = true } }
                     .frame(width: geo.size.width / 3)
                 Color.clear.contentShape(Rectangle())
-                    .onTapGesture { viewModel.nextPage() }
+                    .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { viewModel.nextPage() } }
                     .frame(width: geo.size.width / 3)
             }
         }
