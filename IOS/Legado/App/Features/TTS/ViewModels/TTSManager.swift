@@ -89,6 +89,7 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     }
 
     func stop() {
+        onChapterFinish = nil  // 先清回调，防止 didFinish 触发连读链
         synthesizer.stopSpeaking(at: .immediate)
         isSpeaking = false
     }

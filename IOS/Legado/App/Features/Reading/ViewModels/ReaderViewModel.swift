@@ -47,9 +47,9 @@ class ReaderViewModel: ObservableObject {
         isTTSEnabled = true
 
         ttsManager.speak(content, bookName: book.name, chapterTitle: chapters[currentChapterIndex].title) { [weak self] in
-            // 连读逻辑：章节结束自动切到下一章（不是下一页）
-            self?.nextChapterOnly()
-            self?.startTTS()
+            guard let self, self.isTTSEnabled else { return }  // 已停止则不连读
+            self.nextChapterOnly()
+            self.startTTS()
         }
     }
     
@@ -395,7 +395,8 @@ class ReaderViewModel: ObservableObject {
             pageSize: usableSize,
             font: font,
             lineSpacing: settings.lineSpacing,
-            letterSpacing: settings.letterSpacing
+            letterSpacing: settings.letterSpacing,
+            paragraphSpacing: settings.paragraphSpacing  // 同步传入，与渲染保持一致
         )
         let title = chapters[currentChapterIndex].title
         let pages = paginator.paginate(text: content, chapterTitle: title)

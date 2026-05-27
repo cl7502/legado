@@ -54,12 +54,13 @@ struct ReaderView: View {
         .onAppear  { UIApplication.shared.isIdleTimerDisabled = settings.keepScreenOn }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         // B3修复：排版设置变化 → 重新分页
-        .onChange(of: settings.fontSize)         { _ in viewModel.paginateCurrentChapter() }
-        .onChange(of: settings.lineSpacing)      { _ in viewModel.paginateCurrentChapter() }
-        .onChange(of: settings.letterSpacing)    { _ in viewModel.paginateCurrentChapter() }
-        .onChange(of: settings.sideMargin)       { _ in viewModel.paginateCurrentChapter() }
-        .onChange(of: settings.topMargin)        { _ in viewModel.paginateCurrentChapter() }
-        .onChange(of: settings.bottomMargin)     { _ in viewModel.paginateCurrentChapter() }
+        .onChange(of: settings.fontSize)          { _ in viewModel.paginateCurrentChapter() }
+        .onChange(of: settings.lineSpacing)       { _ in viewModel.paginateCurrentChapter() }
+        .onChange(of: settings.letterSpacing)     { _ in viewModel.paginateCurrentChapter() }
+        .onChange(of: settings.paragraphSpacing)  { _ in viewModel.paginateCurrentChapter() }
+        .onChange(of: settings.sideMargin)        { _ in viewModel.paginateCurrentChapter() }
+        .onChange(of: settings.topMargin)         { _ in viewModel.paginateCurrentChapter() }
+        .onChange(of: settings.bottomMargin)      { _ in viewModel.paginateCurrentChapter() }
         .task { await viewModel.setup() }
     }
 
@@ -210,17 +211,9 @@ struct ReaderPageView: View {
                         .padding(.bottom, 20)
                 }
 
-                // B3修复：段间距通过 VStack spacing 实现
-                VStack(alignment: .leading, spacing: settings.paragraphSpacing) {
-                    ForEach(paragraphs(content), id: \.self) { para in
-                        Text(applyTraditional(para))
-                            .font(.system(size: settings.fontSize))
-                            .kerning(settings.letterSpacing)
-                            .lineSpacing(settings.lineSpacing)
-                            .foregroundColor(settings.currentTheme.textColor)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
+                // 单个 Text 渲染，与分页器 CoreText 计算保持一致，避免 VStack spacing 造成空白偏大
+                Text(attributedContent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 Spacer(minLength: 0)
 
@@ -259,6 +252,36 @@ struct ReaderPageView: View {
                 .padding(.top, 8)
             }
         }
+    }
+
+    /// 构建与分页器一致的 AttributedString（字体、行距、字间距、段间距、颜色）
+    private var attributedContent: AttributedString {
+        let text = applyTraditional(content)
+        var attr = AttributedString(text)
+
+        // 基础字体与颜色
+        attr.font = .system(size: settings.fontSize)
+        attr.foregroundColor = settings.currentTheme.textColor
+
+        // 字间距（SwiftUI AttributedString 用 kern）
+        if settings.letterSpacing != 0 {
+            attr.kern = settings.letterSpacing
+        }
+
+        // 段间距：在每个 \n 之后插入段落样式
+        // 用 NSAttributedString 处理段落样式再转回
+        let nsAttr = NSMutableAttributedString(string: text)
+        let para = NSMutableParagraphStyle()
+        para.lineSpacing = settings.lineSpacing
+        para.paragraphSpacing = settings.paragraphSpacing
+        nsAttr.addAttributes([
+            .font: UIFont.systemFont(ofSize: settings.fontSize),
+            .paragraphStyle: para,
+            .foregroundColor: UIColor(settings.currentTheme.textColor),
+            .kern: settings.letterSpacing,
+        ], range: NSRange(location: 0, length: nsAttr.length))
+
+        return (try? AttributedString(nsAttr, including: \.uiKit)) ?? attr
     }
 
     private func paragraphs(_ text: String) -> [String] {

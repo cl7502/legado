@@ -7,12 +7,15 @@ struct ChapterPaginator {
     let font: UIFont
     let lineSpacing: CGFloat
     let letterSpacing: CGFloat
+    let paragraphSpacing: CGFloat
 
-    init(pageSize: CGSize, font: UIFont, lineSpacing: CGFloat, letterSpacing: CGFloat = 0) {
+    init(pageSize: CGSize, font: UIFont, lineSpacing: CGFloat,
+         letterSpacing: CGFloat = 0, paragraphSpacing: CGFloat = 0) {
         self.pageSize = pageSize
         self.font = font
         self.lineSpacing = lineSpacing
         self.letterSpacing = letterSpacing
+        self.paragraphSpacing = paragraphSpacing
     }
 
     func paginate(text: String, chapterTitle: String) -> [String] {
@@ -55,6 +58,7 @@ struct ChapterPaginator {
     private func makeAttrString(_ text: String) -> NSAttributedString {
         let para = NSMutableParagraphStyle()
         para.lineSpacing = lineSpacing
+        para.paragraphSpacing = paragraphSpacing  // 与 ReaderPageView 保持一致
         return NSAttributedString(string: text, attributes: [
             .font: font,
             .paragraphStyle: para,
