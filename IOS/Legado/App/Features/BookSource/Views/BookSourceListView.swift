@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// 书源管理界面
 struct BookSourceListView: View {
@@ -13,6 +14,9 @@ struct BookSourceListView: View {
     // URL 导入
     @State private var showingURLImportAlert = false
     @State private var importURLText = ""
+
+    // 文件导入
+    @State private var showingFilePicker = false
 
     // 导入结果提示
     @State private var importResultMessage: String = ""
@@ -56,6 +60,11 @@ struct BookSourceListView: View {
                         } label: {
                             Label("从 URL 导入", systemImage: "link.badge.plus")
                         }
+                        Button {
+                            showingFilePicker = true
+                        } label: {
+                            Label("从文件导入", systemImage: "doc.badge.plus")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -98,10 +107,58 @@ struct BookSourceListView: View {
             } message: {
                 Text("输入包含书源 JSON 的远程地址")
             }
+            // 文件选择器：支持 .json 和纯文本（部分书源打包为 .txt）
+            .fileImporter(
+                isPresented: $showingFilePicker,
+                allowedContentTypes: [.json, .plainText, .data],
+                allowsMultipleSelection: false
+            ) { result in
+                handleFileImport(result)
+            }
             .alert("导入结果", isPresented: $showingImportResult) {
                 Button("好") { }
             } message: {
                 Text(importResultMessage)
+            }
+        }
+    }
+
+    // MARK: - 文件导入处理
+
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .failure(let error):
+            importResultMessage = "无法访问文件：\(error.localizedDescription)"
+            showingImportResult = true
+
+        case .success(let urls):
+            guard let url = urls.first else { return }
+
+            // 沙盒外文件需申请访问权限
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+            do {
+                let data = try Data(contentsOf: url)
+                // 尝试 UTF-8，失败时用 GBK（部分书源文件为 GBK 编码）
+                let json = String(data: data, encoding: .utf8)
+                    ?? String(data: data, encoding: .init(rawValue: 936) /* GBK */)
+                    ?? ""
+                guard !json.isEmpty else {
+                    importResultMessage = "文件内容为空或编码不支持"
+                    showingImportResult = true
+                    return
+                }
+                Task {
+                    let (count, error) = await viewModel.importFromJSON(json)
+                    importResultMessage = count > 0
+                        ? "成功从文件导入 \(count) 个书源"
+                        : "导入失败：\(error.isEmpty ? "未找到有效书源，请确认文件为 Legado JSON 格式" : error)"
+                    showingImportResult = true
+                }
+            } catch {
+                importResultMessage = "读取文件失败：\(error.localizedDescription)"
+                showingImportResult = true
             }
         }
     }
