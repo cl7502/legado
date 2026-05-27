@@ -81,7 +81,7 @@ struct ReaderView: View {
         .ignoresSafeArea()
         .onChange(of: viewModel.currentPageIndex) { newIdx in
             if newIdx == viewModel.currentPages.count - 1 {
-                Task { await viewModel.prefetchNextChapter() }
+                viewModel.prefetchNextChapter()  // 并行后台下载，不需要 Task 包装
             }
         }
     }

@@ -59,7 +59,7 @@ class ReaderViewModel: ObservableObject {
         await loadChapters()
         if !chapters.isEmpty {
             await loadChapterContent(at: currentChapterIndex)
-            await prefetch(around: currentChapterIndex)
+            prefetch(around: currentChapterIndex)  // fire-and-forget，不阻塞
         }
     }
 
@@ -303,17 +303,22 @@ class ReaderViewModel: ObservableObject {
     }
     
     // F1: 后台静默预缓存后面 N 章
-    private func prefetch(around index: Int) async {
+    // 每章独立 Task 并行下载，不阻塞调用方（fire-and-forget）
+    private func prefetch(around index: Int) {
         let count = ReaderSettings.shared.prefetchCount
-        let end = min(index + count, chapters.count - 1)
-        for i in (index + 1)...max(index + 1, end) {
-            guard i < chapters.count else { break }
-            await loadChapterContent(at: i)
+        guard count > 0 else { return }
+        let start = index + 1
+        let end   = min(start + count - 1, chapters.count - 1)
+        guard start <= end else { return }
+        for i in start...end {
+            Task { [weak self] in
+                await self?.loadChapterContent(at: i)
+            }
         }
     }
 
-    func prefetchNextChapter() async {
-        await prefetch(around: currentChapterIndex)
+    func prefetchNextChapter() {
+        prefetch(around: currentChapterIndex)
     }
 
     // F2: 刷新当前章节（清除缓存重新拉取）
@@ -436,7 +441,7 @@ class ReaderViewModel: ObservableObject {
         currentPages = []
         Task {
             await loadChapterContent(at: currentChapterIndex)
-            await prefetch(around: currentChapterIndex)
+            prefetch(around: currentChapterIndex)  // 并行后台下载，不阻塞
         }
     }
 
@@ -445,7 +450,10 @@ class ReaderViewModel: ObservableObject {
         currentChapterIndex -= 1
         currentPageIndex = 0
         currentPages = []
-        Task { await loadChapterContent(at: currentChapterIndex) }
+        Task {
+            await loadChapterContent(at: currentChapterIndex)
+            prefetch(around: currentChapterIndex)
+        }
     }
 
     func jumpToChapter(_ index: Int) {
@@ -455,7 +463,7 @@ class ReaderViewModel: ObservableObject {
         showingMenu = false
         Task {
             await loadChapterContent(at: currentChapterIndex)
-            await prefetch(around: currentChapterIndex)
+            prefetch(around: currentChapterIndex)  // 并行后台下载，不阻塞
         }
     }
 }
