@@ -182,9 +182,23 @@ extension BookSource: Codable {
 // MARK: - 工具属性
 extension BookSource {
     var headerDictionary: [String: String] {
-        guard let data = header?.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String]
-        else { return [:] }
-        return dict
+        guard let headerStr = header, !headerStr.isEmpty else { return [:] }
+
+        // Try standard JSON first (double-quoted keys/values)
+        if let data = headerStr.data(using: .utf8),
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+            return dict
+        }
+
+        // Android book sources use single-quoted JSON: {'key': 'value'}
+        // HTTP header names and values never contain apostrophes, so a simple
+        // single→double quote replacement produces valid JSON.
+        let normalized = headerStr.replacingOccurrences(of: "'", with: "\"")
+        if let data = normalized.data(using: .utf8),
+           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
+            return dict
+        }
+
+        return [:]
     }
 }

@@ -8,12 +8,15 @@ struct SimulationPagingView: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> UIPageViewController {
         let pageVC = UIPageViewController(
-            transitionStyle: .pageCurl,
+            transitionStyle: .scroll,
             navigationOrientation: .horizontal,
             options: nil
         )
         pageVC.dataSource = context.coordinator
         pageVC.delegate = context.coordinator
+        // UIPageViewController 默认背景色是 systemBackground（白色），需清除
+        // 以便底层 SwiftUI 背景（主题色）可以透出
+        pageVC.view.backgroundColor = .clear
 
         // 初始页面：如果 currentPages 已填充则使用，否则显示占位
         let initialVC = context.coordinator.makePageVC(at: viewModel.currentPageIndex)
@@ -39,7 +42,6 @@ struct SimulationPagingView: UIViewControllerRepresentable {
         if currentVC?.pageIndex == desiredIndex && currentVC?.content == expectedContent {
             return
         }
-
         let direction: UIPageViewController.NavigationDirection =
             (currentVC?.pageIndex ?? 0) < desiredIndex ? .forward : .reverse
         let nextVC = context.coordinator.makePageVC(at: desiredIndex)
@@ -144,14 +146,22 @@ class PhysicalPageViewController: UIViewController {
             rootView: ReaderPageContent(
                 content: content,
                 chapterTitle: chapterTitle,
-                pageLabel: pageLabel
+                pageLabel: pageLabel,
+                totalChapters: 0,
+                chapterIndex: 0
             )
         )
         addChild(hostingVC)
-        view.addSubview(hostingVC.view)
-        hostingVC.view.frame = view.bounds
-        hostingVC.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        hostingVC.view.translatesAutoresizingMaskIntoConstraints = false
         hostingVC.view.backgroundColor = .clear
+        hostingVC.view.isOpaque = false
+        view.addSubview(hostingVC.view)
+        NSLayoutConstraint.activate([
+            hostingVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hostingVC.view.topAnchor.constraint(equalTo: view.topAnchor),
+            hostingVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
         hostingVC.didMove(toParent: self)
     }
 }

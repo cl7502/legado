@@ -47,6 +47,8 @@ import CommonCrypto
     // AES
     func aesEncrypt(_ data: String, _ key: String, _ iv: String, _ mode: String) -> String
     func aesDecrypt(_ base64Data: String, _ key: String, _ iv: String, _ mode: String) -> String
+    // Android alias: aesBase64DecodeToString(data, key, mode, iv) — note mode/iv order differs
+    func aesBase64DecodeToString(_ data: String, _ key: String, _ mode: String, _ iv: String) -> String
 
     // Compression
     func gzip(_ text: String) -> String?
@@ -289,12 +291,24 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     }
 
     func aesDecrypt(_ base64Data: String, _ key: String, _ iv: String, _ mode: String) -> String {
-        guard let dataBytes = Data(base64Encoded: base64Data),
+        // Normalize URL-safe base64 (- → +, _ → /) and add padding
+        var normalized = base64Data
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let rem = normalized.count % 4
+        if rem > 0 { normalized += String(repeating: "=", count: 4 - rem) }
+        guard let dataBytes = Data(base64Encoded: normalized),
               let keyBytes = key.data(using: .utf8) else { return "" }
         let ivBytes = iv.data(using: .utf8) ?? Data(repeating: 0, count: kCCBlockSizeAES128)
         let opts = aesOptions(mode)
         return aesCrypt(CCOperation(kCCDecrypt), data: dataBytes, key: keyBytes, iv: ivBytes, opts: opts)
             .flatMap { String(data: $0, encoding: .utf8) } ?? ""
+    }
+
+    // Android alias: parameter order is (data, key, mode, iv) — mode and iv are swapped
+    // vs our aesDecrypt(data, key, iv, mode).
+    func aesBase64DecodeToString(_ data: String, _ key: String, _ mode: String, _ iv: String) -> String {
+        aesDecrypt(data, key, iv, mode)
     }
 
     private func aesOptions(_ mode: String) -> CCOptions {

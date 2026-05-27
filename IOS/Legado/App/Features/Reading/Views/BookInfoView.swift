@@ -37,20 +37,23 @@ class BookInfoViewModel: ObservableObject {
             let sources = try await db.getAllBookSources()
             guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
 
-            // ISSUE-025: ruleBookInfoInit 是初始化 JS（副作用），不是重定向 URL 规则
-            // Android BookInfo.analyzeBookInfo() 中此规则只做变量/Cookie 初始化，返回值丢弃
             let detailUrl = book.bookUrl
-            var initVariables: [String: Any] = [:]
-            if let initRule = source.ruleBookInfoInit, !initRule.isEmpty {
-                var ctx = AnalyzeContext(source: source, baseUrl: book.bookUrl)
-                _ = ruleExecutor.execute(initRule, in: &ctx)  // 只取副作用（变量/Cookie），忽略返回值
-                initVariables = ctx.variables
-            }
-
             var context = AnalyzeContext(source: source, baseUrl: detailUrl)
-            context.variables = initVariables
+
+            // Fetch book detail page first
             let html = try await network.request(detailUrl, source: source)
             context.result = html
+
+            // ruleBookInfoInit: mirrors Android BookInfo.analyzeBookInfo().
+            // Android uses the result as new root content if non-empty.
+            // e.g. "$.data" extracts the data object so subsequent rules like
+            // "{{$.novelId}}" can find fields directly rather than at "$.data.novelId".
+            if let initRule = source.ruleBookInfoInit, !initRule.isEmpty {
+                if let newRoot = ruleExecutor.execute(initRule, in: &context), !newRoot.isEmpty {
+                    context.result = newRoot  // use result as new document root
+                }
+                // Side-effect variables (cookies etc.) already captured via context
+            }
 
             // 执行所有详情页规则，有值则覆盖
             if let v = ruleExecutor.execute(source.ruleBookName    ?? "", in: &context), !v.isEmpty { book.name      = v }

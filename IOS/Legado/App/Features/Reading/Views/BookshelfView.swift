@@ -5,7 +5,6 @@ struct BookshelfView: View {
     @StateObject private var viewModel = BookshelfViewModel()
 
     @State private var selectedBook: Book?
-    @State private var isReaderPresented = false
 
     // 定义 3 列网格
     let columns = [
@@ -33,7 +32,6 @@ struct BookshelfView: View {
                             BookItemView(book: book)
                                 .onTapGesture {
                                     selectedBook = book
-                                    isReaderPresented = true
                                 }
                         }
                     }
@@ -74,12 +72,13 @@ struct BookshelfView: View {
             .refreshable {
                 await viewModel.loadBooks()
             }
-            .fullScreenCover(isPresented: $isReaderPresented, onDismiss: {
-                Task { await viewModel.loadBooks() } // 退出阅读器时刷新进度
-            }) {
-                if let book = selectedBook {
-                    ReaderView(viewModel: ReaderViewModel(book: book))
-                }
+            // 用 item: 绑定，避免 isPresented + 独立 selectedBook 的时序竞态：
+            // fullScreenCover(isPresented:) 可能在 selectedBook 提交前就渲染闭包，
+            // 导致 if let book = selectedBook 为 nil，显示空白 EmptyView。
+            .fullScreenCover(item: $selectedBook, onDismiss: {
+                Task { await viewModel.loadBooks() }
+            }) { book in
+                ReaderView(viewModel: ReaderViewModel(book: book))
             }
         }
     }

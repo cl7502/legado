@@ -89,8 +89,15 @@ class RuleExecutor {
             result = htmlParser.xpathText(html, xpath: coreRule)
 
         case .defaultRule:
-            let html = asString(current)
-            result = htmlParser.text(html, query: coreRule)
+            // CSS selectors never start with "/" or "http".
+            // When a URL template like "/novel/{{$.novelId}}/chapters" expands to a path,
+            // return it directly rather than passing it to the CSS parser (which returns nil).
+            if coreRule.hasPrefix("/") || coreRule.hasPrefix("http://") || coreRule.hasPrefix("https://") {
+                result = coreRule
+            } else {
+                let html = asString(current)
+                result = htmlParser.text(html, query: coreRule)
+            }
 
         case .regex:
             let str = asString(current)

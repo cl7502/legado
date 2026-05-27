@@ -28,9 +28,11 @@ struct RuleSegment {
 class RuleParser {
     static let shared = RuleParser()
 
-    // Matches <js>...</js> or javascript:... (up to next newline)
+    // Matches JS blocks: <js>...</js>, javascript:..., or @js:...
+    // Android JS_PATTERN includes @js: which runs to end of string.
+    // This split boundary allows rule chains like: "$.path@js:decrypt(result)"
     private let jsPattern = try! NSRegularExpression(
-        pattern: #"javascript:.+?(?:\n|$)|<js>[\w\W]+?</js>"#,
+        pattern: #"@js:[\w\W]+|javascript:.+?(?:\n|$)|<js>[\w\W]+?</js>"#,
         options: []
     )
 
@@ -78,6 +80,7 @@ class RuleParser {
 
     private func isWholeJS(_ s: String) -> Bool {
         s.hasPrefix("javascript:") ||
+        s.hasPrefix("@js:") ||
         (s.hasPrefix("<js>") && s.hasSuffix("</js>"))
     }
 
@@ -142,7 +145,10 @@ class RuleParser {
             let code: String
             if trimmed.hasPrefix("javascript:") {
                 code = String(trimmed.dropFirst(11))
+            } else if trimmed.hasPrefix("@js:") {
+                code = String(trimmed.dropFirst(4))
             } else {
+                // <js>...</js>
                 code = String(trimmed.dropFirst(4).dropLast(5))
             }
             return RuleSegment(type: .js, content: code)

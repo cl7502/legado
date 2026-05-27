@@ -189,9 +189,13 @@ class ReaderViewModel: ObservableObject {
 
             self.chapters = fetched
 
-            // 3. 持久化章节列表
+            // 持久化章节列表，同步更新 totalChapterNum 避免书架显示异常百分比
             if !fetched.isEmpty {
                 try await db.saveChapters(fetched, for: book.bookUrl)
+                var updatedBook = book
+                updatedBook.totalChapterNum = fetched.count
+                self.book = updatedBook
+                try? await db.saveBook(updatedBook)
             }
         } catch {
             print("❌ [loadChapters]: \(error)")
@@ -206,22 +210,22 @@ class ReaderViewModel: ObservableObject {
         return resolved.absoluteString
     }
 
-    /// ISSUE-021: Refresh BookInfo page before loading chapters.
-    /// Mirrors Android WebBook.getBookInfoAwait() — executes ruleBookInfoInit (side-effect JS)
-    /// and refreshes tocUrl from the book detail page so that dynamic URLs are not stale.
+    /// Refresh BookInfo page before loading chapters.
+    /// Mirrors Android WebBook.getBookInfoAwait() — executes ruleBookInfoInit to set
+    /// document root, then refreshes tocUrl so dynamic URLs are not stale.
     private func refreshBookInfoForChapters(source: BookSource) async {
         do {
-            var context = AnalyzeContext(source: source, baseUrl: book.bookUrl)
-
-            // Execute ruleBookInfoInit (side-effect only — sets variables/cookies)
-            if let initRule = source.ruleBookInfoInit, !initRule.isEmpty {
-                var initCtx = context
-                _ = ruleExecutor.execute(initRule, in: &initCtx)
-                context.variables = initCtx.variables
-            }
-
             let html = try await network.request(book.bookUrl, source: source)
+            var context = AnalyzeContext(source: source, baseUrl: book.bookUrl)
             context.result = html
+
+            // ruleBookInfoInit: use result as new content root if non-empty.
+            // Many sources use "$.data" here to shift the root for subsequent rules.
+            if let initRule = source.ruleBookInfoInit, !initRule.isEmpty {
+                if let newRoot = ruleExecutor.execute(initRule, in: &context), !newRoot.isEmpty {
+                    context.result = newRoot
+                }
+            }
 
             // Refresh tocUrl from detail page
             if let tocRaw = ruleExecutor.execute(source.ruleTocUrl ?? "", in: &context),
@@ -287,8 +291,10 @@ class ReaderViewModel: ObservableObject {
             }
 
             self.chapterContents[index] = content
-            
+
+            // 内容加载完成后立即分页，不等 SwiftUI onChange 触发
             if index == currentChapterIndex {
+                paginateCurrentChapter()
                 await syncProgress(chapter: chapter)
             }
         } catch {
@@ -296,10 +302,49 @@ class ReaderViewModel: ObservableObject {
         }
     }
     
+    // F1: 后台静默预缓存后面 N 章
     private func prefetch(around index: Int) async {
-        let nextIndex = index + 1
-        if nextIndex < chapters.count {
-            await loadChapterContent(at: nextIndex)
+        let count = ReaderSettings.shared.prefetchCount
+        let end = min(index + count, chapters.count - 1)
+        for i in (index + 1)...max(index + 1, end) {
+            guard i < chapters.count else { break }
+            await loadChapterContent(at: i)
+        }
+    }
+
+    func prefetchNextChapter() async {
+        await prefetch(around: currentChapterIndex)
+    }
+
+    // F2: 刷新当前章节（清除缓存重新拉取）
+    func refreshCurrentChapter() async {
+        chapterContents.removeValue(forKey: currentChapterIndex)
+        currentPages = []
+        await loadChapterContent(at: currentChapterIndex)
+    }
+
+    // F2: 缓存全本（后台下载全部章节，已有的也重新拉取）
+    @Published var isCachingAll = false
+    @Published var cacheProgress: Double = 0  // 0.0~1.0
+
+    func cacheAllChapters() {
+        guard !isCachingAll, !chapters.isEmpty else { return }
+        isCachingAll = true
+        cacheProgress = 0
+        chapterContents.removeAll()  // 清空已有缓存，全量重新下载
+        Task.detached(priority: .background) { [weak self] in
+            guard let self else { return }
+            let total = await self.chapters.count
+            for i in 0..<total {
+                await self.loadChapterContent(at: i)
+                await MainActor.run {
+                    self.cacheProgress = Double(i + 1) / Double(total)
+                }
+            }
+            await MainActor.run {
+                self.isCachingAll = false
+                self.cacheProgress = 1.0
+            }
         }
     }
     
@@ -315,23 +360,27 @@ class ReaderViewModel: ObservableObject {
     // MARK: - 章节内分页
 
     /// 对当前章节执行分页，结果写入 currentPages / currentPageIndex。
-    /// 应在章节内容加载完成后，从 ReaderView 传入屏幕可用尺寸后调用。
-    func paginateCurrentChapter(screenSize: CGSize, settings: ReaderSettings) {
+    /// 从 UIScreen.main.bounds 自行计算可用尺寸，不依赖 SwiftUI geometry。
+    func paginateCurrentChapter() {
         guard let content = chapterContents[currentChapterIndex],
               currentChapterIndex < chapters.count else { return }
 
+        let settings = ReaderSettings.shared
+        let screenSize = UIScreen.main.bounds.size
+
         let font = UIFont.systemFont(ofSize: settings.fontSize)
         let horizontalPadding = settings.sideMargin * 2
-        let verticalPadding: CGFloat = 80 // top 40 + bottom 40
+        let verticalPadding   = settings.topMargin + settings.bottomMargin
         let usableSize = CGSize(
-            width: max(screenSize.width - horizontalPadding, 100),
-            height: max(screenSize.height - verticalPadding, 100)
+            width:  max(screenSize.width  - horizontalPadding, 100),
+            height: max(screenSize.height - verticalPadding,   100)
         )
 
         let paginator = ChapterPaginator(
             pageSize: usableSize,
             font: font,
-            lineSpacing: settings.lineSpacing
+            lineSpacing: settings.lineSpacing,
+            letterSpacing: settings.letterSpacing
         )
         let title = chapters[currentChapterIndex].title
         let pages = paginator.paginate(text: content, chapterTitle: title)
