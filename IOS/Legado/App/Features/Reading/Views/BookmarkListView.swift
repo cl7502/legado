@@ -13,11 +13,20 @@ struct BookmarkListView: View {
         NavigationView {
             Group {
                 if vm.bookmarks.isEmpty {
-                    ContentUnavailableView(
-                        "暂无书签",
-                        systemImage: "bookmark",
-                        description: Text("在阅读器菜单中点击「添加书签」")
-                    )
+                    VStack(spacing: 12) {
+                        Spacer()
+                        Image(systemName: "bookmark")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary.opacity(0.5))
+                        Text("暂无书签")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text("在阅读器菜单中点击「添加书签」")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
                 } else {
                     List {
                         ForEach(vm.bookmarks) { bm in

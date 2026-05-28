@@ -319,6 +319,7 @@ struct ReaderMenuView: View {
     @State private var brightness: Double = Double(UIScreen.main.brightness)
     @State private var showingCacheAlert  = false
     @State private var showingBookmarks   = false
+    @State private var showingSearch      = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -384,6 +385,10 @@ struct ReaderMenuView: View {
 
                 Button { showingBookmarks = true } label: {
                     Label("书签列表", systemImage: "bookmark")
+                }
+
+                Button { showingSearch = true } label: {
+                    Label("搜索本书", systemImage: "magnifyingglass")
                 }            } label: {
                 Image(systemName: "ellipsis").font(.title2)
             }
@@ -395,6 +400,15 @@ struct ReaderMenuView: View {
             }
             .sheet(isPresented: $showingBookmarks) {
                 BookmarkListView(bookUrl: viewModel.book.bookUrl) { chapterIdx, pos in
+                    viewModel.jumpToChapter(chapterIdx)
+                }
+            }
+            .sheet(isPresented: $showingSearch) {
+                BookSearchView(
+                    bookUrl: viewModel.book.bookUrl,
+                    chapterContents: viewModel.chapterContents,
+                    chapters: viewModel.chapters
+                ) { chapterIdx in
                     viewModel.jumpToChapter(chapterIdx)
                 }
             }
