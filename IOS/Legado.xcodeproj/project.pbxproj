@@ -16,6 +16,7 @@
 		17EABFDE74A91843DA479BBE /* BookSourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58A64AE613625A1A6F5060F0 /* BookSourceListView.swift */; };
 		1FBB4996EDF285553CA8187D /* ReaderSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC05B10A239C4AA6842C5BD /* ReaderSettingsSheet.swift */; };
 		1FE555CCB62E2E222C04B331 /* ExploreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4219C4F1F814AB2E7305C338 /* ExploreView.swift */; };
+		1455715C1E7840E8A605D9BB /* ExploreDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */; };
 		2AAD0EF819101DDD1F0AFAE0 /* EncodingHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D94DE81601D33C9A1B35B2 /* EncodingHelper.swift */; };
 		2F4D04E3284620D2F140EA0E /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E239C29D6CB61EC2C6EAD6 /* DatabaseManager.swift */; };
 		30FD9C3F43C9037DF2186E8A /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 351E5540D51D9E37E9308ABF /* SettingsViewModel.swift */; };
@@ -72,6 +73,7 @@
 		30BFD519B81F69EFDEBAF611 /* LegadoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegadoApp.swift; sourceTree = "<group>"; };
 		351E5540D51D9E37E9308ABF /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		4219C4F1F814AB2E7305C338 /* ExploreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreView.swift; sourceTree = "<group>"; };
+		E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreDebugView.swift; sourceTree = "<group>"; };
 		4BD1B81E8F65A038E0BDEFBB /* BookSourceViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSourceViewModel.swift; sourceTree = "<group>"; };
 		4C1F46449628245C8AE756AB /* BookInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookInfoView.swift; sourceTree = "<group>"; };
 		62D0CE57F58E9E961E41DF78 /* BookSourceCheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSourceCheckView.swift; sourceTree = "<group>"; };
@@ -312,6 +314,7 @@
 				62D0CE57F58E9E961E41DF78 /* BookSourceCheckView.swift */,
 				58A64AE613625A1A6F5060F0 /* BookSourceListView.swift */,
 				4219C4F1F814AB2E7305C338 /* ExploreView.swift */,
+				E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */,
 				885E8B7FEE8690B2AA0D5CFA /* SearchView.swift */,
 			);
 			path = Views;
@@ -437,6 +440,7 @@
 				FB0527ECB98BD4C4D99C93E2 /* DatabaseModels+GRDB.swift in Sources */,
 				2AAD0EF819101DDD1F0AFAE0 /* EncodingHelper.swift in Sources */,
 				1FE555CCB62E2E222C04B331 /* ExploreView.swift in Sources */,
+				1455715C1E7840E8A605D9BB /* ExploreDebugView.swift in Sources */,
 				E65F4DD892DB561CAFBECDA4 /* HTMLParser.swift in Sources */,
 				AA000002AA000002AA000002 /* LibXMLXPath.swift in Sources */,
 				DBB0AB382ECEE822F0D9F2AA /* JSJavaHelper.swift in Sources */,

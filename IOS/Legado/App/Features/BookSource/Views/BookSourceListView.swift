@@ -31,13 +31,32 @@ struct BookSourceListView: View {
     @State private var showingCheckConfig = false             // 配置 sheet
     @State private var showingCheckProgress = false           // 进度 sheet
 
+    // 书源发现调试器
+    @State private var debugSource: BookSource? = nil
+
     var body: some View {
         NavigationView {
             List {
                 ForEach(viewModel.sources) { source in
-                    NavigationLink(destination: BookSourceEditView(source: source, viewModel: viewModel)) {
-                        BookSourceRow(source: source) {
-                            Task { await viewModel.toggleEnabled(source) }
+                    HStack(spacing: 0) {
+                        // 三点菜单（仅"调试"入口）
+                        Menu {
+                            Button {
+                                debugSource = source
+                            } label: {
+                                Label("调试发现规则", systemImage: "ladybug")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 16))
+                                .foregroundColor(.secondary)
+                                .frame(width: 36, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        NavigationLink(destination: BookSourceEditView(source: source, viewModel: viewModel)) {
+                            BookSourceRow(source: source) {
+                                Task { await viewModel.toggleEnabled(source) }
+                            }
                         }
                     }
                     .swipeActions(edge: .trailing) {
@@ -173,6 +192,10 @@ struct BookSourceListView: View {
                 BookSourceCheckProgressSheet(vm: checkVM) {
                     Task { await viewModel.loadSources() }
                 }
+            }
+            // 书源发现调试器 sheet
+            .sheet(item: $debugSource) { source in
+                ExploreDebugView(source: source, listViewModel: viewModel)
             }
         }
     }
