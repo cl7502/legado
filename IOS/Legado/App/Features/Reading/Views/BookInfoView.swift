@@ -110,16 +110,11 @@ struct BookInfoView: View {
 
                 // MARK: 顶部信息卡（封面 + 文字信息）
                 HStack(alignment: .top, spacing: 15) {
-                    AsyncImage(url: URL(string: viewModel.book.coverUrl ?? "")) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle().fill(Color.gray.opacity(0.2))
-                            .overlay(Image(systemName: "book.closed").foregroundColor(.gray))
-                    }
-                    .frame(width: 100, height: 140)
-                    .clipped()
-                    .cornerRadius(8)
-                    .shadow(radius: 5)
+                    CoverImageView(url: viewModel.book.coverUrl, referer: viewModel.book.origin)
+                        .frame(width: 100, height: 140)
+                        .clipped()
+                        .cornerRadius(8)
+                        .shadow(radius: 5)
 
                     // 不使用 Spacer()：ScrollView 提议无限高度，Spacer 扩展至无穷大
                     // 导致 VStack 内容被推到不可见位置（"一片空白"的根因）

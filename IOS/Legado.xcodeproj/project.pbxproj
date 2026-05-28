@@ -29,6 +29,7 @@
 		5C35AEB5B7424C663AF6FDB2 /* BookSourceEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F47495D6DEE05C3DB85E4BD4 /* BookSourceEditView.swift */; };
 		5FC8A77DBEC5CDFCE76902A1 /* ReplaceRuleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146FB3899E25E3863BAEBF9F /* ReplaceRuleView.swift */; };
 		61A4EE526EA5DB73C341015F /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E292C1C8B8F4028E6FC6614 /* MainTabView.swift */; };
+		3E7E3B439DD24945BF283EB1 /* CoverImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0485951CBCA54AA9BA3B4E03 /* CoverImageView.swift */; };
 		65197FFE5B26950F71447312 /* ReaderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7B5B72D80BDA2FC9A483038 /* ReaderViewModel.swift */; };
 		65B095D9DBDFADE24A9BAE8E /* ReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA99AFE954004117ABFE8DFC /* ReaderView.swift */; };
 		671A65856F1296E4C8B442FC /* AnalyzeContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02F101AE40D62F7261A7698 /* AnalyzeContext.swift */; };
@@ -96,6 +97,7 @@
 		9A2A311A73EF5520A2B486B7 /* CookieManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CookieManager.swift; sourceTree = "<group>"; };
 		9D0A44556F6A3736C966D0C5 /* SearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchViewModel.swift; sourceTree = "<group>"; };
 		9E292C1C8B8F4028E6FC6614 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		0485951CBCA54AA9BA3B4E03 /* CoverImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageView.swift; sourceTree = "<group>"; };
 		A014AEF10E5683C5A1C3FF07 /* ChapterPaginator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPaginator.swift; sourceTree = "<group>"; };
 		A0E239C29D6CB61EC2C6EAD6 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		ABD04F3BC18D250DD4598F1D /* Book.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Book.swift; sourceTree = "<group>"; };
@@ -301,6 +303,7 @@
 			isa = PBXGroup;
 			children = (
 				9E292C1C8B8F4028E6FC6614 /* MainTabView.swift */,
+				0485951CBCA54AA9BA3B4E03 /* CoverImageView.swift */,
 				778EDB16250026BD88C6BA28 /* SettingsView.swift */,
 				351E5540D51D9E37E9308ABF /* SettingsViewModel.swift */,
 			);
@@ -450,6 +453,7 @@
 				392ED90561607C60B02B557F /* LegadoInterceptor.swift in Sources */,
 				E515B4CB92EDFB43E08D7492 /* LegadoJSEngine.swift in Sources */,
 				61A4EE526EA5DB73C341015F /* MainTabView.swift in Sources */,
+				3E7E3B439DD24945BF283EB1 /* CoverImageView.swift in Sources */,
 				E24B8ECC6C7967780CB7A4DC /* NetworkManager.swift in Sources */,
 				BB000002BB000002BB000002 /* HeadlessWebViewLoader.swift in Sources */,
 				9CEEB9DA39A2A0AB59EFF287 /* ReaderSettings.swift in Sources */,

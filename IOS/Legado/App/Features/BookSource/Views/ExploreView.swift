@@ -100,14 +100,9 @@ private struct ExploreBookRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: URL(string: book.coverUrl ?? "")) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Rectangle().fill(Color.secondary.opacity(0.2))
-                    .overlay(Image(systemName: "book.closed").foregroundColor(.secondary))
-            }
-            .frame(width: 48, height: 64)
-            .cornerRadius(4)
+            CoverImageView(url: book.coverUrl, referer: book.origin)
+                .frame(width: 48, height: 64)
+                .cornerRadius(4)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(book.name).font(.headline).lineLimit(1)
