@@ -26,6 +26,7 @@ import CommonCrypto
 
     // Encoding
     func md5(_ text: String) -> String
+    func md5Encode(_ text: String) -> String    // Android 标准名，等同于 md5()
     func md5Encode16(_ text: String) -> String
     func sha1(_ text: String) -> String
     func sha256(_ text: String) -> String
@@ -176,6 +177,8 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         let digest = Insecure.MD5.hash(data: Data(text.utf8))
         return digest.map { String(format: "%02hhx", $0) }.joined()
     }
+
+    func md5Encode(_ text: String) -> String { md5(text) }
 
     func md5Encode16(_ text: String) -> String {
         let full = md5(text)
