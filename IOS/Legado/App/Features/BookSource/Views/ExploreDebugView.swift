@@ -18,11 +18,21 @@ struct ExploreDebugView: View {
     }
 
     var body: some View {
-        Form {
-            exploreUrlSection
-            listRuleSection
-            extractRuleSection
-            diagnosticsSection
+        ScrollViewReader { proxy in
+            Form {
+                exploreUrlSection
+                listRuleSection
+                extractRuleSection
+                diagnosticsSection
+            }
+            .onChange(of: debugVM.isRunning) { isRunning in
+                guard isRunning else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        proxy.scrollTo(0, anchor: .top)
+                    }
+                }
+            }
         }
         .navigationTitle(original.bookSourceName)
         .navigationBarTitleDisplayMode(.inline)
