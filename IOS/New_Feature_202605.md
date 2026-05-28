@@ -82,24 +82,30 @@
 - **删除**：✅ 三点菜单内删除
 - **状态**：✅ 已完成（登录功能暂缓）
 
-### F13 · 书源列表拖拽排序
-- **目标**：用户可调整书源前后顺序
-- **方案选择**（推荐 A）：
-  - **方案A（推荐）**：List 的 `.onMove` modifier — SwiftUI 原生，手指长按自动出现拖拽手柄，持久化 customOrder
-  - **方案B**：自定义三横按钮（DragGesture 实现），UI 更复杂
-- **实现要点**：
-  - `BookSourceViewModel` 加 `moveSource(from:to:)` 方法
-  - `EditButton` 在导航栏激活编辑模式
-  - 移动后批量更新 customOrder → saveBookSources
-- **状态**：⬜ 待实现
+### F13 · 书源列表拖拽排序 ✅ 已完成
+- **实现**：List `.onMove` + 导航栏 `EditButton`；`moveSource(from:to:)` 重排 customOrder
+- **状态**：✅ 已完成
 
 ---
 
 ## 待实现（Priority 2 — 来自 Android 功能差距）
 
-见 `memory/reader_feature_gap.md`：
-- 书内搜索
-- 书签功能
-- 图片显示
-- 笔记/划线
-- 分享
+### P2-1 · 分享 ✅ 已完成
+- **实现**：阅读器三点菜单加 `ShareLink`，分享书籍 URL + 书名
+- **状态**：✅ 已完成
+
+### P2-2 · 书签功能
+- 书签数据表 + 阅读器 UI
+- **状态**：⬜ 待实现
+
+### P2-3 · 书内搜索
+- 章节内文本搜索 + 结果高亮
+- **状态**：⬜ 待实现
+
+### P2-4 · 图片显示
+- 正文内嵌图片渲染
+- **状态**：⬜ 待实现（P2，大）
+
+### P2-5 · 笔记/划线
+- BookChapterReview 数据表
+- **状态**：⬜ 待实现（P3）

@@ -198,6 +198,18 @@ class DatabaseManager {
             }
         }
 
+        migrator.registerMigration("v8-bookmarks") { db in
+            try db.create(table: "bookmarks", ifNotExists: true) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("bookUrl",      .text).notNull().indexed()
+                t.column("chapterIndex", .integer).notNull()
+                t.column("chapterTitle", .text).notNull()
+                t.column("chapterPos",   .integer).notNull().defaults(to: 0)
+                t.column("content",      .text).notNull().defaults(to: "")
+                t.column("createdAt",    .datetime).notNull()
+            }
+        }
+
         return migrator
     }
 }
@@ -336,6 +348,29 @@ extension DatabaseManager {
             for rule in rules {
                 try rule.save(db)
             }
+        }
+    }
+
+    // MARK: - 书签 DAO
+
+    func getBookmarks(bookUrl: String) async throws -> [Bookmark] {
+        try await dbPool.read { db in
+            try Bookmark
+                .filter(Column("bookUrl") == bookUrl)
+                .order(Column("createdAt").desc)
+                .fetchAll(db)
+        }
+    }
+
+    func saveBookmark(_ bookmark: Bookmark) async throws {
+        var bm = bookmark
+        try await dbPool.write { db in try bm.save(db) }
+    }
+
+    func deleteBookmark(_ bookmark: Bookmark) async throws {
+        guard let id = bookmark.id else { return }
+        try await dbPool.write { db in
+            try Bookmark.filter(Column("id") == id).deleteAll(db)
         }
     }
 }

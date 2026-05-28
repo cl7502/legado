@@ -317,7 +317,8 @@ struct ReaderMenuView: View {
     @State private var showingTOC      = false
     @State private var showingSettings = false
     @State private var brightness: Double = Double(UIScreen.main.brightness)
-    @State private var showingCacheAlert = false
+    @State private var showingCacheAlert  = false
+    @State private var showingBookmarks   = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -371,6 +372,18 @@ struct ReaderMenuView: View {
                     ) {
                         Label("分享", systemImage: "square.and.arrow.up")
                     }
+                }
+
+                Divider()
+
+                Button {
+                    Task { await addBookmark() }
+                } label: {
+                    Label("添加书签", systemImage: "bookmark.fill")
+                }
+
+                Button { showingBookmarks = true } label: {
+                    Label("书签列表", systemImage: "bookmark")
                 }            } label: {
                 Image(systemName: "ellipsis").font(.title2)
             }
@@ -380,6 +393,11 @@ struct ReaderMenuView: View {
             } message: {
                 Text("将重新下载全部 \(viewModel.chapters.count) 章节，可能需要较长时间，建议在 WiFi 下进行。")
             }
+            .sheet(isPresented: $showingBookmarks) {
+                BookmarkListView(bookUrl: viewModel.book.bookUrl) { chapterIdx, pos in
+                    viewModel.jumpToChapter(chapterIdx)
+                }
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 12)
@@ -387,6 +405,24 @@ struct ReaderMenuView: View {
             Color(UIColor.systemBackground).opacity(0.95)
                 .ignoresSafeArea(edges: .top)
         )
+    }
+
+    // MARK: 添加书签
+    private func addBookmark() async {
+        let idx   = viewModel.currentChapterIndex
+        let title = idx < viewModel.chapters.count ? viewModel.chapters[idx].title : "第\(idx+1)章"
+        let snippet = viewModel.currentPages.indices.contains(viewModel.currentPageIndex)
+            ? String(viewModel.currentPages[viewModel.currentPageIndex].prefix(80))
+            : ""
+        let bm = Bookmark(
+            bookUrl: viewModel.book.bookUrl,
+            chapterIndex: idx,
+            chapterTitle: title,
+            chapterPos: viewModel.currentPageIndex,
+            content: snippet,
+            createdAt: Date()
+        )
+        try? await DatabaseManager.shared.saveBookmark(bm)
     }
 
     // MARK: 底部
