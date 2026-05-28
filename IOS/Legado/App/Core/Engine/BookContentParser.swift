@@ -84,17 +84,24 @@ class BookContentParser {
     func htmlToPlainText(_ html: String) -> String {
         guard !html.isEmpty else { return "" }
 
-        // If it looks like plain text (no tags), skip HTML parsing
         if !html.contains("<") {
             return formatLines(html.components(separatedBy: .newlines))
         }
 
         do {
             let doc = try SwiftSoup.parse(html)
-            // Remove script/style nodes
             try doc.select("script, style, head").remove()
 
-            // Convert block elements to newline markers before text extraction
+            // 将 <img> 替换为特殊标记行，供渲染层识别
+            for img in try doc.select("img").array() {
+                let src = (try? img.attr("src"))
+                    ?? (try? img.attr("data-src"))
+                    ?? (try? img.attr("data-original"))
+                    ?? ""
+                let marker = src.isEmpty ? "" : "\n⟨IMG:\(src)⟩\n"
+                try img.replaceWith(TextNode(marker, ""))
+            }
+
             let blockTags = ["p", "div", "br", "li", "h1", "h2", "h3", "h4", "h5", "h6",
                              "blockquote", "tr", "dt", "dd", "article", "section"]
             for tag in blockTags {
@@ -105,11 +112,9 @@ class BookContentParser {
             }
 
             let rawText = try doc.body()?.text() ?? ""
-            // body().text() already collapses whitespace; split on the \n markers we injected
             let lines = rawText.components(separatedBy: "\n")
-            return formatLines(lines)
+            return formatLinesWithImages(lines)
         } catch {
-            // Fallback regex-based stripping
             var text = html
             text = text.replacingOccurrences(of: "<br[^>]*>", with: "\n", options: .regularExpression)
             text = text.replacingOccurrences(of: "</p>|</div>|</li>", with: "\n",
@@ -123,8 +128,22 @@ class BookContentParser {
         let trimmed = lines
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-        // Android default indent: two ideographic spaces (　　)
         return trimmed.map { "　　" + $0 }.joined(separator: "\n\n")
+    }
+
+    private func formatLinesWithImages(_ lines: [String]) -> String {
+        var result: [String] = []
+        for line in lines {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.isEmpty { continue }
+            if t.hasPrefix("⟨IMG:") && t.hasSuffix("⟩") {
+                // 图片标记行：原样保留（不加缩进）
+                result.append(t)
+            } else {
+                result.append("　　" + t)
+            }
+        }
+        return result.joined(separator: "\n\n")
     }
 }
 

@@ -73,7 +73,8 @@ struct ReaderView: View {
                     chapterTitle: idx == 0 ? currentChapterTitle : "",
                     pageLabel: "\(idx + 1) / \(viewModel.currentPages.count)",
                     totalChapters: viewModel.chapters.count,
-                    chapterIndex: viewModel.currentChapterIndex
+                    chapterIndex: viewModel.currentChapterIndex,
+                    sourceOrigin: viewModel.book.origin
                 )
                 .tag(idx)
             }
@@ -82,7 +83,7 @@ struct ReaderView: View {
         .ignoresSafeArea()
         .onChange(of: viewModel.currentPageIndex) { newIdx in
             if newIdx == viewModel.currentPages.count - 1 {
-                viewModel.prefetchNextChapter()  // 并行后台下载，不需要 Task 包装
+                viewModel.prefetchNextChapter()
             }
         }
     }
@@ -197,6 +198,7 @@ struct ReaderPageView: View {
     let pageLabel: String
     let totalChapters: Int
     let chapterIndex: Int
+    var sourceOrigin: String = ""
 
     @StateObject private var settings = ReaderSettings.shared
     @StateObject private var battery  = BatteryMonitor.shared
@@ -211,10 +213,13 @@ struct ReaderPageView: View {
                         .padding(.bottom, 20)
                 }
 
-                // 用与分页器完全相同的 NSAttributedString 渲染，
-                // 保证渲染高度 = 分页器计算高度，消除底部空白偏大的问题
-                Text(pageAttributedString(applyTraditional(content)))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // 混合内容渲染：识别 ⟨IMG:url⟩ 标记行，分别渲染为图片或文字
+                MixedContentView(
+                    content: applyTraditional(content),
+                    settings: settings,
+                    sourceOrigin: sourceOrigin
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Spacer(minLength: 0)
 
@@ -634,3 +639,67 @@ struct ReaderSettingsSheet: View {
 
 // MARK: - ReaderPageContent（兼容旧引用）
 typealias ReaderPageContent = ReaderPageView
+
+// MARK: - MixedContentView — 混合文本与图片渲染
+
+private struct MixedContentView: View {
+    let content: String
+    let settings: ReaderSettings
+    let sourceOrigin: String
+
+    private static let imgMarker = "⟨IMG:"
+    private static let imgEnd    = "⟩"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: settings.lineSpacing) {
+            ForEach(segments.indices, id: \.self) { i in
+                let seg = segments[i]
+                if seg.isImage {
+                    CoverImageView(url: seg.text, referer: sourceOrigin)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 220)
+                        .cornerRadius(4)
+                } else if !seg.text.isEmpty {
+                    Text(attributedText(seg.text))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private struct Segment { let isImage: Bool; let text: String }
+
+    private var segments: [Segment] {
+        var result: [Segment] = []
+        var textBuffer = ""
+        for line in content.components(separatedBy: "\n\n") {
+            let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.hasPrefix(Self.imgMarker) && t.hasSuffix(Self.imgEnd) {
+                if !textBuffer.isEmpty {
+                    result.append(Segment(isImage: false, text: textBuffer))
+                    textBuffer = ""
+                }
+                let url = String(t.dropFirst(Self.imgMarker.count).dropLast(Self.imgEnd.count))
+                result.append(Segment(isImage: true, text: url))
+            } else {
+                textBuffer += (textBuffer.isEmpty ? "" : "\n\n") + t
+            }
+        }
+        if !textBuffer.isEmpty { result.append(Segment(isImage: false, text: textBuffer)) }
+        return result
+    }
+
+    private func attributedText(_ text: String) -> AttributedString {
+        let para = NSMutableParagraphStyle()
+        para.lineSpacing = settings.lineSpacing
+        para.paragraphSpacing = settings.paragraphSpacing
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: settings.fontSize),
+            .foregroundColor: UIColor(settings.currentTheme.textColor),
+            .paragraphStyle: para,
+            .kern: settings.letterSpacing,
+        ]
+        let ns = NSAttributedString(string: text, attributes: attrs)
+        return (try? AttributedString(ns, including: \.uiKit)) ?? AttributedString(text)
+    }
+}
