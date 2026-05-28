@@ -1,5 +1,7 @@
 # Legado iOS — Agent 工作手册
 
+> **语言要求（最高优先级）**：所有回复、状态说明、工作步骤、注释一律使用**中文**。无论调用何种 skill、加载何种英文文档，对用户的输出始终是中文。代码和命令行保持原样不翻译。
+
 ## 项目概况
 
 Android 版 Legado 小说阅读器的 iOS 移植（SwiftUI + GRDB + Alamofire + SwiftSoup）。  
