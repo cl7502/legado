@@ -22,9 +22,7 @@ struct ExploreDebugView: View {
             exploreUrlSection
             listRuleSection
             extractRuleSection
-            if !debugVM.steps.isEmpty {
-                diagnosticsSection
-            }
+            diagnosticsSection
         }
         .navigationTitle(original.bookSourceName)
         .navigationBarTitleDisplayMode(.inline)
@@ -225,7 +223,13 @@ private struct DebugStepRow: View {
 
 @MainActor
 class ExploreDebugViewModel: ObservableObject {
-    @Published var steps: [DebugStep] = []
+    @Published var steps: [DebugStep] = [
+        DebugStep(id: 0, title: "Step 1  解析 exploreUrl"),
+        DebugStep(id: 1, title: "Step 2  分类 URL 解析"),
+        DebugStep(id: 2, title: "Step 3  网络请求"),
+        DebugStep(id: 3, title: "Step 4  执行 ruleExploreList"),
+        DebugStep(id: 4, title: "Step 5  提取 item 字段"),
+    ]
     @Published var isRunning = false
 
     private let network = NetworkManager.shared
@@ -236,8 +240,13 @@ class ExploreDebugViewModel: ObservableObject {
         defer { isRunning = false }
 
         print("🔍 [ExploreDebug] run() 开始 source=\(source.bookSourceName)")
-        steps = (0..<5).map { DebugStep(id: $0, title: stepTitle($0)) }
-        print("🔍 [ExploreDebug] steps 初始化完毕 count=\(steps.count)")
+        // 重置状态，保留标题，不替换整个数组（避免 ForEach 重建导致不渲染）
+        for i in 0..<steps.count {
+            steps[i].status = .pending
+            steps[i].summary = ""
+            steps[i].detail = ""
+        }
+        print("🔍 [ExploreDebug] steps 重置完毕")
 
         // Step 0: 解析 exploreUrl → 分类列表
         steps[0].status = .running
