@@ -72,21 +72,15 @@
 
 ## 进行中 / 待实现
 
-### F12 · 书源行内操作菜单（三点按钮）
-- **目标**：每个书源右侧（启用开关与">"之间）加三点菜单，含：
-  - **置顶**：将当前书源移至列表顶部（修改 customOrder 字段）
-  - **登录**：打开书源登录页面（loginUrl），获取 Cookie
-  - **编辑**：复用现有 BookSourceEditView（替代">"）
-  - **浏览**：打开书源网站（bookSourceUrl）用内置浏览器
-  - **调试**：✅ 已实现 → 打开 ExploreDebugView 调试发现规则（含"修复"按钮）
-  - **禁用发现**：切换 enabledExplore（不在发现页显示）
-  - **删除**：✅ 已实现 → 三点菜单内直接删除当前书源
-- **当前进度**：三点菜单按钮已加入，**调试** 和 **删除** 已实现，其余项目仍待实现
-- **ExploreDebugView 功能说明**：
-  - 五步管线诊断（exploreUrl解析 → URL解析 → 网络请求 → ruleExploreList → item字段提取）
-  - Step 3 通过后解锁"修复"按钮，自动分析响应体并填入空白规则字段
-  - "修复"按钮详见 `.planning/notes/explore-debug-notes.md`
-- **状态**：🔄 部分实现（调试+删除已完成，其他项待续）
+### F12 · 书源行内操作菜单（三点按钮）✅ 已完成
+- **置顶**：✅ customOrder = min - 1，移至列表顶部
+- **登录**：⬜ 暂缓（需 WebView + Cookie 注入，复杂度高）
+- **编辑**：✅ sheet 打开 BookSourceEditView，替代原 ">" 行导航
+- **浏览**：✅ SFSafariViewController 打开 bookSourceUrl
+- **调试**：✅ ExploreDebugView（含修复按钮）
+- **禁用发现/启用发现**：✅ 切换 enabledExplore，标签随状态翻转
+- **删除**：✅ 三点菜单内删除
+- **状态**：✅ 已完成（登录功能暂缓）
 
 ### F13 · 书源列表拖拽排序
 - **目标**：用户可调整书源前后顺序

@@ -122,6 +122,24 @@ class BookSourceViewModel: ObservableObject {
         updated.enabledExplore = !source.enabledExplore
         await saveSource(updated)
     }
+
+    /// 拖拽排序：将 from 位置的书源移到 to 位置，批量更新 customOrder
+    func moveSource(from: IndexSet, to: Int) async {
+        var reordered = sources
+        reordered.move(fromOffsets: from, toOffset: to)
+        // 重新分配 customOrder（0, 1, 2, ...），保证顺序稳定
+        let updated = reordered.enumerated().map { idx, src -> BookSource in
+            var s = src
+            s.customOrder = idx
+            return s
+        }
+        do {
+            try await db.saveBookSources(updated)
+            await loadSources()
+        } catch {
+            print("❌ [BookSourceVM] moveSource: \(error)")
+        }
+    }
 }
 
 /// 书源导入解析器 — 支持 Android 嵌套 JSON 格式

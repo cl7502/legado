@@ -91,9 +91,15 @@ struct BookSourceListView: View {
                         }
                     }
                 }
+                .onMove { from, to in
+                    Task { await viewModel.moveSource(from: from, to: to) }
+                }
             }
             .navigationTitle("书源管理")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    EditButton()
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Button {
