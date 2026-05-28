@@ -93,6 +93,11 @@ class BookSourceViewModel: ObservableObject {
         await loadSources()
     }
 
+    func deleteAllSources() async {
+        try? await db.deleteAllBookSources()
+        await loadSources()
+    }
+
     /// 保存（新建或更新）书源
     func saveSource(_ source: BookSource) async {
         do {

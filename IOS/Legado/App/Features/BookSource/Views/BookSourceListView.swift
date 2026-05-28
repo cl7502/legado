@@ -18,6 +18,9 @@ struct BookSourceListView: View {
     // 文件导入
     @State private var showingFilePicker = false
 
+    // 清空书源确认
+    @State private var showingClearConfirm = false
+
     // 导入结果提示
     @State private var importResultMessage: String = ""
     @State private var showingImportResult = false
@@ -64,6 +67,12 @@ struct BookSourceListView: View {
                             showingFilePicker = true
                         } label: {
                             Label("从文件导入", systemImage: "doc.badge.plus")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            showingClearConfirm = true
+                        } label: {
+                            Label("清空书源", systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -119,6 +128,14 @@ struct BookSourceListView: View {
                 Button("好") { }
             } message: {
                 Text(importResultMessage)
+            }
+            .alert("清空书源", isPresented: $showingClearConfirm) {
+                Button("取消", role: .cancel) { }
+                Button("清空", role: .destructive) {
+                    Task { await viewModel.deleteAllSources() }
+                }
+            } message: {
+                Text("将删除全部 \(viewModel.sources.count) 个书源，此操作不可恢复。书架中的书籍不受影响。")
             }
         }
     }

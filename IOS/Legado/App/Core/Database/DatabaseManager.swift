@@ -206,7 +206,13 @@ extension DatabaseManager {
             try BookSource.filter(Column("bookSourceUrl") == source.bookSourceUrl).deleteAll(db)
         }
     }
-    
+
+    func deleteAllBookSources() async throws {
+        try await dbPool.write { db in
+            try BookSource.deleteAll(db)
+        }
+    }
+
     func saveBookSources(_ sources: [BookSource]) async throws {
         try await dbPool.write { db in
             for source in sources {
