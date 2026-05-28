@@ -660,8 +660,11 @@ private struct MixedContentView: View {
                         .frame(height: 220)
                         .cornerRadius(4)
                 } else if !seg.text.isEmpty {
-                    Text(attributedText(seg.text))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    TextKit2TextView(
+                        text: nsAttributedText(seg.text),
+                        backgroundColor: UIColor(settings.currentTheme.backgroundColor)
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -689,17 +692,54 @@ private struct MixedContentView: View {
         return result
     }
 
-    private func attributedText(_ text: String) -> AttributedString {
+    private func nsAttributedText(_ text: String) -> NSAttributedString {
         let para = NSMutableParagraphStyle()
-        para.lineSpacing = settings.lineSpacing
-        para.paragraphSpacing = settings.paragraphSpacing
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: settings.fontSize),
+        let fixedH = UIFont.systemFont(ofSize: settings.fontSize).lineHeight + settings.lineSpacing
+        para.minimumLineHeight  = fixedH
+        para.maximumLineHeight  = fixedH
+        para.paragraphSpacing   = settings.paragraphSpacing
+        return NSAttributedString(string: text, attributes: [
+            .font:           UIFont.systemFont(ofSize: settings.fontSize),
             .foregroundColor: UIColor(settings.currentTheme.textColor),
             .paragraphStyle: para,
-            .kern: settings.letterSpacing,
-        ]
-        let ns = NSAttributedString(string: text, attributes: attrs)
+            .kern:           settings.letterSpacing,
+        ])
+    }
+
+    private func attributedText(_ text: String) -> AttributedString {
+        let ns = nsAttributedText(text)
         return (try? AttributedString(ns, including: \.uiKit)) ?? AttributedString(text)
+    }
+}
+
+// MARK: - TextKit2TextView — UITextView with TextKit 2 backend
+
+/// UIViewRepresentable wrapping UITextView(usingTextLayoutManager: true).
+/// 与 ChapterPaginator 使用相同的 NSTextLayoutManager 引擎，确保测量与渲染一致。
+private struct TextKit2TextView: UIViewRepresentable {
+    let text: NSAttributedString
+    let backgroundColor: UIColor
+
+    func makeUIView(context: Context) -> UITextView {
+        let tv = UITextView(usingTextLayoutManager: true)
+        tv.isEditable             = false
+        tv.isScrollEnabled        = false
+        tv.isUserInteractionEnabled = false
+        tv.backgroundColor        = .clear
+        tv.textContainerInset     = .zero
+        tv.textContainer.lineFragmentPadding = 0
+        return tv
+    }
+
+    func updateUIView(_ tv: UITextView, context: Context) {
+        if tv.attributedText != text {
+            tv.attributedText = text
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView tv: UITextView, context: Context) -> CGSize? {
+        let w = proposal.width ?? UIScreen.main.bounds.width
+        let size = tv.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude))
+        return CGSize(width: w, height: size.height)
     }
 }
