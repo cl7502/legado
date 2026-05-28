@@ -39,12 +39,18 @@ struct BookSourceListView: View {
             List {
                 ForEach(viewModel.sources) { source in
                     HStack(spacing: 0) {
-                        // 三点菜单（仅"调试"入口）
+                        // 三点菜单
                         Menu {
                             Button {
                                 debugSource = source
                             } label: {
                                 Label("调试发现规则", systemImage: "ladybug")
+                            }
+                            Divider()
+                            Button(role: .destructive) {
+                                Task { await viewModel.deleteSource(source) }
+                            } label: {
+                                Label("删除", systemImage: "trash")
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
