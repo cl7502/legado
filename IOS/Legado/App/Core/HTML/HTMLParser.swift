@@ -433,13 +433,24 @@ class HTMLParser {
     /// (attribute name or content keyword) rather than a CSS selector.
     /// Mirrors Android AnalyzeByJSoup.getResultLast() known-keyword check.
     private func isAttributeKeyword(_ s: String) -> Bool {
-        let known: Set<String> = ["text", "html", "outerhtml", "textnodes", "all", "raw"]
-        if known.contains(s.lowercased()) { return true }
-        // Pure alphanumeric + hyphen/underscore without CSS structural chars → attribute
-        let cssSpecial = CharacterSet(charactersIn: ".#[] >+~:(),'\"/\\*=^$|")
-        return !s.isEmpty &&
-               s.unicodeScalars.allSatisfy { !cssSpecial.contains($0) } &&
-               s.unicodeScalars.first.map { CharacterSet.letters.contains($0) } == true
+        let knownKeywords: Set<String> = [
+            "text", "html", "outerhtml", "textnodes", "all", "raw"
+        ]
+        if knownKeywords.contains(s.lowercased()) { return true }
+
+        let knownAttrs: Set<String> = [
+            "href", "src", "_src", "alt", "title", "class", "id", "name",
+            "value", "type", "style", "content", "rel", "action",
+            "placeholder", "srcset", "colspan", "rowspan", "target",
+            "width", "height", "lang", "tabindex", "aria-label",
+        ]
+        if knownAttrs.contains(s.lowercased()) { return true }
+
+        // data-* or _-prefixed custom attributes
+        if s.hasPrefix("data-") || s.hasPrefix("_") { return true }
+
+        // Anything else (including HTML tag names like li/div/h2) → CSS selector
+        return false
     }
 
     /// Split  "selector@attr"  into  (selector, attr?).
@@ -458,13 +469,16 @@ class HTMLParser {
             "text", "html", "outerHtml", "outerhtml", "href", "src", "alt",
             "title", "class", "id", "name", "value", "type", "style", "content",
             "rel", "action", "placeholder", "srcset", "data", "src",
+            "_src",   // Legado lazy-image alias → tries data-src / data-original / src
         ]
         if known.contains(s.lowercased()) { return true }
         if s.hasPrefix("data-") && s.count > 5 { return true }
-        // Pure alphanumeric/hyphen with no CSS special characters
+        // Allow leading underscore (e.g. _src) in addition to ASCII letters
         let cssSpecial = CharacterSet(charactersIn: ".#[]>+~:() ,'\"/\\")
-        return s.unicodeScalars.allSatisfy { !cssSpecial.contains($0) } &&
-               s.unicodeScalars.first.map { CharacterSet.letters.contains($0) } == true
+        guard let first = s.unicodeScalars.first else { return false }
+        let validStart = CharacterSet.letters.union(CharacterSet(charactersIn: "_"))
+        return validStart.contains(first) &&
+               s.unicodeScalars.allSatisfy { !cssSpecial.contains($0) }
     }
 
     private func extractAttr(_ element: Element, attr: String?) throws -> String? {
@@ -479,6 +493,14 @@ class HTMLParser {
         case "outerhtml": return try element.outerHtml()
         case "raw":       return try element.outerHtml()
         case "all":       return try element.text()
+        case "_src":
+            // Legado alias for lazy-loaded image src — tries common lazy-load attribute names
+            for name in ["data-src", "data-original", "data-lazy-src", "data-lazyload",
+                         "data-echo", "_src", "src"] {
+                let v = (try? element.attr(name)) ?? ""
+                if !v.isEmpty { return v }
+            }
+            return nil
         default:
             let v = try element.attr(attr)
             return v.isEmpty ? nil : v

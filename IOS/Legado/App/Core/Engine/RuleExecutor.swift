@@ -43,7 +43,20 @@ class RuleExecutor {
 
     /// Execute rule, return list of strings (used for book/chapter lists).
     func executeList(_ rule: String, in context: inout AnalyzeContext) -> [String] {
-        let segments = RuleParser.shared.parseChain(rule)
+        // Strip Android-only page-rendering directives that have no lightweight iOS equivalent.
+        // #imgload / #webView signal "use a WebView to trigger lazy-load before parsing".
+        // Without a full headless browser we can't honour the intent, but stripping the prefix
+        // lets the normal HTML parser attempt the rule on the raw response — images may be
+        // missing their src but the list structure is still extracted correctly.
+        var effectiveRule = rule
+        for prefix in ["#imgload", "#webView", "#webview", "#javascript"] {
+            if effectiveRule.hasPrefix(prefix) {
+                effectiveRule = String(effectiveRule.dropFirst(prefix.count))
+                if effectiveRule.hasPrefix("@") { effectiveRule = String(effectiveRule.dropFirst()) }
+                break
+            }
+        }
+        let segments = RuleParser.shared.parseChain(effectiveRule)
         guard !segments.isEmpty else { return [] }
 
         var current: Any? = context.result
