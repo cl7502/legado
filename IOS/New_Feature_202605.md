@@ -78,14 +78,15 @@
   - **登录**：打开书源登录页面（loginUrl），获取 Cookie
   - **编辑**：复用现有 BookSourceEditView（替代">"）
   - **浏览**：打开书源网站（bookSourceUrl）用内置浏览器
-  - **调试**：暂不实现（占位），后续用于调试书源规则
+  - **调试**：✅ 已实现 → 打开 ExploreDebugView 调试发现规则（含"修复"按钮）
   - **禁用发现**：切换 enabledExplore（不在发现页显示）
   - **删除**：删除当前书源
-- **实现要点**：
-  - `BookSourceRow` 结构体加 `Button { Menu { ... } }` 在 Toggle 左侧
-  - 登录需 `SFSafariViewController` 或 `WebView` 打开 loginUrl + 注入 Cookie 回调
-  - 置顶需重排 customOrder（所有书源 order-1，当前 order=0）
-- **状态**：⬜ 待实现
+- **当前进度**：三点菜单按钮已加入，**调试**功能已完整实现，其余项目仍待实现
+- **ExploreDebugView 功能说明**：
+  - 五步管线诊断（exploreUrl解析 → URL解析 → 网络请求 → ruleExploreList → item字段提取）
+  - Step 3 通过后解锁"修复"按钮，自动分析响应体并填入空白规则字段
+  - "修复"按钮详见 `.planning/notes/explore-debug-notes.md`
+- **状态**：🔄 部分实现（调试已完成，其他项待续）
 
 ### F13 · 书源列表拖拽排序
 - **目标**：用户可调整书源前后顺序
