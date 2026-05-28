@@ -4,26 +4,32 @@ import UniformTypeIdentifiers
 
 /// 书源管理界面
 struct BookSourceListView: View {
-    @StateObject private var viewModel = BookSourceViewModel()
-    @State private var newSourceSheet = false
+    @StateObject private var viewModel    = BookSourceViewModel()
+    @StateObject private var checkVM      = BookSourceCheckViewModel()
+    @State private var newSourceSheet     = false
 
-    // ISSUE-023: 粘贴 JSON — 使用 .sheet + TextEditor 替代 .alert + TextField（系统 Alert 有 ~255 字符限制）
-    @State private var showingPasteSheet = false
-    @State private var pasteText = ""
+    // ISSUE-023: 粘贴 JSON
+    @State private var showingPasteSheet  = false
+    @State private var pasteText          = ""
 
     // URL 导入
     @State private var showingURLImportAlert = false
-    @State private var importURLText = ""
+    @State private var importURLText      = ""
 
     // 文件导入
-    @State private var showingFilePicker = false
+    @State private var showingFilePicker  = false
 
     // 清空书源确认
     @State private var showingClearConfirm = false
 
     // 导入结果提示
-    @State private var importResultMessage: String = ""
+    @State private var importResultMessage = ""
     @State private var showingImportResult = false
+
+    // 检测书源
+    @State private var pendingCheckScope: CheckScope? = nil   // 待确认的检测范围
+    @State private var showingCheckConfig = false             // 配置 sheet
+    @State private var showingCheckProgress = false           // 进度 sheet
 
     var body: some View {
         NavigationView {
@@ -67,6 +73,20 @@ struct BookSourceListView: View {
                             showingFilePicker = true
                         } label: {
                             Label("从文件导入", systemImage: "doc.badge.plus")
+                        }
+                        Divider()
+                        // 检测书源子菜单
+                        Menu {
+                            ForEach(CheckScope.allCases) { scope in
+                                Button {
+                                    pendingCheckScope = scope
+                                    showingCheckConfig = true
+                                } label: {
+                                    Text(scope.rawValue)
+                                }
+                            }
+                        } label: {
+                            Label("检测书源", systemImage: "antenna.radiowaves.left.and.right")
                         }
                         Divider()
                         Button(role: .destructive) {
@@ -136,6 +156,23 @@ struct BookSourceListView: View {
                 }
             } message: {
                 Text("将删除全部 \(viewModel.sources.count) 个书源，此操作不可恢复。书架中的书籍不受影响。")
+            }
+            // 检测配置 sheet
+            .sheet(isPresented: $showingCheckConfig) {
+                if let scope = pendingCheckScope {
+                    BookSourceCheckConfigSheet(scope: scope) { invalidAct, slowAct in
+                        checkVM.invalidAction = invalidAct
+                        checkVM.slowAction    = slowAct
+                        checkVM.start(scope: scope)
+                        showingCheckProgress = true
+                    }
+                }
+            }
+            // 检测进度 sheet
+            .sheet(isPresented: $showingCheckProgress) {
+                BookSourceCheckProgressSheet(vm: checkVM) {
+                    Task { await viewModel.loadSources() }
+                }
             }
         }
     }
@@ -252,7 +289,7 @@ struct BookSourceRow: View {
                     .font(.headline)
                     .foregroundColor(source.enabled ? .primary : .secondary)
 
-                HStack {
+                HStack(spacing: 4) {
                     Text(source.bookSourceGroup ?? "未分组")
                     Text("|")
                     Text(source.bookSourceUrl)
@@ -264,9 +301,41 @@ struct BookSourceRow: View {
 
             Spacer()
 
+            // 网速徽章
+            speedBadge
+
             Toggle("", isOn: Binding(get: { source.enabled }, set: { _ in onToggle() }))
                 .labelsHidden()
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var speedBadge: some View {
+        switch source.checkState {
+        case 1:
+            Text("\(source.respondTime)ms")
+                .font(.system(size: 10, weight: .medium))
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(Color.green.opacity(0.12))
+                .foregroundColor(.green)
+                .cornerRadius(4)
+        case 2:
+            Text("\(source.respondTime)ms")
+                .font(.system(size: 10, weight: .medium))
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(Color.red.opacity(0.12))
+                .foregroundColor(.red)
+                .cornerRadius(4)
+        case 3:
+            Text("失败")
+                .font(.system(size: 10, weight: .medium))
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(Color.red.opacity(0.12))
+                .foregroundColor(.red)
+                .cornerRadius(4)
+        default:
+            EmptyView()  // 未检测：不显示
+        }
     }
 }

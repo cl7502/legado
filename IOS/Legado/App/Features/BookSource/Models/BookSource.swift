@@ -84,6 +84,12 @@ struct BookSource: Identifiable, Equatable {
     var ruleChapterUpdateTime: String?       // 章节更新时间规则
     var ruleTocPreUpdateJs: String?          // 目录预更新 JS
     var ruleTocFormatJs: String?             // 目录格式化 JS
+
+    // --- 书源检测字段 ---
+    // 0=未检测 1=正常 2=慢速 3=失败
+    // respondTime（已有）：最近一次响应毫秒数；-1 表示连接失败
+    // lastCheckTime（已有）：最近一次检测时间戳
+    var checkState: Int = 0
 }
 
 // MARK: - Codable（自定义实现，容忍缺失/类型错误的字段）
@@ -107,6 +113,7 @@ extension BookSource: Codable {
         case ruleContent, ruleContentNextUrl, ruleContentReplace
         case ruleExploreList, ruleExploreName, ruleExploreAuthor
         case ruleExploreKind, ruleExploreCoverUrl, ruleExploreNoteUrl
+        case checkState
     }
 
     init(from decoder: Decoder) throws {
@@ -125,6 +132,7 @@ extension BookSource: Codable {
         enabledCookieJar = (try? c.decodeIfPresent(Bool.self, forKey: .enabledCookieJar)) ?? false
         respondTime     = (try? c.decodeIfPresent(Int64.self, forKey: .respondTime))     ?? 0
         enabledExplore  = (try? c.decodeIfPresent(Bool.self,  forKey: .enabledExplore))  ?? true
+        checkState      = (try? c.decodeIfPresent(Int.self,   forKey: .checkState))      ?? 0
 
         // 可选字符串字段
         bookSourceGroup   = try? c.decodeIfPresent(String.self, forKey: .bookSourceGroup)

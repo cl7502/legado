@@ -191,6 +191,13 @@ class DatabaseManager {
             }
         }
 
+        migrator.registerMigration("v7-check-state") { db in
+            try db.alter(table: "book_source") { t in
+                // 0=未检测 1=正常 2=慢速 3=失败
+                t.add(column: "checkState", .integer).defaults(to: 0)
+            }
+        }
+
         return migrator
     }
 }
@@ -210,6 +217,27 @@ extension DatabaseManager {
     func deleteAllBookSources() async throws {
         try await dbPool.write { db in
             try BookSource.deleteAll(db)
+        }
+    }
+
+    /// 保存单个书源的检测结果（checkState / respondTime / lastCheckTime / enabled）
+    func saveCheckResult(_ source: BookSource) async throws {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        try await dbPool.write { db in
+            try db.execute(
+                sql: """
+                UPDATE book_source
+                SET checkState=:cs, respondTime=:rt, lastCheckTime=:lct, enabled=:en
+                WHERE bookSourceUrl=:url
+                """,
+                arguments: [
+                    "cs":  source.checkState,
+                    "rt":  source.respondTime,
+                    "lct": now,
+                    "en":  source.enabled,
+                    "url": source.bookSourceUrl,
+                ]
+            )
         }
     }
 
