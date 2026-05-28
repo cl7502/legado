@@ -168,16 +168,16 @@ class HTMLParser {
             let doc = try SwiftSoup.parse(html)
 
             if parts.count == 1 {
-                let elements = try doc.select(parts[0])
+                let elements = try doc.select(parts[0].legadoCSS)
                 return elements.array().compactMap { try? $0.text() }.filter { !$0.isEmpty }
             }
 
             // Navigate through all segments except the last
-            var elList: [Element] = (try? doc.select(parts[0]).array()) ?? []
+            var elList: [Element] = (try? doc.select(parts[0].legadoCSS).array()) ?? []
             for i in 1..<(parts.count - 1) {
                 var next: [Element] = []
                 for el in elList {
-                    let sub = (try? el.select(parts[i])) ?? Elements()
+                    let sub = (try? el.select(parts[i].legadoCSS)) ?? Elements()
                     next.append(contentsOf: sub.array())
                 }
                 elList = next
@@ -231,7 +231,7 @@ class HTMLParser {
             let doc = try SwiftSoup.parse(html)
 
             if parts.count == 1 {
-                let elements = try doc.select(parts[0])
+                let elements = try doc.select(parts[0].legadoCSS)
                 return elements.array().compactMap { try? $0.outerHtml() }
             }
 
@@ -240,11 +240,11 @@ class HTMLParser {
             let extractsAttr = isAttributeKeyword(lastPart)
             let navParts = extractsAttr ? Array(parts.dropLast()) : parts
 
-            var elList: [Element] = (try? doc.select(navParts[0]).array()) ?? []
+            var elList: [Element] = (try? doc.select(navParts[0].legadoCSS).array()) ?? []
             for i in 1..<navParts.count {
                 var next: [Element] = []
                 for el in elList {
-                    let sub = (try? el.select(navParts[i])) ?? Elements()
+                    let sub = (try? el.select(navParts[i].legadoCSS)) ?? Elements()
                     next.append(contentsOf: sub.array())
                 }
                 elList = next
@@ -510,4 +510,11 @@ class HTMLParser {
 
 private extension String {
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Android Legado CSS shorthand: "class.xxx" means ".xxx" (elements with CSS class xxx).
+    /// Standard CSS has no `class` tag, so convert before passing to SwiftSoup.
+    var legadoCSS: String {
+        guard contains("class.") else { return self }
+        return replacingOccurrences(of: #"\bclass\."#, with: ".", options: .regularExpression)
+    }
 }
