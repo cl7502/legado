@@ -1,6 +1,8 @@
 # New Feature 202605 — iOS Legado 功能开发追踪
 
 > **冷启动必读**：每次对话开始，先读本文件 + `memory/reader_bugs_20260527.md` + `memory/reader_feature_gap.md`，了解当前工作状态后再继续。
+>
+> **维护规则**：用户每次提出新增/修改需求，立刻追加到本文件对应区域，状态标 ⬜，实现后更新为 ✅。
 
 ---
 
