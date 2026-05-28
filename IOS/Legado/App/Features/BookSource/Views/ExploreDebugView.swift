@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftSoup
 
 // MARK: - 书源发现调试器
 
@@ -30,6 +31,13 @@ struct ExploreDebugView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     withAnimation(.easeInOut(duration: 0.4)) {
                         proxy.scrollTo(0, anchor: .top)
+                    }
+                }
+            }
+            .onChange(of: debugVM.fixVersion) { _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        proxy.scrollTo(99, anchor: .top)
                     }
                 }
             }
@@ -107,28 +115,45 @@ struct ExploreDebugView: View {
             ForEach(debugVM.steps) { step in
                 DebugStepRow(step: step)
             }
+            if let fix = debugVM.fixStep {
+                DebugStepRow(step: fix).id(99)
+            }
         }
     }
 
     @ViewBuilder
     private var runButton: some View {
-        Button {
-            Task { await debugVM.run(source: draft) }
-        } label: {
-            HStack {
-                if debugVM.isRunning {
-                    ProgressView().tint(.white)
-                    Text("运行中...")
-                } else {
-                    Image(systemName: "play.fill")
-                    Text("运行诊断")
+        HStack(spacing: 12) {
+            Button {
+                Task { await debugVM.run(source: draft) }
+            } label: {
+                HStack {
+                    if debugVM.isRunning {
+                        ProgressView().tint(.white)
+                        Text("运行中...")
+                    } else {
+                        Image(systemName: "play.fill")
+                        Text("运行诊断")
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .buttonStyle(.borderedProminent)
+            .disabled(debugVM.isRunning)
+
+            Button {
+                let fixed = debugVM.inferAndFix(for: draft)
+                draft = fixed
+                hasUnsaved = true
+            } label: {
+                Label("修复", systemImage: "wand.and.stars")
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!debugVM.canAttemptFix || debugVM.isRunning)
         }
-        .buttonStyle(.borderedProminent)
-        .disabled(debugVM.isRunning)
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(.ultraThinMaterial)
@@ -241,7 +266,12 @@ class ExploreDebugViewModel: ObservableObject {
         DebugStep(id: 4, title: "Step 5  提取 item 字段"),
     ]
     @Published var isRunning = false
+    @Published var canAttemptFix = false
+    @Published var fixStep: DebugStep? = nil
+    @Published var fixVersion = 0
 
+    private var storedHtml = ""
+    private var storedRequestUrl = ""
     private let network = NetworkManager.shared
     private let ruleExecutor = RuleExecutor.shared
 
@@ -313,6 +343,9 @@ class ExploreDebugViewModel: ObservableObject {
         steps[2].summary = "HTTP 200  \(html.count) 字节  \(ms)ms"
         steps[2].detail = String(html.prefix(300)).replacingOccurrences(of: "\n", with: " ")
         print("✅ [ExploreDebug] Step2 通过：\(html.count) 字节 \(ms)ms")
+        storedHtml = html
+        storedRequestUrl = requestUrl
+        canAttemptFix = true
 
         // Step 3: ruleExploreList
         steps[3].status = .running
@@ -412,6 +445,186 @@ class ExploreDebugViewModel: ObservableObject {
         }
 
         return [ExploreCategory(title: "全部", url: raw)]
+    }
+
+    // MARK: - 智能修复
+
+    func inferAndFix(for source: BookSource) -> BookSource {
+        var patched = source
+        var changes: [String] = []
+        let trimmed = storedHtml.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmed.hasPrefix("{") || trimmed.hasPrefix("["),
+           let data = storedHtml.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) {
+            (patched, changes) = inferFromJSON(json: json, source: patched)
+        } else if !trimmed.isEmpty {
+            (patched, changes) = inferFromHTML(html: trimmed, source: patched)
+        } else {
+            changes = ["尚无响应数据，请先运行诊断"]
+        }
+
+        let summary = changes.isEmpty ? "未能自动推断，请手动填写" : "已填入 \(changes.count) 项"
+        fixStep = DebugStep(
+            id: 99,
+            title: "修复建议",
+            status: changes.isEmpty ? .warning : .passed,
+            summary: summary,
+            detail: changes.joined(separator: "\n")
+        )
+        fixVersion += 1
+        return patched
+    }
+
+    // MARK: - JSON 推断
+
+    private func inferFromJSON(json: Any, source: BookSource) -> (BookSource, [String]) {
+        var patched = source
+        var changes: [String] = []
+
+        // 1. 收集所有可能的书单数组
+        var candidates: [(String, [[String: Any]])] = []
+        collectBookArrays(from: json, path: "$", into: &candidates)
+        guard let best = candidates
+            .filter({ $0.1.count >= 2 })
+            .max(by: { bookScore($0.1) < bookScore($1.1) }) else {
+            return (patched, ["未找到书单数组，响应可能为错误页或需要认证"])
+        }
+
+        let listPath = best.0 == "$" ? "$[*]" : "\(best.0)[*]"
+        let bestItems = best.1
+
+        // 3. 只填空白字段，不覆盖已有规则
+        if (patched.ruleExploreList ?? "").isEmpty {
+            patched.ruleExploreList = listPath
+            changes.append("ruleExploreList = \(listPath)  （共 \(bestItems.count) 条）")
+        }
+
+        let sample = bestItems[0]
+        func fill(_ current: String?, key: WritableKeyPath<BookSource, String?>,
+                  label: String, candidates: [String]) {
+            guard (current ?? "").isEmpty else { return }
+            if let f = pickField(from: sample, candidates: candidates) {
+                patched[keyPath: key] = "$.\(f)"
+                changes.append("\(label) = $.\(f)  （样例：\(stringify(sample[f]))）")
+            }
+        }
+
+        fill(patched.ruleExploreName, key: \.ruleExploreName, label: "ruleExploreName",
+             candidates: ["novelName", "bookName", "book_name", "name", "title", "bookTitle"])
+        fill(patched.ruleExploreAuthor, key: \.ruleExploreAuthor, label: "ruleExploreAuthor",
+             candidates: ["authorName", "author_name", "author", "penName", "pen_name"])
+        fill(patched.ruleExploreCoverUrl, key: \.ruleExploreCoverUrl, label: "ruleExploreCoverUrl",
+             candidates: ["cover", "coverUrl", "cover_url", "img", "image", "thumb", "pic", "picurl"])
+        fill(patched.ruleExploreKind, key: \.ruleExploreKind, label: "ruleExploreKind",
+             candidates: ["kind", "category", "type", "sort", "genre", "cat", "sortName", "sort_name"])
+
+        // ruleExploreNoteUrl：优先直接 URL，次选 ID 字段
+        if (patched.ruleExploreNoteUrl ?? "").isEmpty {
+            if let f = pickField(from: sample,
+                                 candidates: ["url", "link", "bookUrl", "book_url", "detailUrl", "detail_url"]),
+               let val = sample[f] as? String, val.lowercased().hasPrefix("http") {
+                patched.ruleExploreNoteUrl = "$.\(f)"
+                changes.append("ruleExploreNoteUrl = $.\(f)  （样例：\(val.prefix(60))）")
+            } else if let f = pickField(from: sample,
+                                        candidates: ["novelId", "novel_id", "bookId", "book_id", "id"]) {
+                patched.ruleExploreNoteUrl = "$.\(f)"
+                changes.append("ruleExploreNoteUrl = $.\(f)  ⚠️ 这是 ID 字段，可能需要手动补全 URL 前缀")
+            }
+        }
+
+        return (patched, changes)
+    }
+
+    private func collectBookArrays(from json: Any, path: String,
+                                   into result: inout [(String, [[String: Any]])]) {
+        if let dict = json as? [String: Any] {
+            for (key, value) in dict {
+                collectBookArrays(from: value, path: "\(path).\(key)", into: &result)
+            }
+        } else if let arr = json as? [Any] {
+            let dicts = arr.compactMap { $0 as? [String: Any] }
+            if dicts.count == arr.count && dicts.count >= 2 {
+                result.append((path, dicts))
+            } else {
+                for (i, item) in arr.enumerated() {
+                    collectBookArrays(from: item, path: "\(path)[\(i)]", into: &result)
+                }
+            }
+        }
+    }
+
+    private func bookScore(_ items: [[String: Any]]) -> Int {
+        guard let sample = items.first else { return 0 }
+        var score = min(items.count, 30)
+        let keys = Set(sample.keys.map { $0.lowercased() })
+        let nameHints   = ["name", "title", "novelname", "bookname"]
+        let authorHints = ["author", "authorname", "writer"]
+        let urlHints    = ["url", "link", "id", "novelid", "bookid"]
+        if nameHints.contains(where: { keys.contains($0) })   { score += 20 }
+        if authorHints.contains(where: { keys.contains($0) }) { score += 10 }
+        if urlHints.contains(where: { keys.contains($0) })    { score += 10 }
+        score += min(sample.keys.count, 10)
+        return score
+    }
+
+    private func pickField(from dict: [String: Any], candidates: [String]) -> String? {
+        for c in candidates {
+            if dict[c] != nil { return c }
+            if let k = dict.keys.first(where: { $0.lowercased() == c }) { return k }
+        }
+        return nil
+    }
+
+    private func stringify(_ value: Any?) -> String {
+        switch value {
+        case let s as String: return s
+        case let n as NSNumber: return n.stringValue
+        case .none: return "(null)"
+        default: return "\(value!)"
+        }
+    }
+
+    // MARK: - HTML 推断（启发式，仅处理常见列表结构）
+
+    private func inferFromHTML(html: String, source: BookSource) -> (BookSource, [String]) {
+        guard let doc = try? SwiftSoup.parse(html) else {
+            return (source, ["HTML 解析失败"])
+        }
+        var changes: [String] = []
+        var patched = source
+
+        // 查找含有重复子元素的列表容器（li / div / article）
+        let selectors = ["ul > li", "ol > li", ".book-list > *", ".list > *",
+                         ".booklist > *", ".bookList > *", "article"]
+        for sel in selectors {
+            guard let elements = try? doc.select(sel),
+                  elements.count >= 4 else { continue }
+            if (patched.ruleExploreList ?? "").isEmpty {
+                patched.ruleExploreList = sel
+                changes.append("ruleExploreList = \(sel)  （共 \(elements.count) 个节点）")
+            }
+            // 从第一个元素推断字段规则
+            if let first = elements.first() {
+                let tryLink: (String, WritableKeyPath<BookSource, String?>, String) -> Void = { cssPath, kp, label in
+                    if (patched[keyPath: kp] ?? "").isEmpty,
+                       let node = try? first.select(cssPath).first(),
+                       !((try? node.text()) ?? "").isEmpty {
+                        patched[keyPath: kp] = cssPath
+                        changes.append("\(label) = \(cssPath)")
+                    }
+                }
+                tryLink("h3, h4, .title, .name, a", \.ruleExploreName, "ruleExploreName")
+                tryLink(".author, .writer", \.ruleExploreAuthor, "ruleExploreAuthor")
+                tryLink("a[href]@href", \.ruleExploreNoteUrl, "ruleExploreNoteUrl")
+                tryLink("img@src, img@data-src", \.ruleExploreCoverUrl, "ruleExploreCoverUrl")
+            }
+            if !changes.isEmpty { break }
+        }
+        if changes.isEmpty {
+            changes.append("未能识别列表结构，请手动编写 CSS 规则")
+        }
+        return (patched, changes)
     }
 
     // MARK: - Helpers
