@@ -57,8 +57,12 @@ struct ChapterPaginator {
 
     private func makeAttrString(_ text: String) -> NSAttributedString {
         let para = NSMutableParagraphStyle()
-        para.lineSpacing = lineSpacing
-        para.paragraphSpacing = paragraphSpacing  // 与 ReaderPageView 保持一致
+        // 用 minimumLineHeight/maximumLineHeight 固定行高，
+        // 与 SwiftUI AttributedString 渲染保持一致
+        let fixedLineH = font.lineHeight + lineSpacing
+        para.minimumLineHeight = fixedLineH
+        para.maximumLineHeight = fixedLineH
+        para.paragraphSpacing  = paragraphSpacing
         return NSAttributedString(string: text, attributes: [
             .font: font,
             .paragraphStyle: para,

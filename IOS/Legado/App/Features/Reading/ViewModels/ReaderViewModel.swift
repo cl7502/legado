@@ -366,10 +366,20 @@ class ReaderViewModel: ObservableObject {
     private func syncProgress(chapter: Chapter) async {
         var updatedBook = book
         updatedBook.durChapterIndex = currentChapterIndex
+        updatedBook.durChapterPos   = currentPageIndex      // 保存当前页码
         updatedBook.durChapterTitle = chapter.title
-        updatedBook.durChapterTime = Int64(Date().timeIntervalSince1970)
+        updatedBook.durChapterTime  = Int64(Date().timeIntervalSince1970)
         self.book = updatedBook
         try? await db.saveBook(updatedBook)
+    }
+
+    /// 翻页时轻量保存页码进度（不更新 title/time，减少 DB 写入频率）
+    private func savePageProgress() {
+        var updatedBook = book
+        updatedBook.durChapterIndex = currentChapterIndex
+        updatedBook.durChapterPos   = currentPageIndex
+        self.book = updatedBook
+        Task { try? await db.saveBook(updatedBook) }
     }
     
     // MARK: - 章节内分页
@@ -399,10 +409,20 @@ class ReaderViewModel: ObservableObject {
             paragraphSpacing: settings.paragraphSpacing  // 同步传入，与渲染保持一致
         )
         let title = chapters[currentChapterIndex].title
-        let pages = paginator.paginate(text: content, chapterTitle: title)
+        // \n\n 产生的空行高度 = lineHeight + lineSpacing，随字号同比放大，
+        // 大字号下每页被空行占用大量空间。统一替换为 \n，
+        // 段间距由 paragraphSpacing 独立控制，与字号无关
+        let processedContent = content.replacingOccurrences(of: "\n\n", with: "\n")
+        let pages = paginator.paginate(text: processedContent, chapterTitle: title)
 
         currentPages = pages
-        currentPageIndex = 0
+        // 恢复上次阅读位置：初次打开时 durChapterPos 存储上次页码
+        let savedPage = book.durChapterPos
+        if savedPage > 0 && savedPage < pages.count {
+            currentPageIndex = savedPage
+        } else {
+            currentPageIndex = 0
+        }
     }
 
     // MARK: - 页内翻页
@@ -411,16 +431,16 @@ class ReaderViewModel: ObservableObject {
     func nextPage() {
         if currentPageIndex < currentPages.count - 1 {
             currentPageIndex += 1
+            savePageProgress()
         } else {
-            // 章节末 → 切到下一章，分页在 ReaderView 侧监听到内容变化后重新触发
             nextChapterOnly()
         }
     }
 
-    /// 翻到上一页（章节内）；章节首页则切换上一章
     func prevPage() {
         if currentPageIndex > 0 {
             currentPageIndex -= 1
+            savePageProgress()
         } else {
             prevChapterOnly()
         }
@@ -450,9 +470,11 @@ class ReaderViewModel: ObservableObject {
         currentChapterIndex += 1
         currentPageIndex = 0
         currentPages = []
+        // 切章时 durChapterPos 重置，避免新章节恢复到错误页
+        var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
         Task {
             await loadChapterContent(at: currentChapterIndex)
-            prefetch(around: currentChapterIndex)  // 并行后台下载，不阻塞
+            prefetch(around: currentChapterIndex)
         }
     }
 
@@ -461,6 +483,7 @@ class ReaderViewModel: ObservableObject {
         currentChapterIndex -= 1
         currentPageIndex = 0
         currentPages = []
+        var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
         Task {
             await loadChapterContent(at: currentChapterIndex)
             prefetch(around: currentChapterIndex)
@@ -472,9 +495,10 @@ class ReaderViewModel: ObservableObject {
         currentPageIndex = 0
         currentPages = []
         showingMenu = false
+        var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
         Task {
             await loadChapterContent(at: currentChapterIndex)
-            prefetch(around: currentChapterIndex)  // 并行后台下载，不阻塞
+            prefetch(around: currentChapterIndex)
         }
     }
 }

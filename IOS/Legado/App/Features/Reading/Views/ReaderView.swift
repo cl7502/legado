@@ -211,8 +211,9 @@ struct ReaderPageView: View {
                         .padding(.bottom, 20)
                 }
 
-                // 单个 Text 渲染，与分页器 CoreText 计算保持一致，避免 VStack spacing 造成空白偏大
-                Text(attributedContent)
+                // 用与分页器完全相同的 NSAttributedString 渲染，
+                // 保证渲染高度 = 分页器计算高度，消除底部空白偏大的问题
+                Text(pageAttributedString(applyTraditional(content)))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Spacer(minLength: 0)
@@ -254,34 +255,23 @@ struct ReaderPageView: View {
         }
     }
 
-    /// 构建与分页器一致的 AttributedString（字体、行距、字间距、段间距、颜色）
-    private var attributedContent: AttributedString {
-        let text = applyTraditional(content)
-        var attr = AttributedString(text)
-
-        // 基础字体与颜色
-        attr.font = .system(size: settings.fontSize)
-        attr.foregroundColor = settings.currentTheme.textColor
-
-        // 字间距（SwiftUI AttributedString 用 kern）
-        if settings.letterSpacing != 0 {
-            attr.kern = settings.letterSpacing
-        }
-
-        // 段间距：在每个 \n 之后插入段落样式
-        // 用 NSAttributedString 处理段落样式再转回
-        let nsAttr = NSMutableAttributedString(string: text)
+    /// 构建与 ChapterPaginator.makeAttrString 完全相同的 AttributedString，
+    /// 确保渲染高度 = 分页器测量高度，消除底部空白偏大
+    private func pageAttributedString(_ text: String) -> AttributedString {
+        let font     = UIFont.systemFont(ofSize: settings.fontSize)
+        let fixedLineH = font.lineHeight + settings.lineSpacing
         let para = NSMutableParagraphStyle()
-        para.lineSpacing = settings.lineSpacing
-        para.paragraphSpacing = settings.paragraphSpacing
-        nsAttr.addAttributes([
-            .font: UIFont.systemFont(ofSize: settings.fontSize),
-            .paragraphStyle: para,
+        para.minimumLineHeight = fixedLineH
+        para.maximumLineHeight = fixedLineH
+        para.paragraphSpacing  = settings.paragraphSpacing
+        let nsAttr = NSMutableAttributedString(string: text, attributes: [
+            .font:            font,
+            .paragraphStyle:  para,
+            .kern:            settings.letterSpacing,
             .foregroundColor: UIColor(settings.currentTheme.textColor),
-            .kern: settings.letterSpacing,
-        ], range: NSRange(location: 0, length: nsAttr.length))
-
-        return (try? AttributedString(nsAttr, including: \.uiKit)) ?? attr
+        ])
+        return (try? AttributedString(nsAttr, including: \.uiKit))
+               ?? AttributedString(text)
     }
 
     private func paragraphs(_ text: String) -> [String] {
