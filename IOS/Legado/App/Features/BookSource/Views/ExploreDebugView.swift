@@ -18,33 +18,31 @@ struct ExploreDebugView: View {
     }
 
     var body: some View {
-        NavigationView {
-            Form {
-                exploreUrlSection
-                listRuleSection
-                extractRuleSection
-                if !debugVM.steps.isEmpty {
-                    diagnosticsSection
-                }
+        Form {
+            exploreUrlSection
+            listRuleSection
+            extractRuleSection
+            if !debugVM.steps.isEmpty {
+                diagnosticsSection
             }
-            .navigationTitle(original.bookSourceName)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        Task {
-                            await listViewModel.saveSource(draft)
-                            hasUnsaved = false
-                        }
-                    }
-                    .disabled(!hasUnsaved)
-                }
-            }
-            .safeAreaInset(edge: .bottom) { runButton }
         }
+        .navigationTitle(original.bookSourceName)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("关闭") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") {
+                    Task {
+                        await listViewModel.saveSource(draft)
+                        hasUnsaved = false
+                    }
+                }
+                .disabled(!hasUnsaved)
+            }
+        }
+        .safeAreaInset(edge: .bottom) { runButton }
     }
 
     // MARK: - Sections
@@ -237,7 +235,9 @@ class ExploreDebugViewModel: ObservableObject {
         isRunning = true
         defer { isRunning = false }
 
+        print("🔍 [ExploreDebug] run() 开始 source=\(source.bookSourceName)")
         steps = (0..<5).map { DebugStep(id: $0, title: stepTitle($0)) }
+        print("🔍 [ExploreDebug] steps 初始化完毕 count=\(steps.count)")
 
         // Step 0: 解析 exploreUrl → 分类列表
         steps[0].status = .running
@@ -246,11 +246,13 @@ class ExploreDebugViewModel: ObservableObject {
             steps[0].status = .failed
             steps[0].summary = "未解析到任何分类"
             steps[0].detail = "exploreUrl = \(source.exploreUrl ?? "(空)")"
+            print("❌ [ExploreDebug] Step0 失败：无分类")
             return
         }
         steps[0].status = .passed
         steps[0].summary = "共 \(categories.count) 个分类"
         steps[0].detail = categories.prefix(8).map { $0.title }.joined(separator: "  ")
+        print("✅ [ExploreDebug] Step0 通过：\(categories.count) 个分类")
 
         // Step 1: 解析第一个分类的请求 URL
         steps[1].status = .running
@@ -268,6 +270,7 @@ class ExploreDebugViewModel: ObservableObject {
         steps[1].status = .passed
         steps[1].summary = "分类「\(firstCat.title)」"
         steps[1].detail = requestUrl
+        print("✅ [ExploreDebug] Step1 通过：\(requestUrl)")
 
         // Step 2: 网络请求
         steps[2].status = .running
@@ -283,12 +286,14 @@ class ExploreDebugViewModel: ObservableObject {
             steps[2].status = .failed
             steps[2].summary = "请求失败"
             steps[2].detail = error.localizedDescription
+            print("❌ [ExploreDebug] Step2 网络失败：\(error)")
             return
         }
         let ms = Int(Date().timeIntervalSince(t0) * 1000)
         steps[2].status = .passed
         steps[2].summary = "HTTP 200  \(html.count) 字节  \(ms)ms"
         steps[2].detail = String(html.prefix(300)).replacingOccurrences(of: "\n", with: " ")
+        print("✅ [ExploreDebug] Step2 通过：\(html.count) 字节 \(ms)ms")
 
         // Step 3: ruleExploreList
         steps[3].status = .running
@@ -310,6 +315,7 @@ class ExploreDebugViewModel: ObservableObject {
         steps[3].status = items.count < 3 ? .warning : .passed
         steps[3].summary = "找到 \(items.count) 条\(items.count < 3 ? "（偏少，请检查规则）" : "")"
         steps[3].detail = "规则: \(listRule)"
+        print("✅ [ExploreDebug] Step3 通过：\(items.count) 条")
 
         // Step 4: 提取前 5 个 item 的字段
         steps[4].status = .running
@@ -332,6 +338,8 @@ class ExploreDebugViewModel: ObservableObject {
         steps[4].status = validCount == 0 ? .failed : (validCount < shown ? .warning : .passed)
         steps[4].summary = "前 \(shown) 条中 \(validCount) 条有效（name + bookUrl 非空）"
         steps[4].detail = lines.joined(separator: "\n")
+        print("✅ [ExploreDebug] Step4 完成：\(validCount)/\(shown) 条有效")
+        print("🏁 [ExploreDebug] run() 结束")
     }
 
     // MARK: - Category parsing — mirrors ExploreCategoryViewModel exactly

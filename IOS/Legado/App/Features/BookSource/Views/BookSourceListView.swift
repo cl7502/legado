@@ -195,7 +195,9 @@ struct BookSourceListView: View {
             }
             // 书源发现调试器 sheet
             .sheet(item: $debugSource) { source in
-                ExploreDebugView(source: source, listViewModel: viewModel)
+                NavigationView {
+                    ExploreDebugView(source: source, listViewModel: viewModel)
+                }
             }
         }
     }
