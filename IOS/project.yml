@@ -1,0 +1,63 @@
+name: Legado
+options:
+  bundleIdPrefix: com.legado
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  Alamofire:
+    url: https://github.com/Alamofire/Alamofire.git
+    from: "5.8.1"
+  SwiftSoup:
+    url: https://github.com/scinfu/SwiftSoup.git
+    from: "2.7.2"
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    from: "6.24.2"
+
+targets:
+  Legado:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: Legado/App
+        excludes:
+          - "**/*.md"
+    info:
+      path: Resources/Info.plist
+    entitlements:
+      path: Resources/Legado.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.legado.app
+        PRODUCT_NAME: Legado
+        SWIFT_VERSION: 5.9
+        IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        TARGETED_DEVICE_FAMILY: "1,2"
+        MARKETING_VERSION: "2.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+      configs:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+          DEBUG_INFORMATION_FORMAT: dwarf
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+    dependencies:
+      - package: Alamofire
+      - package: SwiftSoup
+      - package: GRDB
+        product: GRDB
+    capabilities:
+      audio-session:
+        modes:
+          - spoken-audio
+      app-transport-security:
+        allow-arbitrary-loads: true

@@ -362,7 +362,16 @@ struct ReaderMenuView: View {
                           systemImage: "arrow.down.circle")
                 }
                 .disabled(viewModel.isCachingAll)
-            } label: {
+
+                if let url = URL(string: viewModel.book.bookUrl) {
+                    ShareLink(
+                        item: url,
+                        subject: Text(viewModel.book.name),
+                        message: Text("via Legado")
+                    ) {
+                        Label("分享", systemImage: "square.and.arrow.up")
+                    }
+                }            } label: {
                 Image(systemName: "ellipsis").font(.title2)
             }
             .alert("缓存全本", isPresented: $showingCacheAlert) {
