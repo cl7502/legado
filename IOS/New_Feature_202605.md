@@ -102,10 +102,15 @@
 - **实现**：BookSearchView 本地搜索已缓存章节，关键词高亮，最多200条，点击跳转
 - **状态**：✅ 已完成
 
-### P2-4 · 图片显示
-- 正文内嵌图片渲染
-- **状态**：⬜ 待实现（P2，大）
+### P2-4 · 图片显示 ✅ 已完成
+- **实现**：BookContentParser 保留 `<img>` 为 `⟨IMG:url⟩` 标记；MixedContentView 混合渲染文字+图片
+- **状态**：✅ 已完成
 
 ### P2-5 · 笔记/划线
 - BookChapterReview 数据表
 - **状态**：⬜ 待实现（P3）
+
+### 渲染引擎 · TextKit 2 升级 ✅ 已完成
+- **实现**：ChapterPaginator 改用 NSTextLayoutManager；UITextView(usingTextLayoutManager: true) 渲染
+- **收益**：CJK 禁则、分页/渲染引擎一致、消除底部空白偏差
+- **状态**：✅ 已完成
