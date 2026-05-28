@@ -321,31 +321,41 @@ class ExploreDebugViewModel: ObservableObject {
         steps[1].detail = requestUrl
         print("✅ [ExploreDebug] Step1 通过：\(requestUrl)")
 
-        // Step 2: 网络请求
+        // Step 2: 网络请求（JS 驱动的书源跳过，由 java.ajax() 内部处理）
         steps[2].status = .running
-        let t0 = Date()
+        let isJSRule = (source.ruleExploreList ?? "").trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<js>") ||
+                       (source.ruleExploreList ?? "").trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("@js:")
         let html: String
-        do {
-            if parsed.method == "POST", let body = parsed.body {
-                html = try await network.requestPost(requestUrl, body: body, source: source)
-            } else {
-                html = try await network.request(requestUrl, source: source)
+        if isJSRule {
+            html = ""
+            steps[2].status = .passed
+            steps[2].summary = "JS 驱动书源 — 网络请求由 ruleExploreList 内的 java.ajax() 负责"
+            steps[2].detail = "baseUrl 已设置为：\(requestUrl)"
+            print("✅ [ExploreDebug] Step2 JS驱动，跳过预取")
+        } else {
+            let t0 = Date()
+            do {
+                if parsed.method == "POST", let body = parsed.body {
+                    html = try await network.requestPost(requestUrl, body: body, source: source)
+                } else {
+                    html = try await network.request(requestUrl, source: source)
+                }
+            } catch {
+                steps[2].status = .failed
+                steps[2].summary = "请求失败"
+                steps[2].detail = error.localizedDescription
+                print("❌ [ExploreDebug] Step2 网络失败：\(error)")
+                return
             }
-        } catch {
-            steps[2].status = .failed
-            steps[2].summary = "请求失败"
-            steps[2].detail = error.localizedDescription
-            print("❌ [ExploreDebug] Step2 网络失败：\(error)")
-            return
+            let ms = Int(Date().timeIntervalSince(t0) * 1000)
+            steps[2].status = .passed
+            steps[2].summary = "HTTP 200  \(html.count) 字节  \(ms)ms"
+            steps[2].detail = String(html.prefix(300)).replacingOccurrences(of: "\n", with: " ")
+            print("✅ [ExploreDebug] Step2 通过：\(html.count) 字节 \(ms)ms")
+            storedHtml = html
+            storedRequestUrl = requestUrl
+            canAttemptFix = true
         }
-        let ms = Int(Date().timeIntervalSince(t0) * 1000)
-        steps[2].status = .passed
-        steps[2].summary = "HTTP 200  \(html.count) 字节  \(ms)ms"
-        steps[2].detail = String(html.prefix(300)).replacingOccurrences(of: "\n", with: " ")
-        print("✅ [ExploreDebug] Step2 通过：\(html.count) 字节 \(ms)ms")
-        storedHtml = html
-        storedRequestUrl = requestUrl
-        canAttemptFix = true
 
         // Step 3: ruleExploreList
         steps[3].status = .running

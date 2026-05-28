@@ -137,6 +137,11 @@ class NetworkManager {
 
     // MARK: - Sync API (for JS bridge — runs on a background thread via semaphore)
 
+    // Background queue for sync response callbacks — prevents deadlock when
+    // requestSync is called from the main thread (e.g. inside JS evaluation
+    // on a @MainActor context), since Alamofire's default response queue is main.
+    private let syncCallbackQueue = DispatchQueue(label: "com.legado.sync", qos: .utility)
+
     func requestSync(_ url: String, method: String = "GET", body: String? = nil,
                      headers: [String: String]? = nil) -> String? {
         let semaphore = DispatchSemaphore(value: 0)
@@ -153,13 +158,13 @@ class NetworkManager {
             urlReq?.headers = finalHeaders
             urlReq?.httpBody = body.data(using: .utf8)
             guard let req = urlReq else { return nil }
-            session.request(req).responseData { resp in
+            session.request(req).responseData(queue: syncCallbackQueue) { resp in
                 result = resp.data.flatMap { EncodingHelper.shared.decode($0) }
                 semaphore.signal()
             }
         } else {
             session.request(url, method: httpMethod, headers: finalHeaders)
-                .responseData { resp in
+                .responseData(queue: syncCallbackQueue) { resp in
                     result = resp.data.flatMap { EncodingHelper.shared.decode($0) }
                     semaphore.signal()
                 }

@@ -252,8 +252,16 @@ class ExploreBookListViewModel: ObservableObject {
                 return
             }
 
+            // JS-driven list rules (starting with <js> or @js:) perform their own
+            // network requests via java.ajax(). Pre-fetching the category URL is not
+            // only unnecessary — it can cause early-return on failure and blocks the
+            // JS from running at all. Pass the URL as baseUrl and let JS handle it.
+            let isJSRule = listRule.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<js>") ||
+                           listRule.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("@js:")
             let html: String
-            if parsed.method == "POST", let body = parsed.body {
+            if isJSRule {
+                html = ""
+            } else if parsed.method == "POST", let body = parsed.body {
                 html = try await network.requestPost(requestUrl, body: body, source: source)
             } else {
                 html = try await network.request(requestUrl, source: source)
