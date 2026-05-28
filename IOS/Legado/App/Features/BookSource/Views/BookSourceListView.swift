@@ -33,17 +33,37 @@ struct BookSourceListView: View {
 
     // 书源发现调试器
     @State private var debugSource: BookSource? = nil
+    // 编辑书源 sheet
+    @State private var editSource: BookSource? = nil
+    // 浏览书源 sheet
+    @State private var browseURL: URL? = nil
 
     var body: some View {
         NavigationView {
             List {
                 ForEach(viewModel.sources) { source in
                     HStack(spacing: 0) {
-                        // 三点菜单
+                        // 三点菜单（完整版）
                         Menu {
+                            Button { editSource = source } label: {
+                                Label("编辑书源", systemImage: "pencil")
+                            }
                             Button {
-                                debugSource = source
+                                if let url = URL(string: source.bookSourceUrl) { browseURL = url }
                             } label: {
+                                Label("浏览书源", systemImage: "safari")
+                            }
+                            Button { Task { await viewModel.moveToTop(source) } } label: {
+                                Label("置顶", systemImage: "arrow.up.to.line")
+                            }
+                            Button { Task { await viewModel.toggleEnabledExplore(source) } } label: {
+                                Label(
+                                    source.enabledExplore ? "禁用发现" : "启用发现",
+                                    systemImage: source.enabledExplore ? "eye.slash" : "eye"
+                                )
+                            }
+                            Divider()
+                            Button { debugSource = source } label: {
                                 Label("调试发现规则", systemImage: "ladybug")
                             }
                             Divider()
@@ -59,10 +79,8 @@ struct BookSourceListView: View {
                                 .frame(width: 36, height: 44)
                                 .contentShape(Rectangle())
                         }
-                        NavigationLink(destination: BookSourceEditView(source: source, viewModel: viewModel)) {
-                            BookSourceRow(source: source) {
-                                Task { await viewModel.toggleEnabled(source) }
-                            }
+                        BookSourceRow(source: source) {
+                            Task { await viewModel.toggleEnabled(source) }
                         }
                     }
                     .swipeActions(edge: .trailing) {
@@ -204,6 +222,19 @@ struct BookSourceListView: View {
                 NavigationView {
                     ExploreDebugView(source: source, listViewModel: viewModel)
                 }
+            }
+            // 编辑书源 sheet（替代行点击导航）
+            .sheet(item: $editSource) { source in
+                NavigationView {
+                    BookSourceEditView(source: source, viewModel: viewModel)
+                }
+            }
+            // 浏览书源 sheet
+            .sheet(isPresented: Binding(
+                get: { browseURL != nil },
+                set: { if !$0 { browseURL = nil } }
+            )) {
+                if let url = browseURL { SafariView(url: url) }
             }
         }
     }

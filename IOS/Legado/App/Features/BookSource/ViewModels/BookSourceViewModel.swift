@@ -107,6 +107,21 @@ class BookSourceViewModel: ObservableObject {
             print("❌ [BookSourceVM] saveSource: \(error)")
         }
     }
+
+    /// 将书源移至列表最顶部（customOrder = 当前最小值 - 1）
+    func moveToTop(_ source: BookSource) async {
+        let minOrder = sources.map { $0.customOrder }.min() ?? 0
+        var updated = source
+        updated.customOrder = minOrder - 1
+        await saveSource(updated)
+    }
+
+    /// 切换书源在发现页的显示状态（enabledExplore）
+    func toggleEnabledExplore(_ source: BookSource) async {
+        var updated = source
+        updated.enabledExplore = !source.enabledExplore
+        await saveSource(updated)
+    }
 }
 
 /// 书源导入解析器 — 支持 Android 嵌套 JSON 格式
