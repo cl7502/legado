@@ -42,14 +42,14 @@ enum DeepCheckStepKind: Int, CaseIterable {
         case .verifyDetailPage:  return "验证详情页"
         case .fetchSearchPage:   return "获取搜索结果"
         case .parseSearchList:   return "解析搜索书单"
-        case .parseSearchFields: return "解析书目字段"
+        case .parseSearchFields: return "解析搜索书目字段"
         }
     }
 }
 
 // MARK: - Single step result
 struct DeepCheckStepResult: Identifiable, Equatable {
-    var id: Int { kind.rawValue }
+    var id: DeepCheckStepKind { kind }
     let kind: DeepCheckStepKind
     var status: StepStatus = .pending
     var durationMs: Int = 0
@@ -78,11 +78,10 @@ struct DeepCheckSourceResult: Identifiable {
         let all = exploreSteps + searchSteps
         guard !all.isEmpty else { return .pending }
         if all.contains(where: { $0.status == .running }) { return .running }
-        // All skipped/pending with no passed → treat as failed
-        // (happens when Step 1 fails and cascades all later steps to .skipped)
-        if !all.contains(where: { $0.status == .passed || $0.status == .failed }) {
-            return all.allSatisfy({ $0.status == .skipped }) ? .failed : .pending
-        }
+        // All skipped with no passed/failed → Step 1 failed and cascaded; treat as failed
+        if all.allSatisfy({ $0.status == .skipped }) { return .failed }
+        // Still have pending steps (e.g. search pipeline not yet started) → still in progress
+        if all.contains(where: { $0.status == .pending }) { return .running }
         let hasFail = all.contains { $0.status == .failed }
         let hasPass = all.contains { $0.status == .passed }
         if hasFail && hasPass { return .partial }
