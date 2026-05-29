@@ -287,35 +287,62 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
 
     // MARK: - AES (CommonCrypto)
     // mode string: "CBC/PKCS5Padding", "ECB/PKCS5Padding", etc.
+    // key/iv 支持三种格式：UTF-8 字符串、十六进制、Base64
 
     func aesEncrypt(_ data: String, _ key: String, _ iv: String, _ mode: String) -> String {
         guard let dataBytes = data.data(using: .utf8),
-              let keyBytes = key.data(using: .utf8) else { return "" }
-        let ivBytes = iv.data(using: .utf8) ?? Data(repeating: 0, count: kCCBlockSizeAES128)
+              let keyBytes = decodeKeyBytes(key) else { return "" }
+        let ivBytes = decodeKeyBytes(iv) ?? Data(repeating: 0, count: kCCBlockSizeAES128)
         let opts = aesOptions(mode)
         return aesCrypt(CCOperation(kCCEncrypt), data: dataBytes, key: keyBytes, iv: ivBytes, opts: opts)?
             .base64EncodedString() ?? ""
     }
 
     func aesDecrypt(_ base64Data: String, _ key: String, _ iv: String, _ mode: String) -> String {
-        // Normalize URL-safe base64 (- → +, _ → /) and add padding
         var normalized = base64Data
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
         let rem = normalized.count % 4
         if rem > 0 { normalized += String(repeating: "=", count: 4 - rem) }
         guard let dataBytes = Data(base64Encoded: normalized),
-              let keyBytes = key.data(using: .utf8) else { return "" }
-        let ivBytes = iv.data(using: .utf8) ?? Data(repeating: 0, count: kCCBlockSizeAES128)
+              let keyBytes = decodeKeyBytes(key) else { return "" }
+        let ivBytes = decodeKeyBytes(iv) ?? Data(repeating: 0, count: kCCBlockSizeAES128)
         let opts = aesOptions(mode)
         return aesCrypt(CCOperation(kCCDecrypt), data: dataBytes, key: keyBytes, iv: ivBytes, opts: opts)
             .flatMap { String(data: $0, encoding: .utf8) } ?? ""
     }
 
     // Android alias: parameter order is (data, key, mode, iv) — mode and iv are swapped
-    // vs our aesDecrypt(data, key, iv, mode).
     func aesBase64DecodeToString(_ data: String, _ key: String, _ mode: String, _ iv: String) -> String {
         aesDecrypt(data, key, iv, mode)
+    }
+
+    /// key/iv 解码：自动识别十六进制（纯十六进制字符且长度为偶数）、Base64、UTF-8
+    private func decodeKeyBytes(_ s: String) -> Data? {
+        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 十六进制：全为 0-9a-fA-F 且长度为偶数（16/24/32/48/64字节对应的十六进制）
+        let hexLengths: Set<Int> = [32, 48, 64]
+        if hexLengths.contains(trimmed.count),
+           trimmed.allSatisfy({ $0.isHexDigit }) {
+            var bytes: [UInt8] = []
+            var i = trimmed.startIndex
+            while i < trimmed.endIndex {
+                let next = trimmed.index(i, offsetBy: 2, limitedBy: trimmed.endIndex) ?? trimmed.endIndex
+                if let byte = UInt8(trimmed[i..<next], radix: 16) { bytes.append(byte) }
+                i = next
+            }
+            if bytes.count == 16 || bytes.count == 24 || bytes.count == 32 { return Data(bytes) }
+        }
+        // Base64：尝试解码并校验长度
+        var b64 = trimmed
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let rem = b64.count % 4
+        if rem > 0 { b64 += String(repeating: "=", count: 4 - rem) }
+        if let data = Data(base64Encoded: b64),
+           data.count == 16 || data.count == 24 || data.count == 32 { return data }
+        // 兜底：UTF-8
+        return trimmed.data(using: .utf8)
     }
 
     private func aesOptions(_ mode: String) -> CCOptions {
@@ -510,16 +537,19 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     }
 
     func timeFormat(_ timestamp: String) -> String {
-        guard let ms = Double(timestamp) else { return timestamp }
-        let date = Date(timeIntervalSince1970: ms / 1000)
+        guard let ts = Double(timestamp) else { return timestamp }
+        // > 1e10 视为毫秒级（当前秒级时间戳约 1.7e9），否则视为秒级
+        let seconds = ts > 1e10 ? ts / 1000 : ts
+        let date = Date(timeIntervalSince1970: seconds)
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd HH:mm"
         return fmt.string(from: date)
     }
 
     func timeFormatUTC(_ time: String, _ format: String, _ sh: Int) -> String {
-        guard let ms = Double(time) else { return time }
-        let date = Date(timeIntervalSince1970: ms / 1000)
+        guard let ts = Double(time) else { return time }
+        let seconds = ts > 1e10 ? ts / 1000 : ts
+        let date = Date(timeIntervalSince1970: seconds)
         let fmt = DateFormatter()
         fmt.dateFormat = format.isEmpty ? "yyyy-MM-dd HH:mm:ss" : format
         fmt.timeZone = TimeZone(secondsFromGMT: sh * 3600)

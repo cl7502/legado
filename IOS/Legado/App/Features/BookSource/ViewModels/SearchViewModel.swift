@@ -309,15 +309,16 @@ struct AnalyzeUrl {
 
     private static func evaluateInlineJS(_ tmpl: String, context: inout AnalyzeContext) -> String {
         guard let re = try? NSRegularExpression(pattern: #"\{\{([\s\S]*?)\}\}"#) else { return tmpl }
-        let ns = tmpl as NSString
-        let matches = re.matches(in: tmpl, range: NSRange(location: 0, length: ns.length)).reversed()
         var result = tmpl
-        for m in matches {
-            guard let fullRange = Range(m.range, in: result),
-                  let exprRange = Range(m.range(at: 1), in: result) else { continue }
+        // 每次从头匹配，避免替换后 NSRange 失效
+        while true {
+            let ns = result as NSString
+            guard let m = re.firstMatch(in: result, range: NSRange(location: 0, length: ns.length)),
+                  let fullRange = Range(m.range, in: result),
+                  let exprRange = Range(m.range(at: 1), in: result) else { break }
             let expr = String(result[exprRange])
             var resolved = ""
-            // JSONPath 优先（$ 开头）：对当前 result 提取字段
+            // JSONPath 优先（$ 开头）：对当前 context.result 提取字段
             if expr.hasPrefix("$") {
                 let jsonStr: String
                 if let s = context.result as? String { jsonStr = s }
