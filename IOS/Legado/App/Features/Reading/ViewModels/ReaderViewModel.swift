@@ -79,8 +79,7 @@ class ReaderViewModel: ObservableObject {
             if !cached.isEmpty {
                 // 检测章节 URL 是否存在明显的空参数（如 bookId=&），若有则强制重新加载
                 let hasBrokenUrl = cached.contains { ch in
-                    ch.url.contains("bookId=&") || ch.url.contains("bookId= &") ||
-                    (ch.url.contains("bookId=") && ch.url.range(of: "bookId=([^&]+)", options: .regularExpression) == nil)
+                    ch.url.contains("bookId=&") || ch.url.contains("bookId= &")
                 }
                 if !hasBrokenUrl {
                     self.chapters = cached
