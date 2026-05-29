@@ -17,8 +17,12 @@ class ReaderViewModel: ObservableObject {
     // MARK: - 章节内分页
     /// 当前章节分割出的物理页内容列表（按页索引排列）
     @Published var currentPages: [String] = []
+    /// 每页在完整章节文本中的起始字符偏移（用于高亮定位）
+    @Published var currentPageOffsets: [Int] = []
     /// 当前章节内的页码（0-based）
     @Published var currentPageIndex: Int = 0
+    /// 当前章节的高亮列表
+    @Published var currentHighlights: [BookHighlight] = []
     
     private let db = DatabaseManager.shared
     private let network = NetworkManager.shared
@@ -416,6 +420,13 @@ class ReaderViewModel: ObservableObject {
         let pages = paginator.paginate(text: processedContent, chapterTitle: title)
 
         currentPages = pages
+        // 计算每页在 processedContent 中的起始字符偏移
+        var offset = 0
+        currentPageOffsets = pages.map { page in
+            let start = offset
+            offset += (page as NSString).length
+            return start
+        }
         // 恢复上次阅读位置：初次打开时 durChapterPos 存储上次页码
         let savedPage = book.durChapterPos
         if savedPage > 0 && savedPage < pages.count {
@@ -423,6 +434,37 @@ class ReaderViewModel: ObservableObject {
         } else {
             currentPageIndex = 0
         }
+        // 异步加载当前章节高亮
+        Task { await loadHighlights() }
+    }
+
+    // MARK: - 高亮操作
+
+    func loadHighlights() async {
+        currentHighlights = (try? await db.getHighlights(
+            bookUrl: book.bookUrl, chapterIndex: currentChapterIndex)) ?? []
+    }
+
+    func addHighlight(pageIndex: Int, pageLocalStart: Int, pageLocalEnd: Int,
+                      selectedText: String, color: Int = 0) async {
+        guard pageIndex < currentPageOffsets.count else { return }
+        let pageOffset = currentPageOffsets[pageIndex]
+        let h = BookHighlight(
+            bookUrl:      book.bookUrl,
+            chapterIndex: currentChapterIndex,
+            startOffset:  pageOffset + pageLocalStart,
+            endOffset:    pageOffset + pageLocalEnd,
+            selectedText: selectedText,
+            color:        color,
+            createdAt:    Date()
+        )
+        try? await db.saveHighlight(h)
+        await loadHighlights()
+    }
+
+    func deleteHighlight(_ highlight: BookHighlight) async {
+        try? await db.deleteHighlight(highlight)
+        await loadHighlights()
     }
 
     // MARK: - 页内翻页

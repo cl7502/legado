@@ -74,7 +74,19 @@ struct ReaderView: View {
                     pageLabel: "\(idx + 1) / \(viewModel.currentPages.count)",
                     totalChapters: viewModel.chapters.count,
                     chapterIndex: viewModel.currentChapterIndex,
-                    sourceOrigin: viewModel.book.origin
+                    sourceOrigin: viewModel.book.origin,
+                    pageStartOffset: idx < viewModel.currentPageOffsets.count
+                        ? viewModel.currentPageOffsets[idx] : 0,
+                    highlights: viewModel.currentHighlights,
+                    onHighlight: { localStart, localEnd, text, color in
+                        Task { await viewModel.addHighlight(
+                            pageIndex: idx,
+                            pageLocalStart: localStart,
+                            pageLocalEnd: localEnd,
+                            selectedText: text,
+                            color: color
+                        )}
+                    }
                 )
                 .tag(idx)
             }
@@ -199,6 +211,9 @@ struct ReaderPageView: View {
     let totalChapters: Int
     let chapterIndex: Int
     var sourceOrigin: String = ""
+    var pageStartOffset: Int = 0
+    var highlights: [BookHighlight] = []
+    var onHighlight: ((Int, Int, String, Int) -> Void)? = nil
 
     @StateObject private var settings = ReaderSettings.shared
     @StateObject private var battery  = BatteryMonitor.shared
@@ -217,7 +232,10 @@ struct ReaderPageView: View {
                 MixedContentView(
                     content: applyTraditional(content),
                     settings: settings,
-                    sourceOrigin: sourceOrigin
+                    sourceOrigin: sourceOrigin,
+                    pageStartOffset: pageStartOffset,
+                    highlights: highlights,
+                    onHighlight: onHighlight
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -325,6 +343,7 @@ struct ReaderMenuView: View {
     @State private var showingCacheAlert  = false
     @State private var showingBookmarks   = false
     @State private var showingSearch      = false
+    @State private var showingHighlights  = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -394,6 +413,10 @@ struct ReaderMenuView: View {
 
                 Button { showingSearch = true } label: {
                     Label("搜索本书", systemImage: "magnifyingglass")
+                }
+
+                Button { showingHighlights = true } label: {
+                    Label("高亮列表", systemImage: "highlighter")
                 }            } label: {
                 Image(systemName: "ellipsis").font(.title2)
             }
@@ -412,6 +435,14 @@ struct ReaderMenuView: View {
                 BookSearchView(
                     bookUrl: viewModel.book.bookUrl,
                     chapterContents: viewModel.chapterContents,
+                    chapters: viewModel.chapters
+                ) { chapterIdx in
+                    viewModel.jumpToChapter(chapterIdx)
+                }
+            }
+            .sheet(isPresented: $showingHighlights) {
+                HighlightListView(
+                    bookUrl: viewModel.book.bookUrl,
                     chapters: viewModel.chapters
                 ) { chapterIdx in
                     viewModel.jumpToChapter(chapterIdx)
@@ -646,6 +677,9 @@ private struct MixedContentView: View {
     let content: String
     let settings: ReaderSettings
     let sourceOrigin: String
+    var pageStartOffset: Int = 0
+    var highlights: [BookHighlight] = []
+    var onHighlight: ((Int, Int, String, Int) -> Void)? = nil
 
     private static let imgMarker = "⟨IMG:"
     private static let imgEnd    = "⟩"
@@ -660,9 +694,22 @@ private struct MixedContentView: View {
                         .frame(height: 220)
                         .cornerRadius(4)
                 } else if !seg.text.isEmpty {
+                    let segOffset = computeSegmentOffset(upTo: i)
+                    let pageHighlights = highlights.compactMap { h -> (range: NSRange, color: UIColor)? in
+                        // 将章节偏移转为页内偏移，再转为段内偏移
+                        let pageStart = pageStartOffset + segOffset
+                        let pageEnd   = pageStart + (seg.text as NSString).length
+                        let hStart    = max(h.startOffset, pageStart) - pageStart
+                        let hEnd      = min(h.endOffset,   pageEnd)   - pageStart
+                        guard hEnd > hStart else { return nil }
+                        return (NSRange(location: hStart, length: hEnd - hStart), h.uiColor)
+                    }
                     TextKit2TextView(
                         text: nsAttributedText(seg.text),
-                        backgroundColor: UIColor(settings.currentTheme.backgroundColor)
+                        backgroundColor: UIColor(settings.currentTheme.backgroundColor),
+                        pageStartOffset: pageStartOffset + segOffset,
+                        highlights: pageHighlights,
+                        onHighlight: onHighlight
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -706,6 +753,17 @@ private struct MixedContentView: View {
         ])
     }
 
+    /// 计算 segments[0..<upTo] 中文字段的累积字符数（段间用 \n\n 分隔）
+    private func computeSegmentOffset(upTo idx: Int) -> Int {
+        var offset = 0
+        for i in 0..<min(idx, segments.count) {
+            if !segments[i].isImage {
+                offset += (segments[i].text as NSString).length + 2 // +2 for \n\n
+            }
+        }
+        return offset
+    }
+
     private func attributedText(_ text: String) -> AttributedString {
         let ns = nsAttributedText(text)
         return (try? AttributedString(ns, including: \.uiKit)) ?? AttributedString(text)
@@ -719,27 +777,72 @@ private struct MixedContentView: View {
 private struct TextKit2TextView: UIViewRepresentable {
     let text: NSAttributedString
     let backgroundColor: UIColor
+    /// 该页在完整章节文本中的起始偏移（用于将页内选区映射到章节偏移）
+    var pageStartOffset: Int = 0
+    /// 当前页关联的高亮（range 是页内偏移）
+    var highlights: [(range: NSRange, color: UIColor)] = []
+    /// 用户选中文字后触发：(pageLocalStart, pageLocalEnd, selectedText)
+    var onHighlight: ((Int, Int, String, Int) -> Void)? = nil
+
+    func makeCoordinator() -> Coordinator { Coordinator(onHighlight: onHighlight) }
 
     func makeUIView(context: Context) -> UITextView {
         let tv = UITextView(usingTextLayoutManager: true)
         tv.isEditable             = false
-        tv.isScrollEnabled        = false
-        tv.isUserInteractionEnabled = false
+        tv.isSelectable           = true
+        tv.isUserInteractionEnabled = true
         tv.backgroundColor        = .clear
         tv.textContainerInset     = .zero
         tv.textContainer.lineFragmentPadding = 0
+        tv.delegate               = context.coordinator
         return tv
     }
 
     func updateUIView(_ tv: UITextView, context: Context) {
-        if tv.attributedText != text {
-            tv.attributedText = text
+        context.coordinator.onHighlight = onHighlight
+        // 将高亮背景色叠加到 NSAttributedString
+        let mutable = NSMutableAttributedString(attributedString: text)
+        for h in highlights {
+            let safe = NSRange(
+                location: min(h.range.location, mutable.length),
+                length: min(h.range.length, mutable.length - min(h.range.location, mutable.length))
+            )
+            if safe.length > 0 {
+                mutable.addAttribute(.backgroundColor, value: h.color, range: safe)
+            }
         }
+        if tv.attributedText != mutable { tv.attributedText = mutable }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView tv: UITextView, context: Context) -> CGSize? {
         let w = proposal.width ?? UIScreen.main.bounds.width
         let size = tv.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude))
         return CGSize(width: w, height: size.height)
+    }
+
+    // MARK: - Coordinator
+
+    class Coordinator: NSObject, UITextViewDelegate {
+        var onHighlight: ((Int, Int, String, Int) -> Void)?
+        init(onHighlight: ((Int, Int, String, Int) -> Void)?) { self.onHighlight = onHighlight }
+
+        func textView(_ textView: UITextView,
+                      editMenuForTextIn range: UITextRange,
+                      suggestedActions: [UIMenuElement]) -> UIMenu? {
+            let colors: [(String, Int)] = [("黄色高亮", 0), ("绿色高亮", 1), ("蓝色高亮", 2), ("粉色高亮", 3)]
+            let hlItems = colors.map { (title, colorIdx) -> UIAction in
+                UIAction(title: title) { [weak textView, weak self] _ in
+                    guard let tv = textView,
+                          let sel = tv.selectedTextRange, !sel.isEmpty else { return }
+                    let s = tv.offset(from: tv.beginningOfDocument, to: sel.start)
+                    let e = tv.offset(from: tv.beginningOfDocument, to: sel.end)
+                    let text = tv.text(in: sel) ?? ""
+                    self?.onHighlight?(s, e, text, colorIdx)
+                }
+            }
+            let highlightMenu = UIMenu(title: "高亮", image: UIImage(systemName: "highlighter"),
+                                       children: hlItems)
+            return UIMenu(children: [highlightMenu] + suggestedActions)
+        }
     }
 }

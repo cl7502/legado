@@ -210,6 +210,20 @@ class DatabaseManager {
             }
         }
 
+        migrator.registerMigration("v9-highlights") { db in
+            try db.create(table: "book_highlights", ifNotExists: true) { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("bookUrl",      .text).notNull().indexed()
+                t.column("chapterIndex", .integer).notNull()
+                t.column("startOffset",  .integer).notNull()
+                t.column("endOffset",    .integer).notNull()
+                t.column("selectedText", .text).notNull().defaults(to: "")
+                t.column("color",        .integer).notNull().defaults(to: 0)
+                t.column("note",         .text)
+                t.column("createdAt",    .datetime).notNull()
+            }
+        }
+
         return migrator
     }
 }
@@ -371,6 +385,38 @@ extension DatabaseManager {
         guard let id = bookmark.id else { return }
         try await dbPool.write { db in
             try Bookmark.filter(Column("id") == id).deleteAll(db)
+        }
+    }
+
+    // MARK: - 高亮/划线 DAO
+
+    func getHighlights(bookUrl: String, chapterIndex: Int) async throws -> [BookHighlight] {
+        try await dbPool.read { db in
+            try BookHighlight
+                .filter(Column("bookUrl") == bookUrl && Column("chapterIndex") == chapterIndex)
+                .order(Column("startOffset").asc)
+                .fetchAll(db)
+        }
+    }
+
+    func getAllHighlights(bookUrl: String) async throws -> [BookHighlight] {
+        try await dbPool.read { db in
+            try BookHighlight
+                .filter(Column("bookUrl") == bookUrl)
+                .order(Column("chapterIndex").asc, Column("startOffset").asc)
+                .fetchAll(db)
+        }
+    }
+
+    func saveHighlight(_ highlight: BookHighlight) async throws {
+        var h = highlight
+        try await dbPool.write { db in try h.save(db) }
+    }
+
+    func deleteHighlight(_ highlight: BookHighlight) async throws {
+        guard let id = highlight.id else { return }
+        try await dbPool.write { db in
+            try BookHighlight.filter(Column("id") == id).deleteAll(db)
         }
     }
 }
