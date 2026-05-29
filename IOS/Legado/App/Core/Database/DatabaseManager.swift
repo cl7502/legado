@@ -224,6 +224,12 @@ class DatabaseManager {
             }
         }
 
+        migrator.registerMigration("v10-chapter-content-cache") { db in
+            try db.alter(table: "book_chapter") { t in
+                t.add(column: "content", .text)
+            }
+        }
+
         return migrator
     }
 }
@@ -329,6 +335,28 @@ extension DatabaseManager {
             try Chapter.filter(Column("bookUrl") == bookUrl)
                 .order(Column("index").asc)
                 .fetchAll(db)
+        }
+    }
+
+    /// 读取单章节缓存正文（nil = 未缓存或内容为空）
+    func getChapterContent(url: String) async -> String? {
+        try? await dbPool.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: "SELECT content FROM book_chapter WHERE url = ?",
+                arguments: [url]
+            )
+            return row?["content"] as? String
+        }
+    }
+
+    /// 持久化章节正文到 DB
+    func saveChapterContent(_ content: String, for chapterUrl: String) async {
+        try? await dbPool.write { db in
+            try db.execute(
+                sql: "UPDATE book_chapter SET content = ? WHERE url = ?",
+                arguments: [content, chapterUrl]
+            )
         }
     }
     

@@ -279,16 +279,26 @@ class ReaderViewModel: ObservableObject {
     func loadChapterContent(at index: Int) async {
         guard index < chapters.count else { return }
 
-        // 已缓存：若是当前章节且 currentPages 为空（如刚切章），直接重分页即可
+        // 内存命中 — 最快路径
         if chapterContents[index] != nil {
             if index == currentChapterIndex && currentPages.isEmpty {
                 paginateCurrentChapter()
             }
             return
         }
-        
+
         let chapter = chapters[index]
-        
+
+        // DB 缓存命中 — 跳过网络请求
+        if let cached = await db.getChapterContent(url: chapter.url), !cached.isEmpty {
+            chapterContents[index] = cached
+            if index == currentChapterIndex {
+                paginateCurrentChapter()
+                await syncProgress(chapter: chapter)
+            }
+            return
+        }
+
         do {
             let sources = try await db.getAllBookSources()
             guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
@@ -336,6 +346,9 @@ class ReaderViewModel: ObservableObject {
             }
 
             self.chapterContents[index] = content
+
+            // 持久化到 DB，下次进入直接从 DB 读取，跳过网络请求
+            await db.saveChapterContent(content, for: chapter.url)
 
             // 内容加载完成后立即分页，不等 SwiftUI onChange 触发
             if index == currentChapterIndex {
