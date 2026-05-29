@@ -106,9 +106,9 @@
 - **实现**：BookContentParser 保留 `<img>` 为 `⟨IMG:url⟩` 标记；MixedContentView 混合渲染文字+图片
 - **状态**：✅ 已完成
 
-### P2-5 · 笔记/划线
-- BookChapterReview 数据表
-- **状态**：⬜ 待实现（P3）
+### P2-5 · 笔记/划线 ✅ 已完成
+- **实现**：BookHighlight 模型 + DB v9 + iOS 16 edit menu 4色高亮 + HighlightListView
+- **状态**：✅ 已完成
 
 ### 渲染引擎 · TextKit 2 升级 ✅ 已完成
 - **实现**：ChapterPaginator 改用 NSTextLayoutManager；UITextView(usingTextLayoutManager: true) 渲染
