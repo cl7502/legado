@@ -321,13 +321,13 @@ extension DatabaseManager {
     
     func saveChapters(_ chapters: [Chapter], for bookUrl: String) async throws {
         try await dbPool.write { db in
-            // 先清空旧章节，避免 URL 主键不同导致新旧并存
-            // （章节 URL 可能因书源规则修正而改变，必须全量替换）
+            // 先删本书全部旧章节（URL 可能因书源规则修正而改变，需全量替换）
             try Chapter.filter(Column("bookUrl") == bookUrl).deleteAll(db)
             for chapter in chapters {
                 var c = chapter
                 c.bookUrl = bookUrl
-                try c.insert(db)
+                // save() = INSERT OR REPLACE，兼容其他残留记录
+                try c.save(db)
             }
         }
     }

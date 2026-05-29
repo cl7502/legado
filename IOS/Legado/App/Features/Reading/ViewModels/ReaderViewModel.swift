@@ -161,10 +161,7 @@ class ReaderViewModel: ObservableObject {
                                 ?? "第\(idx + 1)章"
                     var rawUrl = ruleExecutor.execute(source.ruleChapterUrl ?? "", in: &ctx) ?? ""
                     rawUrl = resolveUrl(rawUrl, base: pageBaseUrl)
-                    fetched.append(Chapter(
-                        url: rawUrl, title: title, index: idx,
-                        bookUrl: book.bookUrl
-                    ))
+                    fetched.append(Chapter(url: rawUrl, title: title, index: idx, bookUrl: book.bookUrl))
                 }
             }
 
