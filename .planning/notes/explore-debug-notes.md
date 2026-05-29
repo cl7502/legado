@@ -137,8 +137,8 @@ WHERE exploreUrl LIKE '%md5Encode%'
 
 ## 待加强的功能
 
-- [ ] Step 3 响应完整展示（当前截断 300 字符，复杂 JSON 看不全）
-- [ ] 候选数组多选展示，用户手动选择而非系统强制推断
-- [ ] `ruleExploreNoteUrl` 的 URL 模板推断（参考 `bookUrlPattern` 和同书源 `ruleSearchNoteUrl`）
-- [ ] 非标准字段名的值类型启发（URL / 中文短串 / 纯数字）
-- [ ] 一键对比 Android 版书源规则（从书源社区拉取同 URL 书源）
+- [x] Step 3 响应完整展示 ✅ 2026-05-28 — FullResponseSheet，文本可选择/可导出
+- [x] 候选数组多选展示 ✅ 2026-05-28 — Picker 展示最多8个候选，按打分排序
+- [x] `ruleExploreNoteUrl` 的 URL 模板推断 ✅ 2026-05-28 — 参考 ruleSearchNoteUrl/bookUrlPattern
+- [x] 非标准字段名的值类型启发 ✅ 2026-05-28 — 中文/图片URL/详情URL/纯数字四类
+- [x] 一键导出书源 JSON ✅ 2026-05-28 — 导航栏 ShareLink（注：自动对比社区规则未实现，改为手动导出后自行对比）
