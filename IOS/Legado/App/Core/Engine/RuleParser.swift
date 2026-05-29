@@ -85,22 +85,34 @@ class RuleParser {
     }
 
     /// Extract @put:{key:subRule} blocks from rule string.
+    /// 用括号深度计数而非正则匹配，支持子规则中含 } 的情况（如 @js: 块、JSON 访问器）。
     /// Returns (cleanedRule, putMap).
     private func extractPutMap(from rule: String) -> (String, [String: String]) {
         var putMap: [String: String] = [:]
-        let ns = rule as NSString
-        let matches = Self.putPattern.matches(in: rule, range: NSRange(location: 0, length: ns.length))
-        guard !matches.isEmpty else { return (rule, putMap) }
-
         var cleaned = rule
-        for match in matches.reversed() {
-            let fullMatch = ns.substring(with: match.range) // e.g. "@put:{bookId:div.book@data-id}"
-            let jsonStr = String(fullMatch.dropFirst(5))     // drop "@put:" → {bookId:div.book@data-id}
-            let parsed = parsePutContent(jsonStr)
-            putMap.merge(parsed) { _, new in new }
-            if let r = Range(match.range, in: cleaned) {
-                cleaned.removeSubrange(r)
+        var searchFrom = cleaned.startIndex
+
+        while let putRange = cleaned.range(of: "@put:{", range: searchFrom..<cleaned.endIndex) {
+            // 从 { 开始用深度计数找对应的闭合 }
+            var depth = 0
+            var endIdx: String.Index? = nil
+            var i = cleaned.index(before: putRange.upperBound) // 指向 {
+            while i < cleaned.endIndex {
+                if cleaned[i] == "{" { depth += 1 }
+                else if cleaned[i] == "}" {
+                    depth -= 1
+                    if depth == 0 { endIdx = i; break }
+                }
+                i = cleaned.index(after: i)
             }
+            guard let closingIdx = endIdx else { break }
+
+            let fullMatch = String(cleaned[putRange.lowerBound...closingIdx])
+            let jsonStr   = String(fullMatch.dropFirst(5)) // drop "@put:" → {key:rule}
+            let parsed    = parsePutContent(jsonStr)
+            putMap.merge(parsed) { _, new in new }
+            cleaned.removeSubrange(putRange.lowerBound...closingIdx)
+            searchFrom = putRange.lowerBound < cleaned.endIndex ? putRange.lowerBound : cleaned.endIndex
         }
         return (cleaned.trimmingCharacters(in: .whitespacesAndNewlines), putMap)
     }
@@ -124,7 +136,7 @@ class RuleParser {
             return dict
         }
 
-        // Fallback: simple first-colon split for single key-value pair
+        // Fallback: first-colon split — key 是纯字母数字，value 取剩余全部（支持含 : 的子规则）
         s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
         if let colonIdx = s.firstIndex(of: ":") {
             let key = s[..<colonIdx]

@@ -258,11 +258,13 @@ class RuleExecutor {
     // MARK: - ## regex replacement (Android SourceRule.makeUpRule split logic)
 
     /// Split "rule##matchPattern##replacement[##replaceFirst]"
+    /// 最多切 3 次：replacement 自身可能含 ##（如 URL 规范化），须合并剩余段。
     private func splitHashHash(_ rule: String) -> (core: String, pattern: String, replacement: String, replaceFirst: Bool) {
-        let parts = rule.components(separatedBy: "##")
+        let parts       = rule.components(separatedBy: "##")
         let core        = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
         let pattern     = parts.count > 1 ? parts[1] : ""
-        let replacement = parts.count > 2 ? parts[2] : ""
+        // parts[2...] 合并回 replacement，保留其中的 ##
+        let replacement = parts.count > 2 ? parts[2...].joined(separator: "##") : ""
         let replaceFirst = parts.count > 3
         return (core, pattern, replacement, replaceFirst)
     }
@@ -274,14 +276,11 @@ class RuleExecutor {
             let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
             let range = NSRange(text.startIndex..., in: text)
             if replaceFirst {
+                // 无匹配时返回原文（Android 行为），而非 replacement 本身
                 if let match = regex.firstMatch(in: text, range: range) {
-                    let matched = (text as NSString).substring(with: match.range)
-                    let replaced = regex.stringByReplacingMatches(
-                        in: matched, range: NSRange(matched.startIndex..., in: matched),
-                        withTemplate: replacement)
-                    return (text as NSString).replacingCharacters(in: match.range, with: replaced)
+                    return regex.stringByReplacingMatches(in: text, range: match.range, withTemplate: replacement)
                 }
-                return replacement
+                return text
             } else {
                 return regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
             }
