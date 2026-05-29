@@ -66,8 +66,10 @@ class DeepCheckViewModel: ObservableObject {
 
     // MARK: - Single-source: user triggers search after explore
     func runSearchFor(sourceUrl: String) async {
-        guard let idx = await MainActor.run(body: { entries.firstIndex(where: { $0.id == sourceUrl }) }),
-              await MainActor.run(body: { entries[idx].result.hasSearch }) else { return }
+        guard let (idx, hasSearch) = await MainActor.run(body: { () -> (Int, Bool)? in
+            guard let i = self.entries.firstIndex(where: { $0.id == sourceUrl }) else { return nil }
+            return (i, self.entries[i].result.hasSearch)
+        }), hasSearch else { return }
         let source = await getSource(url: sourceUrl)
         guard let source else { return }
 
@@ -124,6 +126,9 @@ class DeepCheckViewModel: ObservableObject {
     // MARK: - Internal
 
     private func runOneSource(_ source: BookSource) async {
+        // Snapshot main-actor-isolated config values before async work
+        let alsoRunSearch = await MainActor.run { self.alsoRunSearch }
+        let searchKeyword = await MainActor.run { self.searchKeyword }
         guard !Task.isCancelled else {
             await addCancelledEntry(source); return
         }
