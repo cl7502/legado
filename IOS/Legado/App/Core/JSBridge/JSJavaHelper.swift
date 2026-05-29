@@ -60,6 +60,8 @@ import CommonCrypto
     // HTML helpers
     func queryTextContent(_ html: String, _ cssSelector: String) -> String?
     func queryAllTextContent(_ html: String, _ cssSelector: String) -> String
+    /// Android JsExtensions.getElements — CSS 选择当前 result 中的元素，返回 outerHTML 数组
+    func getElements(_ cssSelector: String) -> JSValue?
 
     // Font decryption (ISSUE-016)
     func queryTTF(_ str: String) -> QueryTTFProxy?
@@ -373,6 +375,15 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     func queryAllTextContent(_ html: String, _ cssSelector: String) -> String {
         let els = (try? SwiftSoup.parse(html).select(cssSelector)) ?? Elements()
         return els.array().compactMap { try? $0.text() }.joined(separator: "\n")
+    }
+
+    func getElements(_ cssSelector: String) -> JSValue? {
+        guard let jsCtx = JSContext.current() else { return nil }
+        let html: String
+        if let s = currentContext?.result as? String { html = s }
+        else { return JSValue(undefinedIn: jsCtx) }
+        let outerHtmls = HTMLParser.shared.cssList(html, query: cssSelector)
+        return JSValue(object: outerHtmls, in: jsCtx)
     }
 
     // MARK: - Font decryption (ISSUE-016)

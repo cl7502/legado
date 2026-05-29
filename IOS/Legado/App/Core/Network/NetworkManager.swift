@@ -140,7 +140,9 @@ class NetworkManager {
     // Background queue for sync response callbacks — prevents deadlock when
     // requestSync is called from the main thread (e.g. inside JS evaluation
     // on a @MainActor context), since Alamofire's default response queue is main.
-    private let syncCallbackQueue = DispatchQueue(label: "com.legado.sync", qos: .utility)
+    // QoS set to .userInitiated to avoid priority inversion when called from
+    // the main (User-interactive) thread.
+    private let syncCallbackQueue = DispatchQueue(label: "com.legado.sync", qos: .userInitiated)
 
     func requestSync(_ url: String, method: String = "GET", body: String? = nil,
                      headers: [String: String]? = nil) -> String? {
