@@ -17,6 +17,7 @@
 		CC000002CC000002CC000002 /* QueryTTF.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000001CC000001CC000001 /* QueryTTF.swift */; };
 		EB8B314DCD492A3103F4F715 /* BookSourceCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62D0CE57F58E9E961E41DF78 /* BookSourceCheckView.swift */; };
 		A1B2C3D4E5F60011A2B3C4D5 /* DeepCheckConfigSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60010A2B3C4D5 /* DeepCheckConfigSheet.swift */; };
+		DC001122334455667788BB01 /* DeepCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC001122334455667788BB00 /* DeepCheckView.swift */; };
 		17EABFDE74A91843DA479BBE /* BookSourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58A64AE613625A1A6F5060F0 /* BookSourceListView.swift */; };
 		1FBB4996EDF285553CA8187D /* ReaderSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC05B10A239C4AA6842C5BD /* ReaderSettingsSheet.swift */; };
 		AA11BB22CC33DD44EE55FF01 /* ExploreUrlParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF00 /* ExploreUrlParser.swift */; };
@@ -94,6 +95,7 @@
 		4C1F46449628245C8AE756AB /* BookInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookInfoView.swift; sourceTree = "<group>"; };
 		62D0CE57F58E9E961E41DF78 /* BookSourceCheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSourceCheckView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60010A2B3C4D5 /* DeepCheckConfigSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepCheckConfigSheet.swift; sourceTree = "<group>"; };
+		DC001122334455667788BB00 /* DeepCheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepCheckView.swift; sourceTree = "<group>"; };
 		58A64AE613625A1A6F5060F0 /* BookSourceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSourceListView.swift; sourceTree = "<group>"; };
 		5E494EB6E5276C0FA16C637F /* Legado.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Legado.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5F66B313E91F18FD0A376B6A /* LegadoInterceptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegadoInterceptor.swift; sourceTree = "<group>"; };
@@ -367,6 +369,7 @@
 				F47495D6DEE05C3DB85E4BD4 /* BookSourceEditView.swift */,
 				62D0CE57F58E9E961E41DF78 /* BookSourceCheckView.swift */,
 				A1B2C3D4E5F60010A2B3C4D5 /* DeepCheckConfigSheet.swift */,
+				DC001122334455667788BB00 /* DeepCheckView.swift */,
 				58A64AE613625A1A6F5060F0 /* BookSourceListView.swift */,
 				4219C4F1F814AB2E7305C338 /* ExploreView.swift */,
 				E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */,
@@ -489,6 +492,7 @@
 				5C35AEB5B7424C663AF6FDB2 /* BookSourceEditView.swift in Sources */,
 				EB8B314DCD492A3103F4F715 /* BookSourceCheckView.swift in Sources */,
 				A1B2C3D4E5F60011A2B3C4D5 /* DeepCheckConfigSheet.swift in Sources */,
+				DC001122334455667788BB01 /* DeepCheckView.swift in Sources */,
 				A1B2C3D4E5F60002A2B3C4D5 /* AsyncSemaphore.swift in Sources */,
 				A1B2C3D4E5F60004A2B3C4D5 /* DeepCheckModels.swift in Sources */,
 				AA11BB22CC33DD44EE55FF01 /* ExploreUrlParser.swift in Sources */,
