@@ -187,30 +187,6 @@ class BookSourceCheckViewModel: ObservableObject {
     }
 }
 
-// 简单异步信号量，限制并发数
-actor AsyncSemaphore {
-    private var count: Int
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    init(_ count: Int) { self.count = count }
-
-    func wait() async {
-        if count > 0 {
-            count -= 1
-        } else {
-            await withCheckedContinuation { cont in waiters.append(cont) }
-        }
-    }
-
-    func signal() {
-        if waiters.isEmpty {
-            count += 1
-        } else {
-            waiters.removeFirst().resume()
-        }
-    }
-}
-
 // MARK: - 检测配置 Sheet
 
 struct BookSourceCheckConfigSheet: View {
