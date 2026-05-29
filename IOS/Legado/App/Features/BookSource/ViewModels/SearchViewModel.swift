@@ -111,7 +111,8 @@ class SearchViewModel: ObservableObject {
 
                 let name    = ruleExecutor.execute(source.ruleSearchName    ?? "", in: &ctx) ?? ""
                 let author  = ruleExecutor.execute(source.ruleSearchAuthor  ?? "", in: &ctx) ?? ""
-                let bookUrl = ruleExecutor.execute(source.ruleSearchNoteUrl ?? "", in: &ctx) ?? ""
+                let rawBookUrl = ruleExecutor.execute(source.ruleSearchNoteUrl ?? "", in: &ctx) ?? ""
+                let bookUrl    = AnalyzeUrl.parse(rawBookUrl, context: ctx).url
                 guard !name.isEmpty, !bookUrl.isEmpty else { return nil }
 
                 let coverUrl      = ruleExecutor.execute(source.ruleSearchCoverUrl   ?? "", in: &ctx)

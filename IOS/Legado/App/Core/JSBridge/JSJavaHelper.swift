@@ -382,8 +382,10 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         let html: String
         if let s = currentContext?.result as? String { html = s }
         else { return JSValue(undefinedIn: jsCtx) }
-        let outerHtmls = HTMLParser.shared.cssList(html, query: cssSelector)
-        return JSValue(object: outerHtmls, in: jsCtx)
+        // 返回 [ElementWrapper]，JSCore 自动桥接为 JS 数组，每个元素支持 .select()/.attr()/.text()
+        let wrappers = HTMLParser.shared.cssList(html, query: cssSelector)
+            .map { ElementWrapper($0) }
+        return JSValue(object: wrappers, in: jsCtx)
     }
 
     // MARK: - Font decryption (ISSUE-016)
@@ -492,4 +494,51 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
 @objc final class QueryTTFProxy: NSObject, QueryTTFProxyProtocol {
     let ttf: QueryTTF
     init(_ ttf: QueryTTF) { self.ttf = ttf }
+}
+
+// MARK: - ElementWrapper — DOM-like element wrapper for java.getElements()
+
+/// Android JsExtensions 返回的元素对象，支持 .select() / .attr() / .text() 链式调用。
+/// 例：lis[i].select('a').attr('href')
+@objc protocol ElementWrapperProtocol: JSExport {
+    /// 在当前元素内查找第一个匹配的子元素，返回 ElementWrapper
+    func select(_ css: String) -> ElementWrapper?
+    /// 获取当前元素的属性值
+    func attr(_ name: String) -> String
+    /// 获取当前元素的纯文本内容
+    func text() -> String
+    /// 获取当前元素的 inner HTML
+    func html() -> String
+}
+
+@objc final class ElementWrapper: NSObject, ElementWrapperProtocol {
+    let outerHtml: String
+
+    init(_ outerHtml: String) {
+        self.outerHtml = outerHtml
+    }
+
+    func select(_ css: String) -> ElementWrapper? {
+        // HTMLParser.cssList 返回 outerHTML 数组，取第一个
+        let results = HTMLParser.shared.cssList(outerHtml, query: css)
+        return results.first.map { ElementWrapper($0) }
+    }
+
+    func attr(_ name: String) -> String {
+        guard let doc = try? SwiftSoup.parse(outerHtml),
+              let el = doc.body()?.children().first() else { return "" }
+        return (try? el.attr(name)) ?? ""
+    }
+
+    func text() -> String {
+        guard let doc = try? SwiftSoup.parse(outerHtml),
+              let el = doc.body()?.children().first() else { return "" }
+        return (try? el.text()) ?? ""
+    }
+
+    func html() -> String {
+        guard let doc = try? SwiftSoup.parse(outerHtml),
+              let el = doc.body()?.children().first() else { return "" }
+        return (try? el.html()) ?? ""
+    }
 }

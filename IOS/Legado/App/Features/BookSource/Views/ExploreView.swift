@@ -278,7 +278,9 @@ class ExploreBookListViewModel: ObservableObject {
 
                 let name    = ruleExecutor.execute(source.ruleExploreName    ?? "", in: &itemCtx) ?? ""
                 let author  = ruleExecutor.execute(source.ruleExploreAuthor  ?? "", in: &itemCtx) ?? ""
-                let bookUrl = ruleExecutor.execute(source.ruleExploreNoteUrl ?? "", in: &itemCtx) ?? ""
+                // 剥离 URL options JSON（如 url,{"js":"..."}），只保留纯 URL
+                let rawBookUrl = ruleExecutor.execute(source.ruleExploreNoteUrl ?? "", in: &itemCtx) ?? ""
+                let bookUrl    = AnalyzeUrl.parse(rawBookUrl, context: itemCtx).url
                 let coverUrl = ruleExecutor.execute(source.ruleExploreCoverUrl ?? "", in: &itemCtx)
                 let kind    = ruleExecutor.execute(source.ruleExploreKind    ?? "", in: &itemCtx)
 
