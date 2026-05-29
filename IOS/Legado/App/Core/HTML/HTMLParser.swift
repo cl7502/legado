@@ -405,18 +405,22 @@ class HTMLParser {
         return result
     }
 
-    /// Split on `@` that are NOT inside square brackets `[...]`.
+    /// Split on `@` that are NOT inside square brackets `[...]` or parentheses `(...)`.
     /// Mirrors Android RuleAnalyzer.splitRule("@") which skips @ inside predicates.
     /// e.g. "div[class*='x']@a@href" → ["div[class*='x']", "a", "href"]
+    /// e.g. "div:not(.ad)@a@href" — parens inside CSS pseudo-class must be preserved
     private func splitOnAt(_ query: String) -> [String] {
         var parts: [String] = []
         var current = ""
-        var depth = 0
+        var bracketDepth = 0
+        var parenDepth = 0
         for ch in query {
             switch ch {
-            case "[": depth += 1; current.append(ch)
-            case "]": depth = max(0, depth - 1); current.append(ch)
-            case "@" where depth == 0:
+            case "[": bracketDepth += 1; current.append(ch)
+            case "]": bracketDepth = max(0, bracketDepth - 1); current.append(ch)
+            case "(": parenDepth += 1; current.append(ch)
+            case ")": parenDepth = max(0, parenDepth - 1); current.append(ch)
+            case "@" where bracketDepth == 0 && parenDepth == 0:
                 let p = current.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !p.isEmpty { parts.append(p) }
                 current = ""
@@ -434,7 +438,7 @@ class HTMLParser {
     /// Mirrors Android AnalyzeByJSoup.getResultLast() known-keyword check.
     private func isAttributeKeyword(_ s: String) -> Bool {
         let knownKeywords: Set<String> = [
-            "text", "html", "outerhtml", "textnodes", "all", "raw"
+            "text", "html", "outerhtml", "textnodes", "all", "raw", "owntext"
         ]
         if knownKeywords.contains(s.lowercased()) { return true }
 
@@ -485,6 +489,10 @@ class HTMLParser {
         guard let attr = attr else { return try element.text() }
         switch attr.lowercased() {
         case "text":      return try element.text()
+        case "owntext":   // 仅直接文本节点，不含子元素文本
+            let texts = element.textNodes().map { $0.text().trimmingCharacters(in: .whitespaces) }
+                                           .filter { !$0.isEmpty }
+            return texts.isEmpty ? nil : texts.joined(separator: "\n")
         case "textnodes": // Android: direct text nodes only (no children)
             let texts = element.textNodes().map { $0.text().trimmingCharacters(in: .whitespaces) }
                                            .filter { !$0.isEmpty }

@@ -51,6 +51,9 @@ class NetworkManager {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60
+        // 书源请求不应使用缓存（防止同 URL 返回旧响应）
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
         session = Session(configuration: config, interceptor: interceptor)
     }
 

@@ -139,6 +139,11 @@ class SearchViewModel: ObservableObject {
 
     nonisolated private func resolveUrl(_ url: String, base: String) -> String {
         if url.hasPrefix("http") { return url }
+        // 协议相对 URL（//example.com/path）：补全 base 的 scheme
+        if url.hasPrefix("//") {
+            if let scheme = URL(string: base)?.scheme { return "\(scheme):\(url)" }
+            return "https:\(url)"
+        }
         guard let baseURL = URL(string: base),
               let resolved = URL(string: url, relativeTo: baseURL) else { return url }
         return resolved.absoluteString
@@ -215,7 +220,12 @@ struct AnalyzeUrl {
                 if let result = LegadoJSEngine.shared.evaluateRule(jsCode, in: &ctx),
                    !result.isEmpty {
                     tmpl = result
+                } else {
+                    // JS 执行失败或返回空 — 无法生成有效 URL，终止解析
+                    return AnalyzeUrl(url: "")
                 }
+            } else {
+                return AnalyzeUrl(url: "")
             }
         }
 
@@ -231,7 +241,7 @@ struct AnalyzeUrl {
                 guard let r = Range(match.range, in: tmpl),
                       let inner = Range(match.range(at: 1), in: tmpl) else { continue }
                 let choices = tmpl[inner].components(separatedBy: ",")
-                let idx = min(page - 1, choices.count - 1)
+                let idx = max(0, min(page - 1, choices.count - 1))
                 tmpl.replaceSubrange(r, with: choices[idx].trimmingCharacters(in: .whitespaces))
             }
         }
@@ -328,14 +338,15 @@ struct AnalyzeUrl {
         return result
     }
 
-    // Find the first comma that is NOT inside a {{ }} or < > or [ ] block
+    // Find the first comma that is NOT inside a {{ }} or [ ] block
+    // 注意：不追踪 <> 深度，避免 URL 中的 < > 导致逗号定位错误
     private static func findOptionComma(in s: String) -> String.Index? {
         var depth = 0
         var i = s.startIndex
         while i < s.endIndex {
             let ch = s[i]
-            if ch == "{" || ch == "[" || ch == "<" { depth += 1 }
-            else if ch == "}" || ch == "]" || ch == ">" { depth = max(0, depth - 1) }
+            if ch == "{" || ch == "[" { depth += 1 }
+            else if ch == "}" || ch == "]" { depth = max(0, depth - 1) }
             else if ch == "," && depth == 0 { return i }
             i = s.index(after: i)
         }

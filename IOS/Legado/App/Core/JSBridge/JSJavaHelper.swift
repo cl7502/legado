@@ -72,6 +72,16 @@ import CommonCrypto
     func getBook() -> String?
     func getCookie(_ tag: String) -> String?
     func setCookie(_ tag: String, _ value: String)
+    func removeCookie(_ tag: String)
+    func clearCookies()
+
+    // Text / array helpers
+    func toast(_ message: Any)
+    func getString(_ strArray: JSValue) -> String
+    func getStringArray(_ str: String) -> JSValue?
+
+    // Crypto
+    func rsaEncrypt(_ data: String, _ key: String, _ transformation: String) -> String
 
     // Time / system
     func getNetworkTime() -> String
@@ -235,26 +245,18 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     }
 
     func htmlDecode(_ text: String) -> String {
-        // SwiftSoup can unescape HTML entities
-        return (try? SwiftSoup.parse(text).text()) ?? text
-            .replacingOccurrences(of: "&amp;",  with: "&")
-            .replacingOccurrences(of: "&lt;",   with: "<")
-            .replacingOccurrences(of: "&gt;",   with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;",  with: "'")
+        (try? Entities.unescape(text)) ?? text
     }
 
     func hexDecodeToString(_ hex: String) -> String {
-        var result = ""
+        var bytes: [UInt8] = []
         var i = hex.startIndex
         while i < hex.endIndex {
             let next = hex.index(i, offsetBy: 2, limitedBy: hex.endIndex) ?? hex.endIndex
-            if let byte = UInt8(hex[i..<next], radix: 16) {
-                result.append(Character(UnicodeScalar(byte)))
-            }
+            if let byte = UInt8(hex[i..<next], radix: 16) { bytes.append(byte) }
             i = next
         }
-        return result
+        return String(bytes: bytes, encoding: .utf8) ?? String(bytes: bytes, encoding: .isoLatin1) ?? ""
     }
 
     func hexEncodeToString(_ utf8: String) -> String {
@@ -428,18 +430,77 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
 
     func getBook() -> String? {
         guard let ctx = currentContext,
-              let data = try? JSONEncoder().encode(ctx.source),
+              let book = ctx.book,
+              let data = try? JSONEncoder().encode(book),
               let json = String(data: data, encoding: .utf8)
         else { return nil }
         return json
     }
 
     func getCookie(_ tag: String) -> String? {
-        CookieManager.shared.getCookie(for: tag)
+        // Tag 直接查找（setCookie 存储方式）；失败后再走 URL host 解析
+        if let v = CookieManager.shared.getCookie(forTag: tag) { return v }
+        return CookieManager.shared.getCookie(for: tag)
     }
 
     func setCookie(_ tag: String, _ value: String) {
         CookieManager.shared.saveCookie(forTag: tag, value: value)
+    }
+
+    func removeCookie(_ tag: String) {
+        CookieManager.shared.removeCookie(forTag: tag)
+    }
+
+    func clearCookies() {
+        CookieManager.shared.clearAll()
+    }
+
+    func toast(_ message: Any) {
+        print("📖 [JS Toast]: \(message)")
+    }
+
+    func getString(_ strArray: JSValue) -> String {
+        guard let arr = strArray.toArray() else { return "" }
+        let strs = arr.compactMap { $0 as? String }
+        return strs.isEmpty ? "" : strs[Int.random(in: 0..<strs.count)]
+    }
+
+    func getStringArray(_ str: String) -> JSValue? {
+        guard let jsCtx = JSContext.current() else { return nil }
+        let arr = str.components(separatedBy: ",")
+                     .map { $0.trimmingCharacters(in: .whitespaces) }
+        return JSValue(object: arr, in: jsCtx)
+    }
+
+    func rsaEncrypt(_ data: String, _ key: String, _ transformation: String) -> String {
+        let upper = transformation.uppercased()
+        let useOAEP = upper.contains("OAEP")
+        let padding: SecKeyAlgorithm = useOAEP
+            ? .rsaEncryptionOAEPSHA1
+            : .rsaEncryptionPKCS1
+
+        // key 可能是 Base64 DER 或 PEM；剥离 PEM 头尾后解码
+        var b64 = key
+            .replacingOccurrences(of: "-----BEGIN PUBLIC KEY-----", with: "")
+            .replacingOccurrences(of: "-----END PUBLIC KEY-----", with: "")
+            .replacingOccurrences(of: "-----BEGIN RSA PUBLIC KEY-----", with: "")
+            .replacingOccurrences(of: "-----END RSA PUBLIC KEY-----", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: " ", with: "")
+        let rem = b64.count % 4
+        if rem > 0 { b64 += String(repeating: "=", count: 4 - rem) }
+        guard let keyData = Data(base64Encoded: b64) else { return "" }
+
+        let attrs: [String: Any] = [
+            kSecAttrKeyType as String:       kSecAttrKeyTypeRSA,
+            kSecAttrKeyClass as String:      kSecAttrKeyClassPublic,
+        ]
+        var error: Unmanaged<CFError>?
+        guard let secKey = SecKeyCreateWithData(keyData as CFData, attrs as CFDictionary, &error),
+              let plainData = data.data(using: .utf8),
+              let encData = SecKeyCreateEncryptedData(secKey, padding, plainData as CFData, &error)
+        else { return "" }
+        return (encData as Data).base64EncodedString()
     }
 
     // MARK: - Time / system

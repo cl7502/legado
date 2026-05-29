@@ -41,6 +41,17 @@ class CookieManager {
         saveToDisk()
     }
 
+    /// 按 tag 直接读取（对标 Android JsExtensions.getCookie(tag)）
+    func getCookie(forTag tag: String) -> String? {
+        cookies[tag]
+    }
+
+    /// 按 tag 删除（对标 Android JsExtensions.removeCookie(tag)）
+    func removeCookie(forTag tag: String) {
+        cookies.removeValue(forKey: tag)
+        saveToDisk()
+    }
+
     /// 清理所有 Cookie
     func clearAll() {
         cookies.removeAll()
