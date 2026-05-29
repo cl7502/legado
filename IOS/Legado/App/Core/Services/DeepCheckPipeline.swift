@@ -211,4 +211,120 @@ struct DeepCheckPipeline {
         }
         return sourceBase + (url.hasPrefix("/") ? "" : "/") + url
     }
+
+    // MARK: - Search Pipeline (3 steps)
+
+    static func runSearch(
+        source: BookSource,
+        keyword: String = "小说",
+        onStep: @escaping (DeepCheckStepResult) -> Void
+    ) async -> [DeepCheckStepResult] {
+        let inner = Task<[DeepCheckStepResult], Never> {
+            await _runSearch(source: source, keyword: keyword, onStep: onStep)
+        }
+        let timeout = Task {
+            try? await Task.sleep(nanoseconds: UInt64(perSourceTimeout * 1_000_000_000))
+            inner.cancel()
+        }
+        let result = await inner.value
+        timeout.cancel()
+        return result
+    }
+
+    private static func _runSearch(
+        source: BookSource,
+        keyword: String,
+        onStep: @escaping (DeepCheckStepResult) -> Void
+    ) async -> [DeepCheckStepResult] {
+        // Pre-initialise all 3 search steps as .pending (rawValue 5-7)
+        var steps = (5..<8).map { DeepCheckStepResult.pending(DeepCheckStepKind(rawValue: $0)!) }
+
+        func emit(_ s: DeepCheckStepResult) { onStep(s) }
+        func skipFrom(_ localIdx: Int, reason: String? = nil) {
+            for j in localIdx..<3 {
+                steps[j].status = .skipped
+                steps[j].errorMessage = reason
+                emit(steps[j])
+            }
+        }
+
+        // ── Step 1: fetchSearchPage ──────────────────────────────────────────
+        guard !Task.isCancelled else { skipFrom(0, reason: "已取消"); return steps }
+        steps[0].status = .running; emit(steps[0])
+
+        guard let searchTmpl = source.searchUrl, !searchTmpl.isEmpty else {
+            steps[0].status = .failed; steps[0].errorMessage = "searchUrl 未配置"
+            emit(steps[0]); skipFrom(1); return steps
+        }
+        var baseCtx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
+        let parsedSearch = AnalyzeUrl.parse(
+            searchTmpl, variables: ["key": keyword, "page": "1"], context: baseCtx)
+        let searchUrl = parsedSearch.url.hasPrefix("http") ? parsedSearch.url
+                      : source.bookSourceUrl + parsedSearch.url
+        var searchHeaders = parsedSearch.headers
+        source.headerDictionary.forEach { searchHeaders[$0.key] = $0.value }
+
+        let t1 = Date()
+        let searchBody: String
+        do {
+            if parsedSearch.webView {
+                searchBody = (try? await HeadlessWebViewLoader.fetch(
+                    urlString: searchUrl, headers: searchHeaders, injectJs: parsedSearch.webJs)) ?? ""
+            } else {
+                searchBody = try await NetworkManager.shared.request(
+                    searchUrl, headers: HTTPHeaders(searchHeaders), source: source)
+            }
+        } catch {
+            steps[0].durationMs = ms(since: t1)
+            steps[0].status = .failed; steps[0].errorMessage = error.localizedDescription
+            emit(steps[0]); skipFrom(1); return steps
+        }
+        steps[0].durationMs = ms(since: t1)
+        guard !searchBody.isEmpty else {
+            steps[0].status = .failed; steps[0].errorMessage = "搜索响应体为空"
+            emit(steps[0]); skipFrom(1); return steps
+        }
+        steps[0].status = .passed; steps[0].summary = "HTTP 200"
+        steps[0].detailPreview = String(searchBody.prefix(300)); emit(steps[0])
+
+        // ── Step 2: parseSearchList ──────────────────────────────────────────
+        guard !Task.isCancelled else { skipFrom(1, reason: "已取消"); return steps }
+        steps[1].status = .running; emit(steps[1])
+
+        guard let listRule = source.ruleSearchList,
+              !listRule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            steps[1].status = .failed; steps[1].errorMessage = "ruleSearchList 未配置"
+            emit(steps[1]); skipFrom(2); return steps
+        }
+        let t2 = Date()
+        var listCtx = AnalyzeContext(source: source, baseUrl: searchUrl)
+        listCtx.result = searchBody
+        let items = RuleExecutor.shared.executeList(listRule, in: &listCtx)
+        steps[1].durationMs = ms(since: t2)
+        guard !items.isEmpty else {
+            steps[1].status = .failed; steps[1].errorMessage = "搜索结果为空（0条）"
+            emit(steps[1]); skipFrom(2); return steps
+        }
+        steps[1].status = .passed; steps[1].summary = "\(items.count)条搜索结果"; emit(steps[1])
+
+        // ── Step 3: parseSearchFields ────────────────────────────────────────
+        guard !Task.isCancelled else { skipFrom(2, reason: "已取消"); return steps }
+        steps[2].status = .running; emit(steps[2])
+
+        let t3 = Date()
+        var itemCtx = AnalyzeContext(source: source, baseUrl: searchUrl)
+        itemCtx.result = items[0]
+        let name = execute(source.ruleSearchName ?? "", ctx: &itemCtx)
+        let noteUrlRaw = execute(source.ruleSearchNoteUrl ?? "", ctx: &itemCtx)
+        steps[2].durationMs = ms(since: t3)
+        guard !name.isEmpty else {
+            steps[2].status = .failed; steps[2].errorMessage = "书名解析为空（ruleSearchName）"
+            emit(steps[2]); return steps
+        }
+        steps[2].status = .passed
+        steps[2].summary = "《\(name)》"
+        steps[2].detailPreview = "名：\(name)\n链接：\(noteUrlRaw.isEmpty ? "（无）" : noteUrlRaw)"
+        emit(steps[2])
+        return steps
+    }
 }
