@@ -481,57 +481,11 @@ class ExploreDebugViewModel: ObservableObject {
         print("🏁 [ExploreDebug] run() 结束")
     }
 
-    // MARK: - Category parsing — mirrors ExploreCategoryViewModel exactly
+    // MARK: - Category parsing — delegates to shared ExploreUrlParser
 
     private func parseCategories(source: BookSource) -> [ExploreCategory] {
-        guard let rawInput = source.exploreUrl,
-              !rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
-
-        var raw = rawInput
-        let trimmed = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("@js:") || trimmed.lowercased().hasPrefix("javascript:") {
-            let ctx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
-            let p = AnalyzeUrl.parse(raw, context: ctx)
-            if p.url.lowercased().hasPrefix("http") { raw = p.url }
-        }
-
-        if let data = raw.data(using: .utf8),
-           let arr = try? JSONDecoder().decode([ExploreCategory].self, from: data) {
-            let cats = arr.compactMap { cat -> ExploreCategory? in
-                let u = cat.url.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !u.isEmpty else { return nil }
-                let t = cat.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                return ExploreCategory(title: t.isEmpty ? "全部" : t, url: u)
-            }
-            if !cats.isEmpty { return cats }
-        }
-
-        let lines = raw.components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        if lines.count > 1 || lines.first?.contains("::") == true || lines.first?.contains(",http") == true {
-            let cats = lines.compactMap { line -> ExploreCategory? in
-                if line.contains("::") {
-                    let parts = line.components(separatedBy: "::")
-                    let title = parts[0].trimmingCharacters(in: .whitespaces)
-                    let url   = parts.dropFirst().joined(separator: "::").trimmingCharacters(in: .whitespaces)
-                    guard !url.isEmpty else { return nil }
-                    return ExploreCategory(title: title.isEmpty ? "全部" : title, url: url)
-                } else if let r = line.range(of: ",http") {
-                    let title = String(line[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
-                    let url   = "http" + String(line[r.upperBound...]).trimmingCharacters(in: .whitespaces)
-                    return ExploreCategory(title: title.isEmpty ? "全部" : title, url: url)
-                } else if line.hasPrefix("http") {
-                    return ExploreCategory(title: "全部", url: line)
-                } else if line.hasPrefix("/") || line.hasPrefix("./") {
-                    return ExploreCategory(title: "全部", url: line)
-                }
-                return nil
-            }
-            if !cats.isEmpty { return cats }
-        }
-
-        return [ExploreCategory(title: "全部", url: raw)]
+        let ctx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
+        return ExploreUrlParser.parse(source.exploreUrl ?? "", context: ctx)
     }
 
     // MARK: - 智能修复

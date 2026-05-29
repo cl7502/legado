@@ -153,71 +153,9 @@ class ExploreCategoryViewModel: ObservableObject {
     func loadCategories(source: BookSource) async {
         isLoading = true
         defer { isLoading = false }
-
-        guard let rawInput = source.exploreUrl,
-              !rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-
-        // If exploreUrl starts with @js:, evaluate it first to get the real URL/content.
-        // Android AnalyzeUrl evaluates @js: prefix before any further URL processing.
-        var raw = rawInput
-        let trimmed = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("@js:") || trimmed.lowercased().hasPrefix("javascript:") {
-            let ctx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
-            let parsed = AnalyzeUrl.parse(raw, context: ctx)
-            if parsed.url.lowercased().hasPrefix("http") {
-                raw = parsed.url
-            }
-        }
-
-        // 1. JSON 数组格式：[{"title":"...","url":"..."}]
-        if let data = raw.data(using: .utf8),
-           let arr = try? JSONDecoder().decode([ExploreCategory].self, from: data) {
-            // Filter section headers with empty URLs and trim whitespace in titles
-            categories = arr.compactMap { cat -> ExploreCategory? in
-                let u = cat.url.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !u.isEmpty else { return nil }
-                let t = cat.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                return ExploreCategory(title: t.isEmpty ? "全部" : t, url: u)
-            }
-            if !categories.isEmpty { return }
-        }
-
-        // 2. 换行分隔格式（Android 常用）：
-        //    "分类名::http://..." 或 "分类名,http://..." 或 纯 URL（每行一个）
-        let lines = raw.components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        if lines.count > 1 || lines.first?.contains("::") == true || lines.first?.contains(",http") == true {
-            categories = lines.compactMap { line -> ExploreCategory? in
-                if line.contains("::") {
-                    let parts = line.components(separatedBy: "::")
-                    let title = parts[0].trimmingCharacters(in: .whitespaces)
-                    let url   = parts.dropFirst().joined(separator: "::").trimmingCharacters(in: .whitespaces)
-                    guard !url.isEmpty else { return nil }
-                    return ExploreCategory(title: title.isEmpty ? "全部" : title, url: url)
-                } else if let commaRange = line.range(of: ",http") {
-                    let title = String(line[line.startIndex..<commaRange.lowerBound]).trimmingCharacters(in: .whitespaces)
-                    let url   = String(line[commaRange.upperBound...]).trimmingCharacters(in: .whitespaces)
-                    let fullUrl = "http" + url  // restore dropped "http" prefix
-                    return ExploreCategory(title: title.isEmpty ? "全部" : title, url: fullUrl)
-                } else if line.hasPrefix("http") {
-                    return ExploreCategory(title: "全部", url: line)
-                } else if line.hasPrefix("/") || line.hasPrefix("./") {
-                    // Relative path — resolve against source at request time
-                    return ExploreCategory(title: "全部", url: line)
-                }
-                return nil
-            }
-            if !categories.isEmpty { return }
-        }
-
-        // 3. 退化：单一 URL
-        categories = [ExploreCategory(title: "全部", url: raw)]
-
-        // Deduplicate — identical title+url pairs cause SwiftUI "duplicate ID" faults
-        var seen = Set<String>()
-        categories = categories.filter { seen.insert($0.id).inserted }
+        guard !(source.exploreUrl ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let ctx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
+        categories = ExploreUrlParser.parse(source.exploreUrl ?? "", context: ctx)
     }
 }
 
@@ -317,12 +255,4 @@ class ExploreBookListViewModel: ObservableObject {
     }
 }
 
-// MARK: - 数据模型
-
-struct ExploreCategory: Codable, Identifiable {
-    // Use title+url as ID so that two categories with the same URL but different
-    // titles are treated as distinct. Prevents the SwiftUI "duplicate ID" warning.
-    var id: String { "\(title)|\(url)" }
-    var title: String
-    var url: String
-}
+// ExploreCategory is defined in Core/Services/ExploreUrlParser.swift

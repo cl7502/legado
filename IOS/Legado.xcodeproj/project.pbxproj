@@ -18,6 +18,7 @@
 		EB8B314DCD492A3103F4F715 /* BookSourceCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62D0CE57F58E9E961E41DF78 /* BookSourceCheckView.swift */; };
 		17EABFDE74A91843DA479BBE /* BookSourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58A64AE613625A1A6F5060F0 /* BookSourceListView.swift */; };
 		1FBB4996EDF285553CA8187D /* ReaderSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC05B10A239C4AA6842C5BD /* ReaderSettingsSheet.swift */; };
+		AA11BB22CC33DD44EE55FF01 /* ExploreUrlParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF00 /* ExploreUrlParser.swift */; };
 		1FE555CCB62E2E222C04B331 /* ExploreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4219C4F1F814AB2E7305C338 /* ExploreView.swift */; };
 		1455715C1E7840E8A605D9BB /* ExploreDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */; };
 		2AAD0EF819101DDD1F0AFAE0 /* EncodingHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D94DE81601D33C9A1B35B2 /* EncodingHelper.swift */; };
@@ -82,6 +83,7 @@
 		3030BF4AC290D0B281153590 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		30BFD519B81F69EFDEBAF611 /* LegadoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegadoApp.swift; sourceTree = "<group>"; };
 		351E5540D51D9E37E9308ABF /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF00 /* ExploreUrlParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreUrlParser.swift; sourceTree = "<group>"; };
 		4219C4F1F814AB2E7305C338 /* ExploreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreView.swift; sourceTree = "<group>"; };
 		E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreDebugView.swift; sourceTree = "<group>"; };
 		4BD1B81E8F65A038E0BDEFBB /* BookSourceViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSourceViewModel.swift; sourceTree = "<group>"; };
@@ -257,6 +259,7 @@
 				474051CD172B8E294B40D176 /* HTML */,
 				73A50470F25033A8D7478887 /* JSBridge */,
 				6FD8F1416F813FCE8BBEA217 /* Network */,
+				AA11BB22CC33DD44EE55FF02 /* Services */,
 				A1B2C3D4E5F60005A2B3C4D5 /* Utils */,
 			);
 			path = Core;
@@ -269,6 +272,14 @@
 				E53CBC7D7F8135315BC60D57 /* LegadoJSEngine.swift */,
 			);
 			path = JSBridge;
+			sourceTree = "<group>";
+		};
+		AA11BB22CC33DD44EE55FF02 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AA11BB22CC33DD44EE55FF00 /* ExploreUrlParser.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		7A9998A08F31415169D8903D /* Products */ = {
@@ -470,6 +481,7 @@
 				EB8B314DCD492A3103F4F715 /* BookSourceCheckView.swift in Sources */,
 				A1B2C3D4E5F60002A2B3C4D5 /* AsyncSemaphore.swift in Sources */,
 				A1B2C3D4E5F60004A2B3C4D5 /* DeepCheckModels.swift in Sources */,
+				AA11BB22CC33DD44EE55FF01 /* ExploreUrlParser.swift in Sources */,
 				17EABFDE74A91843DA479BBE /* BookSourceListView.swift in Sources */,
 				AEA89EB11549973A49306E86 /* BookSourceViewModel.swift in Sources */,
 				44D89104140842B138A01F5F /* BookshelfView.swift in Sources */,
