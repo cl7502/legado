@@ -33,6 +33,14 @@ struct BookSourceListView: View {
 
     // 书源发现调试器
     @State private var debugSource: BookSource? = nil
+
+    // 深度检查
+    @State private var showingDeepCheckConfig = false
+    @State private var deepCheckVM: DeepCheckViewModel? = nil
+    @State private var deepCheckSources: [BookSource] = []
+    @State private var showingDeepCheckResult = false
+    @State private var deepCheckSingleSource: BookSource? = nil
+
     // 编辑书源 sheet
     @State private var editSource: BookSource? = nil
     // 浏览书源 sheet
@@ -65,6 +73,9 @@ struct BookSourceListView: View {
                             Divider()
                             Button { debugSource = source } label: {
                                 Label("调试发现规则", systemImage: "ladybug")
+                            }
+                            Button { deepCheckSingleSource = source } label: {
+                                Label("深度检查", systemImage: "stethoscope")
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
@@ -127,6 +138,15 @@ struct BookSourceListView: View {
                                 } label: {
                                     Text(scope.rawValue)
                                 }
+                            }
+                            Divider()
+                            Button {
+                                Task {
+                                    deepCheckSources = (try? await DatabaseManager.shared.getAllBookSources()) ?? []
+                                    showingDeepCheckConfig = true
+                                }
+                            } label: {
+                                Label("深度检查...", systemImage: "stethoscope")
                             }
                         } label: {
                             Label("检测书源", systemImage: "antenna.radiowaves.left.and.right")
@@ -221,6 +241,32 @@ struct BookSourceListView: View {
             .sheet(item: $debugSource) { source in
                 NavigationView {
                     ExploreDebugView(source: source, listViewModel: viewModel)
+                }
+            }
+            // 批量深度检查：配置弹窗
+            .sheet(isPresented: $showingDeepCheckConfig) {
+                DeepCheckConfigSheet(allSources: deepCheckSources) { vm, filtered in
+                    deepCheckVM = vm
+                    showingDeepCheckResult = true
+                    Task { await vm.start(sources: filtered) }
+                }
+            }
+            // 批量深度检查：结果视图
+            .sheet(isPresented: $showingDeepCheckResult) {
+                if let vm = deepCheckVM {
+                    NavigationView {
+                        DeepCheckView(vm: vm, sources: [], isSingleSource: false)
+                    }
+                }
+            }
+            // 单书源深度检查
+            .sheet(item: $deepCheckSingleSource) { source in
+                NavigationView {
+                    DeepCheckView(
+                        vm: DeepCheckViewModel(),
+                        sources: [source],
+                        isSingleSource: true
+                    )
                 }
             }
             // 编辑书源 sheet（替代行点击导航）
