@@ -302,6 +302,14 @@ extension DatabaseManager {
             try book.save(db)
         }
     }
+
+    /// 从书架删除书籍，同时清除缓存的章节列表和正文内容
+    func deleteBook(_ book: Book) async throws {
+        try await dbPool.write { db in
+            try Book.filter(Column("bookUrl") == book.bookUrl).deleteAll(db)
+            try Chapter.filter(Column("bookUrl") == book.bookUrl).deleteAll(db)
+        }
+    }
     
     // --- 章节操作 ---
     

@@ -49,4 +49,10 @@ class BookshelfViewModel: ObservableObject {
         try? await db.saveBook(updatedBook)
         await loadBooks()
     }
+
+    /// 从书架删除书籍（同时清除章节缓存）
+    func deleteBook(_ book: Book) async {
+        try? await db.deleteBook(book)
+        books.removeAll { $0.bookUrl == book.bookUrl }
+    }
 }

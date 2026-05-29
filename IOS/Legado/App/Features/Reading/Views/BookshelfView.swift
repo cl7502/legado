@@ -6,6 +6,9 @@ struct BookshelfView: View {
 
     @State private var selectedBook: Book?
 
+    @State private var bookPendingDelete: Book? = nil
+    @State private var showDeleteConfirm = false
+
     // 定义 3 列网格
     let columns = [
         GridItem(.flexible(), spacing: 20),
@@ -32,6 +35,14 @@ struct BookshelfView: View {
                             BookItemView(book: book)
                                 .onTapGesture {
                                     selectedBook = book
+                                }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        bookPendingDelete = book
+                                        showDeleteConfirm = true
+                                    } label: {
+                                        Label("从书架删除", systemImage: "trash")
+                                    }
                                 }
                         }
                     }
@@ -71,6 +82,14 @@ struct BookshelfView: View {
             }
             .refreshable {
                 await viewModel.loadBooks()
+            }
+            .alert("删除书籍", isPresented: $showDeleteConfirm, presenting: bookPendingDelete) { book in
+                Button("取消", role: .cancel) {}
+                Button("删除", role: .destructive) {
+                    Task { await viewModel.deleteBook(book) }
+                }
+            } message: { book in
+                Text("将从书架移除《\(book.name)》，阅读进度和缓存章节也会一并清除，不影响书源。")
             }
             // 用 item: 绑定，避免 isPresented + 独立 selectedBook 的时序竞态：
             // fullScreenCover(isPresented:) 可能在 selectedBook 提交前就渲染闭包，
