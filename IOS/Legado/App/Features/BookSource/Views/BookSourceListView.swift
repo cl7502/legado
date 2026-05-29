@@ -66,12 +66,6 @@ struct BookSourceListView: View {
                             Button { debugSource = source } label: {
                                 Label("调试发现规则", systemImage: "ladybug")
                             }
-                            Divider()
-                            Button(role: .destructive) {
-                                Task { await viewModel.deleteSource(source) }
-                            } label: {
-                                Label("删除", systemImage: "trash")
-                            }
                         } label: {
                             Image(systemName: "ellipsis.circle")
                                 .font(.system(size: 16))
