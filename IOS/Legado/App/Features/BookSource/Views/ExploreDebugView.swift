@@ -10,6 +10,7 @@ struct ExploreDebugView: View {
     @StateObject private var debugVM = ExploreDebugViewModel()
     @State private var draft: BookSource
     @State private var hasUnsaved = false
+    @State private var showingFullResponse = false   // 增强1
     @Environment(\.dismiss) private var dismiss
 
     init(source: BookSource, listViewModel: BookSourceViewModel) {
@@ -48,6 +49,19 @@ struct ExploreDebugView: View {
             ToolbarItem(placement: .cancellationAction) {
                 Button("关闭") { dismiss() }
             }
+            // 增强5：导出书源 JSON
+            ToolbarItem(placement: .principal) {
+                if let jsonData = try? JSONEncoder().encode(draft),
+                   let jsonStr = String(data: jsonData, encoding: .utf8) {
+                    ShareLink(
+                        item: jsonStr,
+                        subject: Text("书源: \(draft.bookSourceName)"),
+                        message: Text("Legado 书源规则（发现）")
+                    ) {
+                        Image(systemName: "square.and.arrow.up").font(.caption)
+                    }
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存") {
                     Task {
@@ -57,6 +71,10 @@ struct ExploreDebugView: View {
                 }
                 .disabled(!hasUnsaved)
             }
+        }
+        // 增强1：完整响应 sheet
+        .sheet(isPresented: $showingFullResponse) {
+            FullResponseSheet(html: debugVM.storedHtml)
         }
         .safeAreaInset(edge: .bottom) { runButton }
     }
@@ -114,11 +132,47 @@ struct ExploreDebugView: View {
         Section("诊断结果") {
             ForEach(debugVM.steps) { step in
                 DebugStepRow(step: step)
+                // 增强1：Step 3（网络请求）通过后显示"查看完整响应"按钮
+                if step.id == 2 && step.status == .passed && !debugVM.storedHtml.isEmpty {
+                    Button {
+                        showingFullResponse = true
+                    } label: {
+                        Label("查看完整响应（\(debugVM.storedHtml.count) 字节）",
+                              systemImage: "doc.text.magnifyingglass")
+                            .font(.caption)
+                    }
+                    .padding(.leading, 28)
+                }
+            }
+            // 增强2：候选数组选择器（JSON 书源，多个候选时显示）
+            if debugVM.arrayCandidates.count > 1 {
+                candidatePickerSection
             }
             if let fix = debugVM.fixStep {
                 DebugStepRow(step: fix).id(99)
             }
         }
+    }
+
+    @ViewBuilder
+    private var candidatePickerSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("书单数组候选（选择后点「修复」）")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Picker("", selection: $debugVM.selectedCandidateIndex) {
+                ForEach(debugVM.arrayCandidates.indices, id: \.self) { i in
+                    let c = debugVM.arrayCandidates[i]
+                    Text("\(c.path)[*]  (\(c.count)条)  \(c.sampleKeys)")
+                        .font(.system(.caption2, design: .monospaced))
+                        .tag(i)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+        }
+        .padding(.leading, 28)
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
@@ -270,8 +324,14 @@ class ExploreDebugViewModel: ObservableObject {
     @Published var fixStep: DebugStep? = nil
     @Published var fixVersion = 0
 
-    private var storedHtml = ""
+    // 完整响应（增强1）
+    @Published var storedHtml = ""
+    // 候选书单数组（增强2）
+    @Published var arrayCandidates: [(path: String, count: Int, sampleKeys: String)] = []
+    @Published var selectedCandidateIndex = 0
+
     private var storedRequestUrl = ""
+    private var storedJsonCandidates: [(String, [[String: Any]])] = []   // 内部完整候选
     private let network = NetworkManager.shared
     private let ruleExecutor = RuleExecutor.shared
 
@@ -355,6 +415,23 @@ class ExploreDebugViewModel: ObservableObject {
             storedHtml = html
             storedRequestUrl = requestUrl
             canAttemptFix = true
+            // 增强2：收集候选书单数组
+            let t = html.trimmingCharacters(in: .whitespacesAndNewlines)
+            if (t.hasPrefix("{") || t.hasPrefix("[")),
+               let data = html.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) {
+                var raw: [(String, [[String: Any]])] = []
+                collectBookArrays(from: json, path: "$", into: &raw)
+                storedJsonCandidates = raw.filter { $0.1.count >= 2 }
+                                           .sorted { bookScore($1.1) < bookScore($0.1) }
+                selectedCandidateIndex = 0
+                arrayCandidates = storedJsonCandidates.prefix(8).map { path, items in
+                    let keys = items.first.map { $0.keys.sorted().prefix(6).joined(separator: " / ") } ?? ""
+                    return (path: path, count: items.count, sampleKeys: keys)
+                }
+            } else {
+                storedJsonCandidates = []; arrayCandidates = []
+            }
         }
 
         // Step 3: ruleExploreList
@@ -464,9 +541,14 @@ class ExploreDebugViewModel: ObservableObject {
         var changes: [String] = []
         let trimmed = storedHtml.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if trimmed.hasPrefix("{") || trimmed.hasPrefix("["),
-           let data = storedHtml.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: data) {
+        if !storedJsonCandidates.isEmpty {
+            // 增强2：使用用户选中的候选数组
+            let idx = min(selectedCandidateIndex, storedJsonCandidates.count - 1)
+            let chosen = storedJsonCandidates[idx]
+            (patched, changes) = inferFromJSONCandidate(path: chosen.0, items: chosen.1, source: patched)
+        } else if trimmed.hasPrefix("{") || trimmed.hasPrefix("["),
+                  let data = storedHtml.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) {
             (patched, changes) = inferFromJSON(json: json, source: patched)
         } else if !trimmed.isEmpty {
             (patched, changes) = inferFromHTML(html: trimmed, source: patched)
@@ -486,13 +568,30 @@ class ExploreDebugViewModel: ObservableObject {
         return patched
     }
 
-    // MARK: - JSON 推断
+    // MARK: - JSON 推断（基于已选候选）
+
+    private func inferFromJSONCandidate(path: String, items: [[String: Any]],
+                                        source: BookSource) -> (BookSource, [String]) {
+        var patched = source
+        var changes: [String] = []
+
+        let listPath = path == "$" ? "$[*]" : "\(path)[*]"
+        if (patched.ruleExploreList ?? "").isEmpty {
+            patched.ruleExploreList = listPath
+            changes.append("ruleExploreList = \(listPath)  （共 \(items.count) 条）")
+        }
+
+        let sample = items[0]
+        applyFieldInference(to: &patched, sample: sample, source: source, changes: &changes)
+        return (patched, changes)
+    }
+
+    // MARK: - JSON 推断（旧入口，保持向后兼容）
 
     private func inferFromJSON(json: Any, source: BookSource) -> (BookSource, [String]) {
         var patched = source
         var changes: [String] = []
 
-        // 1. 收集所有可能的书单数组
         var candidates: [(String, [[String: Any]])] = []
         collectBookArrays(from: json, path: "$", into: &candidates)
         guard let best = candidates
@@ -504,32 +603,51 @@ class ExploreDebugViewModel: ObservableObject {
         let listPath = best.0 == "$" ? "$[*]" : "\(best.0)[*]"
         let bestItems = best.1
 
-        // 3. 只填空白字段，不覆盖已有规则
         if (patched.ruleExploreList ?? "").isEmpty {
             patched.ruleExploreList = listPath
             changes.append("ruleExploreList = \(listPath)  （共 \(bestItems.count) 条）")
         }
 
         let sample = bestItems[0]
+        applyFieldInference(to: &patched, sample: sample, source: source, changes: &changes)
+        return (patched, changes)
+    }
+
+    // MARK: - 字段推断核心（增强3：URL模板推断 + 增强4：值类型启发）
+
+    private func applyFieldInference(to patched: inout BookSource,
+                                     sample: [String: Any],
+                                     source: BookSource,
+                                     changes: inout [String]) {
         func fill(_ current: String?, key: WritableKeyPath<BookSource, String?>,
-                  label: String, candidates: [String]) {
+                  label: String, candidates: [String], valueType: ValueHint? = nil) {
             guard (current ?? "").isEmpty else { return }
+            // 优先按字段名匹配
             if let f = pickField(from: sample, candidates: candidates) {
                 patched[keyPath: key] = "$.\(f)"
                 changes.append("\(label) = $.\(f)  （样例：\(stringify(sample[f]))）")
+                return
+            }
+            // 增强4：值类型启发式匹配
+            if let hint = valueType, let f = pickFieldByValue(from: sample, hint: hint) {
+                patched[keyPath: key] = "$.\(f)"
+                changes.append("\(label) = $.\(f)  💡 值类型启发（样例：\(stringify(sample[f]))）")
             }
         }
 
         fill(patched.ruleExploreName, key: \.ruleExploreName, label: "ruleExploreName",
-             candidates: ["novelName", "bookName", "book_name", "name", "title", "bookTitle"])
+             candidates: ["novelName", "bookName", "book_name", "name", "title", "bookTitle"],
+             valueType: .chineseText)
         fill(patched.ruleExploreAuthor, key: \.ruleExploreAuthor, label: "ruleExploreAuthor",
-             candidates: ["authorName", "author_name", "author", "penName", "pen_name"])
+             candidates: ["authorName", "author_name", "author", "penName", "pen_name"],
+             valueType: .chineseText)
         fill(patched.ruleExploreCoverUrl, key: \.ruleExploreCoverUrl, label: "ruleExploreCoverUrl",
-             candidates: ["cover", "coverUrl", "cover_url", "img", "image", "thumb", "pic", "picurl"])
+             candidates: ["cover", "coverUrl", "cover_url", "img", "image", "thumb", "pic", "picurl"],
+             valueType: .imageUrl)
         fill(patched.ruleExploreKind, key: \.ruleExploreKind, label: "ruleExploreKind",
              candidates: ["kind", "category", "type", "sort", "genre", "cat", "sortName", "sort_name"])
 
-        // ruleExploreNoteUrl：优先直接 URL，次选 ID 字段
+        // ruleExploreNoteUrl：增强3 URL模板推断 + 增强4 值启发
         if (patched.ruleExploreNoteUrl ?? "").isEmpty {
             if let f = pickField(from: sample,
                                  candidates: ["url", "link", "bookUrl", "book_url", "detailUrl", "detail_url"]),
@@ -537,13 +655,77 @@ class ExploreDebugViewModel: ObservableObject {
                 patched.ruleExploreNoteUrl = "$.\(f)"
                 changes.append("ruleExploreNoteUrl = $.\(f)  （样例：\(val.prefix(60))）")
             } else if let f = pickField(from: sample,
-                                        candidates: ["novelId", "novel_id", "bookId", "book_id", "id"]) {
+                                        candidates: ["novelId", "novel_id", "bookId", "book_id", "id"])
+                      ?? pickFieldByValue(from: sample, hint: .idNumber) {
+                // 增强3：尝试从书源现有规则推断 URL 模板
+                if let tpl = inferUrlTemplate(idField: f, source: source) {
+                    patched.ruleExploreNoteUrl = tpl
+                    changes.append("ruleExploreNoteUrl = \(tpl)  （从 ruleSearchNoteUrl/bookUrlPattern 推断）")
+                } else {
+                    patched.ruleExploreNoteUrl = "$.\(f)"
+                    changes.append("ruleExploreNoteUrl = $.\(f)  ⚠️ 是 ID 字段，需手动补全 URL 前缀")
+                }
+            } else if let f = pickFieldByValue(from: sample, hint: .detailUrl) {
                 patched.ruleExploreNoteUrl = "$.\(f)"
-                changes.append("ruleExploreNoteUrl = $.\(f)  ⚠️ 这是 ID 字段，可能需要手动补全 URL 前缀")
+                changes.append("ruleExploreNoteUrl = $.\(f)  💡 值类型启发（URL）")
             }
         }
+    }
 
-        return (patched, changes)
+    // MARK: - 增强3：URL 模板推断
+
+    private func inferUrlTemplate(idField: String, source: BookSource) -> String? {
+        // 先看 ruleSearchNoteUrl 是否可复用（最可靠）
+        if let snUrl = source.ruleSearchNoteUrl, !snUrl.isEmpty {
+            // 包含 JSONPath 模板且引用了 ID 类字段 → 替换字段名
+            let idHints = ["$.id", "$.novelId", "$.novel_id", "$.bookId", "$.book_id"]
+            for hint in idHints where snUrl.contains(hint) {
+                return snUrl.replacingOccurrences(of: hint, with: "$.\(idField)")
+            }
+            // 包含 {{$. 模板语法 → 直接复用
+            if snUrl.contains("{{$.") { return snUrl }
+        }
+        // 再看 bookUrlPattern：提取路径骨架
+        if let pattern = source.bookUrlPattern, !pattern.isEmpty {
+            // 把正则数字匹配符换成模板变量，提取 URL 路径
+            let cleaned = pattern
+                .replacingOccurrences(of: "\\d+", with: "{ID}", options: .regularExpression)
+                .replacingOccurrences(of: "(\\d+)", with: "{ID}", options: .regularExpression)
+            if let urlObj = URL(string: cleaned.hasPrefix("http") ? cleaned : "https://example.com" + cleaned),
+               urlObj.path.contains("{ID}") {
+                let pathTpl = urlObj.path.replacingOccurrences(of: "{ID}", with: "{{$.\(idField)}}")
+                return pathTpl
+            }
+        }
+        return nil
+    }
+
+    // MARK: - 增强4：值类型启发式字段选取
+
+    enum ValueHint { case chineseText, imageUrl, detailUrl, idNumber }
+
+    private func pickFieldByValue(from dict: [String: Any], hint: ValueHint) -> String? {
+        for (key, rawValue) in dict {
+            switch hint {
+            case .chineseText:
+                guard let s = rawValue as? String else { continue }
+                let cjk = s.unicodeScalars.filter { $0.value >= 0x4E00 && $0.value <= 0x9FFF }.count
+                if cjk >= 2 && s.count <= 30 { return key }
+            case .imageUrl:
+                guard let s = rawValue as? String,
+                      s.lowercased().hasPrefix("http") else { continue }
+                let ext = (s as NSString).pathExtension.lowercased()
+                if ["jpg","jpeg","png","webp","gif","bmp"].contains(ext) { return key }
+            case .detailUrl:
+                guard let s = rawValue as? String,
+                      s.lowercased().hasPrefix("http"), s.count > 20 else { continue }
+                return key
+            case .idNumber:
+                if let s = rawValue as? String, Int(s) != nil { return key }
+                if rawValue is Int || rawValue is NSNumber { return key }
+            }
+        }
+        return nil
     }
 
     private func collectBookArrays(from json: Any, path: String,
@@ -655,5 +837,38 @@ class ExploreDebugViewModel: ObservableObject {
         guard let baseURL = URL(string: base),
               let resolved = URL(string: path, relativeTo: baseURL) else { return path }
         return resolved.absoluteString
+    }
+}
+
+// MARK: - 增强1：完整响应查看 Sheet
+
+private struct FullResponseSheet: View {
+    let html: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                let display = searchText.isEmpty ? html : html
+                Text(display)
+                    .font(.system(.caption2, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .navigationTitle("完整响应  (\(html.count) 字节)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    ShareLink(item: html) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+            }
+        }
     }
 }
