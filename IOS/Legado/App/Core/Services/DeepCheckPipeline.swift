@@ -159,16 +159,19 @@ struct DeepCheckPipeline {
         let parsedDetail = AnalyzeUrl.parse(noteUrl, variables: [:])
         let detailUrl = parsedDetail.url.hasPrefix("http") ? parsedDetail.url
                       : source.bookSourceUrl + parsedDetail.url
+        // Merge URL-embedded headers with source-level headers (same pattern as Step 2)
+        var detailHeaders = parsedDetail.headers
+        source.headerDictionary.forEach { detailHeaders[$0.key] = $0.value }
         let t5 = Date()
         do {
             let body: String
             if parsedDetail.webView {
                 body = (try? await HeadlessWebViewLoader.fetch(
-                    urlString: detailUrl, headers: source.headerDictionary,
+                    urlString: detailUrl, headers: detailHeaders,
                     injectJs: parsedDetail.webJs)) ?? ""
             } else {
                 body = try await NetworkManager.shared.request(
-                    detailUrl, headers: HTTPHeaders(source.headerDictionary), source: source)
+                    detailUrl, headers: HTTPHeaders(detailHeaders), source: source)
             }
             steps[4].durationMs = ms(since: t5)
             if body.isEmpty {
