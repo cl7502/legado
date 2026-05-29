@@ -14,7 +14,11 @@ struct ReaderView: View {
 
             Group {
                 if viewModel.currentPages.isEmpty {
-                    loadingPlaceholder
+                    if viewModel.isLoading || !viewModel.setupDone {
+                        loadingPlaceholder
+                    } else {
+                        loadFailedView
+                    }
                 } else if settings.pageMode == .scroll {
                     scrollModeView
                 } else {
@@ -182,6 +186,38 @@ struct ReaderView: View {
                 .foregroundColor(settings.currentTheme.textColor)
                 .font(.system(size: settings.fontSize))
         }
+    }
+
+    private var loadFailedView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 40))
+                .foregroundColor(.orange)
+            Text("加载失败")
+                .font(.headline)
+                .foregroundColor(settings.currentTheme.textColor)
+            if viewModel.chapters.isEmpty {
+                Text("未能获取章节列表\n请检查书源是否可用，或重新搜索添加此书")
+                    .font(.caption)
+                    .foregroundColor(settings.currentTheme.textColor.opacity(0.6))
+                    .multilineTextAlignment(.center)
+            } else {
+                Text("章节内容加载失败\n请尝试刷新")
+                    .font(.caption)
+                    .foregroundColor(settings.currentTheme.textColor.opacity(0.6))
+                    .multilineTextAlignment(.center)
+            }
+            Button {
+                Task { await viewModel.setup() }
+            } label: {
+                Label("重试", systemImage: "arrow.clockwise")
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.bordered)
+            .tint(.orange)
+        }
+        .padding()
     }
 
     private var currentChapterTitle: String {

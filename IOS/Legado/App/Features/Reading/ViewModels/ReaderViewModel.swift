@@ -57,9 +57,12 @@ class ReaderViewModel: ObservableObject {
         }
     }
     
+    /// setup() 完成后设为 true，区分"正在加载"与"加载失败"
+    @Published var setupDone = false
+
     func setup() async {
         isLoading = true
-        defer { isLoading = false }
+        defer { isLoading = false; setupDone = true }
         await loadChapters()
         if !chapters.isEmpty {
             await loadChapterContent(at: currentChapterIndex)
