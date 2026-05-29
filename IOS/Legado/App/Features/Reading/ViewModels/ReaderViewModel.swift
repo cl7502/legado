@@ -77,8 +77,16 @@ class ReaderViewModel: ObservableObject {
             // 1. 优先从数据库读缓存
             let cached = try await db.getChapters(for: book.bookUrl)
             if !cached.isEmpty {
-                self.chapters = cached
-                return
+                // 检测章节 URL 是否存在明显的空参数（如 bookId=&），若有则强制重新加载
+                let hasBrokenUrl = cached.contains { ch in
+                    ch.url.contains("bookId=&") || ch.url.contains("bookId= &") ||
+                    (ch.url.contains("bookId=") && ch.url.range(of: "bookId=([^&]+)", options: .regularExpression) == nil)
+                }
+                if !hasBrokenUrl {
+                    self.chapters = cached
+                    return
+                }
+                print("⚠️ [loadChapters] 检测到章节 URL 中 bookId 为空，强制重新加载目录")
             }
 
             // 2. 缓存为空 — 先刷新 BookInfo 以执行 ruleBookInfoInit 并获取最新 tocUrl (ISSUE-021)
@@ -119,6 +127,24 @@ class ReaderViewModel: ObservableObject {
             context.book = book
             let html = try await network.request(effectiveTocUrl, source: source)
             context.result = html
+
+            // 将 tocUrl 和 bookUrl 的 URL 参数注入 context.variables（大小写均存），
+            // 使 ruleChapterUrl 中的 @get:{bookid} 等变量引用能正确取值
+            for urlStr in [effectiveTocUrl, book.bookUrl] {
+                if let comps = URLComponents(string: urlStr) {
+                    for item in comps.queryItems ?? [] {
+                        let v = item.value ?? ""
+                        context.variables[item.name]            = v   // 原始大小写
+                        context.variables[item.name.lowercased()] = v // 全小写兼容
+                    }
+                }
+            }
+            // 同时存入 bookId 的常见别名，供不同书源使用
+            if let bId = (context.variables["bookId"] ?? context.variables["bookid"]) as? String, !bId.isEmpty {
+                context.variables["bookId"]  = bId
+                context.variables["bookid"]  = bId
+                context.variables["book_id"] = bId
+            }
 
             let listRule = source.ruleTocList ?? ""
             guard !listRule.isEmpty else { return }
@@ -238,7 +264,12 @@ class ReaderViewModel: ObservableObject {
             if let tocRaw = ruleExecutor.execute(source.ruleTocUrl ?? "", in: &context),
                !tocRaw.isEmpty {
                 let resolved = resolveUrl(tocRaw, base: book.bookUrl)
-                book.tocUrl = resolved
+                if resolved != book.tocUrl {
+                    book.tocUrl = resolved
+                    // 持久化到 DB，防止冷启动后再次从旧值读取
+                    try? await db.saveBook(book)
+                    print("🔗 [loadChapters] tocUrl 已更新并持久化: \(resolved)")
+                }
             }
         } catch {
             print("⚠️ [refreshBookInfo]: \(error.localizedDescription)")

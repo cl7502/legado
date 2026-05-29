@@ -75,11 +75,52 @@ class JSONPathEngine {
 
         // Strip leading $
         if p.hasPrefix("$") { p = String(p.dropFirst()) }
-        if p.hasPrefix(".") { p = String(p.dropFirst()) }
 
+        // $.. recursive descent: search entire tree for matching path
+        if p.hasPrefix("..") {
+            let rest = String(p.dropFirst(2))  // e.g. "bookVo.bookId"
+            return deepSearch(path: rest.isEmpty ? nil : rest, in: root)
+        }
+
+        if p.hasPrefix(".") { p = String(p.dropFirst()) }
         if p.isEmpty { return root }
 
         return traverse(components: tokenize(p), from: root)
+    }
+
+    /// 递归搜索整棵 JSON 树，返回所有匹配 `path` 的值
+    private func deepSearch(path: String?, in node: Any) -> Any? {
+        var results: [Any] = []
+
+        func collect(_ v: Any) {
+            switch v {
+            case let arr as [Any]: results.append(contentsOf: arr)
+            default: results.append(v)
+            }
+        }
+
+        if let p = path, !p.isEmpty {
+            // 先在当前节点试直接匹配
+            if let direct = traverse(components: tokenize(p), from: node) {
+                collect(direct)
+            }
+        } else {
+            collect(node)
+        }
+
+        // 递归子节点
+        if let dict = node as? [String: Any] {
+            for (_, value) in dict {
+                if let found = deepSearch(path: path, in: value) { collect(found) }
+            }
+        } else if let arr = node as? [Any] {
+            for item in arr {
+                if let found = deepSearch(path: path, in: item) { collect(found) }
+            }
+        }
+
+        if results.isEmpty { return nil }
+        return results.count == 1 ? results[0] : results
     }
 
     // MARK: - Tokenizer

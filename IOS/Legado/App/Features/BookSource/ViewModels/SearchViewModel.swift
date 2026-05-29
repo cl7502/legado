@@ -305,9 +305,24 @@ struct AnalyzeUrl {
             guard let fullRange = Range(m.range, in: result),
                   let exprRange = Range(m.range(at: 1), in: result) else { continue }
             let expr = String(result[exprRange])
-            // Plain variable name → already substituted; evaluate as JS expression
-            let jsResult = LegadoJSEngine.shared.evaluateRule(expr, in: &context) ?? ""
-            result.replaceSubrange(fullRange, with: jsResult)
+            var resolved = ""
+            // JSONPath 优先（$ 开头）：对当前 result 提取字段
+            if expr.hasPrefix("$") {
+                let jsonStr: String
+                if let s = context.result as? String { jsonStr = s }
+                else if let d = context.result as? [String: Any],
+                        let data = try? JSONSerialization.data(withJSONObject: d),
+                        let s = String(data: data, encoding: .utf8) { jsonStr = s }
+                else { jsonStr = "" }
+                if !jsonStr.isEmpty,
+                   let val = JSONPathEngine.shared.extract(json: jsonStr, path: expr) {
+                    resolved = "\(val)"
+                }
+            }
+            if resolved.isEmpty {
+                resolved = LegadoJSEngine.shared.evaluateRule(expr, in: &context) ?? ""
+            }
+            result.replaceSubrange(fullRange, with: resolved)
         }
         return result
     }
