@@ -75,7 +75,7 @@ struct ReaderView: View {
             ForEach(0..<viewModel.currentPages.count, id: \.self) { idx in
                 ReaderPageView(
                     content: viewModel.currentPages[idx],
-                    chapterTitle: idx == 0 ? currentChapterTitle : "",
+                    chapterTitle: currentChapterTitle,   // 每页都传入，不再只传第0页
                     pageLabel: "\(idx + 1) / \(viewModel.currentPages.count)",
                     totalChapters: viewModel.chapters.count,
                     chapterIndex: viewModel.currentChapterIndex,
@@ -318,7 +318,9 @@ struct ReaderPageView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 11, weight: .medium))
-                        Text("第\(chapterIndex + 1)章 \(applyTraditional(chapterTitle))")
+                        Text(chapterTitle.isEmpty
+                             ? "第\(chapterIndex + 1)章"
+                             : applyTraditional(chapterTitle))
                             .font(.system(size: 11))
                             .lineLimit(1)
                     }
