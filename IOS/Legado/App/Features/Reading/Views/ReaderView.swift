@@ -315,16 +315,18 @@ struct ReaderPageView: View {
 
             // 页眉：左侧章节导航（固定显示），右侧章节进度（受 showHeaderProgress 控制）
             HStack(spacing: 4) {
-                // 左侧：返回 + 章节标题（始终显示，不受开关控制）
+                // 左侧：返回箭头；第一页额外显示章节标题，后续页只显示箭头
                 Button(action: { onBack?() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 11, weight: .medium))
-                        Text(chapterTitle.isEmpty
-                             ? "第\(chapterIndex + 1)章"
-                             : applyTraditional(chapterTitle))
-                            .font(.system(size: 11))
-                            .lineLimit(1)
+                        if isFirstPage {
+                            Text(chapterTitle.isEmpty
+                                 ? "第\(chapterIndex + 1)章"
+                                 : applyTraditional(chapterTitle))
+                                .font(.system(size: 11))
+                                .lineLimit(1)
+                        }
                     }
                     .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
                 }
