@@ -80,13 +80,18 @@ final class SourceSelectionViewModel: ObservableObject {
         var headers = parsed.headers
         source.headerDictionary.forEach { headers[$0.key] = $0.value }
 
-        guard !url.isEmpty,
-              let body = NetworkManager.shared.requestSync(url, headers: headers) else {
-            return .notFound
-        }
+        guard !url.isEmpty else { return .notFound }
+
+        let bodyOpt: String? = await Task.detached(priority: .utility) {
+            NetworkManager.shared.requestSync(url, headers: headers)
+        }.value
+        guard let body = bodyOpt else { return .notFound }
         ctx.result = body
 
-        let items = RuleExecutor.shared.executeList(source.ruleSearchList ?? "", in: &ctx)
+        let items: [String] = await Task.detached(priority: .utility) {
+            var c = ctx
+            return RuleExecutor.shared.executeList(source.ruleSearchList ?? "", in: &c)
+        }.value
         guard !items.isEmpty else { return .notFound }
 
         var itemCtx = AnalyzeContext(source: source, baseUrl: url)
@@ -107,9 +112,15 @@ final class SourceSelectionViewModel: ObservableObject {
         let tocUrlRaw = RuleExecutor.shared.execute(source.ruleTocUrl ?? "", in: &ctx) ?? bookUrl
         let tocUrl = tocUrlRaw.hasPrefix("http") ? tocUrlRaw : (source.bookSourceUrl + tocUrlRaw)
         let fetchUrl = tocUrl.isEmpty ? bookUrl : tocUrl
-        guard let tocBody = NetworkManager.shared.requestSync(fetchUrl) else { return false }
+        let tocBodyOpt: String? = await Task.detached(priority: .utility) {
+            NetworkManager.shared.requestSync(fetchUrl)
+        }.value
+        guard let tocBody = tocBodyOpt else { return false }
         ctx.result = tocBody
-        let chapters = RuleExecutor.shared.executeList(source.ruleTocList ?? "", in: &ctx)
+        let chapters: [String] = await Task.detached(priority: .utility) {
+            var c = ctx
+            return RuleExecutor.shared.executeList(source.ruleTocList ?? "", in: &c)
+        }.value
         return chapters.count > chapterIndex
     }
 
