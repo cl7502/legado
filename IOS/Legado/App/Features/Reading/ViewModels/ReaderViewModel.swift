@@ -28,7 +28,7 @@ class ReaderViewModel: ObservableObject {
     private let network = NetworkManager.shared
     private let ruleExecutor = RuleExecutor.shared
     private let contentParser = BookContentParser.shared
-    private let ttsManager = TTSManager.shared
+    let ttsManager = TTSManager.shared
     
     init(book: Book) {
         self.book = book
@@ -44,6 +44,12 @@ class ReaderViewModel: ObservableObject {
         } else {
             startTTS()
         }
+    }
+
+    /// 停止朗读（用于朗读面板"退出朗读"按钮）
+    func stopTTS() {
+        ttsManager.stop()
+        isTTSEnabled = false
     }
     
     func startTTS() {
