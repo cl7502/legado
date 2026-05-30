@@ -257,15 +257,16 @@ class RuleExecutor {
 
     // MARK: - ## regex replacement (Android SourceRule.makeUpRule split logic)
 
-    /// Split "rule##matchPattern##replacement[##replaceFirst]"
-    /// 最多切 3 次：replacement 自身可能含 ##（如 URL 规范化），须合并剩余段。
+    /// Split "rule##matchPattern##replacement[##^]"
+    /// parts[2] is replacement; parts[3] is optional flag ("^" = replaceFirst).
     private func splitHashHash(_ rule: String) -> (core: String, pattern: String, replacement: String, replaceFirst: Bool) {
         let parts       = rule.components(separatedBy: "##")
         let core        = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
         let pattern     = parts.count > 1 ? parts[1] : ""
-        // parts[2...] 合并回 replacement，保留其中的 ##
-        let replacement = parts.count > 2 ? parts[2...].joined(separator: "##") : ""
-        let replaceFirst = parts.count > 3
+        let replacement = parts.count > 2 ? parts[2] : ""
+        // Android convention: "^" flag in parts[3] means replaceFirst; anything else means replace all.
+        // Trailing "###" in book source rules is a terminator (parts[3]="#"), NOT replaceFirst.
+        let replaceFirst = parts.count > 3 && parts[3].trimmingCharacters(in: .whitespaces) == "^"
         return (core, pattern, replacement, replaceFirst)
     }
 

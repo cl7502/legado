@@ -168,18 +168,15 @@ class HTMLParser {
             let doc = try SwiftSoup.parse(html)
 
             if parts.count == 1 {
-                let elements = try doc.select(parts[0].legadoCSS)
-                return elements.array().compactMap { try? $0.text() }.filter { !$0.isEmpty }
+                let elements = legadoSelect(parts[0], from: doc)
+                return elements.compactMap { try? $0.text() }.filter { !$0.isEmpty }
             }
 
             // Navigate through all segments except the last
-            var elList: [Element] = (try? doc.select(parts[0].legadoCSS).array()) ?? []
+            var elList: [Element] = legadoSelect(parts[0], from: doc)
             for i in 1..<(parts.count - 1) {
                 var next: [Element] = []
-                for el in elList {
-                    let sub = (try? el.select(parts[i].legadoCSS)) ?? Elements()
-                    next.append(contentsOf: sub.array())
-                }
+                for el in elList { next.append(contentsOf: legadoSelect(parts[i], from: el)) }
                 elList = next
             }
 
@@ -231,8 +228,8 @@ class HTMLParser {
             let doc = try SwiftSoup.parse(html)
 
             if parts.count == 1 {
-                let elements = try doc.select(parts[0].legadoCSS)
-                return elements.array().compactMap { try? $0.outerHtml() }
+                let elements = legadoSelect(parts[0], from: doc)
+                return elements.compactMap { try? $0.outerHtml() }
             }
 
             // Determine if the last part is attribute extraction or further CSS navigation
@@ -240,13 +237,10 @@ class HTMLParser {
             let extractsAttr = isAttributeKeyword(lastPart)
             let navParts = extractsAttr ? Array(parts.dropLast()) : parts
 
-            var elList: [Element] = (try? doc.select(navParts[0].legadoCSS).array()) ?? []
+            var elList: [Element] = legadoSelect(navParts[0], from: doc)
             for i in 1..<navParts.count {
                 var next: [Element] = []
-                for el in elList {
-                    let sub = (try? el.select(navParts[i].legadoCSS)) ?? Elements()
-                    next.append(contentsOf: sub.array())
-                }
+                for el in elList { next.append(contentsOf: legadoSelect(navParts[i], from: el)) }
                 elList = next
             }
 
@@ -329,6 +323,26 @@ class HTMLParser {
     }
 
     // MARK: - Private helpers
+
+    /// Select elements using Legado's extended selector syntax.
+    /// Handles tag.xxx prefix (via legadoCSS) and element.N index suffix ("a.0" = first a).
+    private func legadoSelect(_ rule: String, from element: Element) -> [Element] {
+        let css = rule.legadoCSS
+        if let (base, idx) = css.legadoSelectorAndIndex {
+            let all = (try? element.select(base).array()) ?? []
+            return idx < all.count ? [all[idx]] : []
+        }
+        return (try? element.select(css).array()) ?? []
+    }
+
+    private func legadoSelect(_ rule: String, from doc: Document) -> [Element] {
+        let css = rule.legadoCSS
+        if let (base, idx) = css.legadoSelectorAndIndex {
+            let all = (try? doc.select(base).array()) ?? []
+            return idx < all.count ? [all[idx]] : []
+        }
+        return (try? doc.select(css).array()) ?? []
+    }
 
     /// Returns true if the string contains a `|` that is NOT inside `[]` (XPath union operator).
     private func hasTopLevelPipe(_ s: String) -> Bool {
@@ -519,10 +533,29 @@ class HTMLParser {
 private extension String {
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    /// Android Legado CSS shorthand: "class.xxx" means ".xxx" (elements with CSS class xxx).
-    /// Standard CSS has no `class` tag, so convert before passing to SwiftSoup.
+    /// Android Legado CSS shorthand conversions applied before SwiftSoup selection:
+    ///   • "class.xxx"  → ".xxx"      (class shorthand, e.g. class.title → .title)
+    ///   • "tag.xxx"    → "xxx"       (tag shorthand, e.g. tag.img → img)
     var legadoCSS: String {
-        guard contains("class.") else { return self }
-        return replacingOccurrences(of: #"\bclass\."#, with: ".", options: .regularExpression)
+        var s = self
+        // tag.xxx → xxx  (must come before class. check to avoid false match on "tag.class.xxx")
+        if s.hasPrefix("tag.") { s = String(s.dropFirst(4)) }
+        // class.xxx → .xxx
+        if s.contains("class.") {
+            s = s.replacingOccurrences(of: #"\bclass\."#, with: ".", options: .regularExpression)
+        }
+        return s
+    }
+
+    /// Legado element-index suffix: "a.0" → (selector:"a", index:0).
+    /// Returns nil when the suffix is not an integer (i.e. it's a CSS class name).
+    var legadoSelectorAndIndex: (selector: String, index: Int)? {
+        guard let re = try? NSRegularExpression(pattern: #"^(.+)\.(\d+)$"#),
+              let m  = re.firstMatch(in: self, range: NSRange(startIndex..., in: self)),
+              let sr = Range(m.range(at: 1), in: self),
+              let ir = Range(m.range(at: 2), in: self),
+              let idx = Int(self[ir])
+        else { return nil }
+        return (String(self[sr]), idx)
     }
 }
