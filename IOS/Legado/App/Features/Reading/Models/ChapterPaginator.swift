@@ -54,7 +54,16 @@ struct ChapterPaginator {
             pages.append(slice)
             let nextStart = visibleRange.location + visibleRange.length
             if nextStart >= remaining.length { break }
-            remaining   = remaining.substring(from: nextStart) as NSString
+
+            // 跳过段落边界处的换行符：若下一页以 \n 开头，TextKit2 会将其渲染为
+            // 一整行空白（lineHeight + paragraphSpacing ≈ 38pt），造成顶部空白过大
+            var adjustedStart = nextStart
+            while adjustedStart < remaining.length
+                    && remaining.character(at: adjustedStart) == 0x000A {
+                adjustedStart += 1
+            }
+            if adjustedStart >= remaining.length { break }
+            remaining   = remaining.substring(from: adjustedStart) as NSString
             isFirstPage = false
         }
         return pages.isEmpty ? [text] : pages

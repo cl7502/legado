@@ -510,9 +510,9 @@ class ReaderViewModel: ObservableObject {
 
         let font = UIFont.systemFont(ofSize: settings.fontSize)
         let horizontalPadding = settings.sideMargin * 2
-        // 减去 header 栏、footer 栏、以及上下内边距，确保每页文字刚好填满可见区域
+        // 减去 header/footer 高度、上下内边距；额外 4pt 安全余量对冲 CoreText vs TextKit2 测量差异
         let verticalPadding   = settings.topMargin + settings.bottomMargin
-                              + ReaderLayout.headerH + ReaderLayout.footerH
+                              + ReaderLayout.headerH + ReaderLayout.footerH + 4
         let usableSize = CGSize(
             width:  max(screenSize.width  - horizontalPadding, 100),
             height: max(screenSize.height - verticalPadding,   100)
