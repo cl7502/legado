@@ -10,8 +10,3 @@ final class ZipVoiceEngine: TTSEngine {
     }
 }
 
-enum TTSError: Error {
-    case engineNotReady
-    case modelNotFound(String)
-    case synthesizeFailed(String)
-}

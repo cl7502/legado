@@ -28,3 +28,9 @@ protocol TTSEngine: AnyObject {
         style: SpeakingStyle
     ) async throws -> AudioChunk
 }
+
+enum TTSError: Error {
+    case engineNotReady
+    case modelNotFound(String)
+    case synthesizeFailed(String)
+}
