@@ -410,6 +410,8 @@ struct ReaderMenuView: View {
     @State private var showingBookmarks   = false
     @State private var showingSearch      = false
     @State private var showingHighlights  = false
+    @State private var showingSourceSelection = false
+    @State private var bookmarkAdded = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -421,6 +423,17 @@ struct ReaderMenuView: View {
         .foregroundColor(.primary)
         .sheet(isPresented: $showingTOC)      { TOCView(viewModel: viewModel) }
         .sheet(isPresented: $showingSettings) { ReaderSettingsSheet() }
+        .sheet(isPresented: $showingSourceSelection) {
+            NavigationView {
+                Text("换源功能（Plan C 实现）")
+                    .navigationTitle("选择来源")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { showingSourceSelection = false }
+                        }
+                    }
+            }
+        }
     }
 
     // MARK: 顶部
@@ -437,6 +450,29 @@ struct ReaderMenuView: View {
                 }
             }
             Spacer()
+            // 书签按钮
+            Button {
+                Task {
+                    await addBookmark()
+                    withAnimation { bookmarkAdded = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation { bookmarkAdded = false }
+                    }
+                }
+            } label: {
+                Image(systemName: bookmarkAdded ? "bookmark.fill" : "bookmark")
+                    .font(.title2)
+                    .foregroundColor(bookmarkAdded ? .yellow : .primary)
+            }
+
+            // 换源按钮
+            Button {
+                showingSourceSelection = true
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath.circle")
+                    .font(.title2)
+            }
+
             // F2: 三点菜单
             Menu {
                 Button {
