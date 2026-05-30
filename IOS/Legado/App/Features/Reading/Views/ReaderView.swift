@@ -478,7 +478,6 @@ struct ReaderMenuView: View {
 
     @State private var showingTOC      = false
     @State private var showingSettings = false
-    @State private var brightness: Double = Double(UIScreen.main.brightness)
     @State private var showingCacheAlert  = false
     @State private var showingBookmarks   = false
     @State private var showingSearch      = false
@@ -680,16 +679,6 @@ struct ReaderMenuView: View {
             }
             .padding(.horizontal)
 
-            // 亮度条
-            HStack(spacing: 8) {
-                Image(systemName: "sun.min").font(.caption).foregroundColor(.secondary)
-                Slider(value: $brightness, in: 0.05...1.0) { _ in
-                    UIScreen.main.brightness = CGFloat(brightness)
-                }
-                Image(systemName: "sun.max").font(.caption).foregroundColor(.secondary)
-            }
-            .padding(.horizontal)
-
             if viewModel.isTTSEnabled {
                 // ── TTS 控制面板（激活朗读时取代功能按钮行）──────────
                 ttsPanelView
@@ -727,7 +716,6 @@ struct ReaderMenuView: View {
             Color(UIColor.systemBackground).opacity(0.95)
                 .ignoresSafeArea(edges: .bottom)
         )
-        .onAppear { brightness = Double(UIScreen.main.brightness) }
     }
 
     private var currentChapterTitle: String {
@@ -923,10 +911,22 @@ struct ReaderSettingsSheet: View {
     @StateObject private var settings = ReaderSettings.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showPreferences = false
+    @State private var brightness: Double = Double(UIScreen.main.brightness)
 
     var body: some View {
         NavigationView {
             Form {
+                // ── 亮度 ─────────────────────────────────────
+                Section("亮度") {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sun.min").font(.caption).foregroundColor(.secondary)
+                        Slider(value: $brightness, in: 0.05...1.0) { _ in
+                            UIScreen.main.brightness = CGFloat(brightness)
+                        }
+                        Image(systemName: "sun.max").font(.caption).foregroundColor(.secondary)
+                    }
+                }
+
                 // ── 字体排版 ─────────────────────────────────
                 Section("字体排版") {
                     stepperRow(title: "字号",   value: $settings.fontSize,        range: 12...40, step: 1)
@@ -986,6 +986,7 @@ struct ReaderSettingsSheet: View {
                     Button("完成") { dismiss() }
                 }
             }
+            .onAppear { brightness = Double(UIScreen.main.brightness) }
             .sheet(isPresented: $showPreferences) {
                 ReadingPreferencesView()
             }
@@ -1183,7 +1184,6 @@ private struct MixedContentView: View {
 struct ReadingPreferencesView: View {
     @StateObject private var settings = ReaderSettings.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var brightness: Double = Double(UIScreen.main.brightness)
 
     var body: some View {
         NavigationView {
@@ -1196,17 +1196,6 @@ struct ReadingPreferencesView: View {
                         presetButton(label: "紧凑",  fontSize: 17, lineSpacing: 6,  sideMargin: 16)
                     }
                     .padding(.vertical, 4)
-                }
-
-                // ── 亮度 ──────────────────────────────────────
-                Section("亮度") {
-                    HStack(spacing: 8) {
-                        Image(systemName: "sun.min").font(.caption).foregroundColor(.secondary)
-                        Slider(value: $brightness, in: 0.05...1.0) { _ in
-                            UIScreen.main.brightness = CGFloat(brightness)
-                        }
-                        Image(systemName: "sun.max").font(.caption).foregroundColor(.secondary)
-                    }
                 }
 
                 // ── 页眉信息 ──────────────────────────────────
@@ -1274,7 +1263,6 @@ struct ReadingPreferencesView: View {
                     Button("完成") { dismiss() }
                 }
             }
-            .onAppear { brightness = Double(UIScreen.main.brightness) }
         }
     }
 
