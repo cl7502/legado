@@ -90,7 +90,8 @@ struct ReaderView: View {
                             selectedText: text,
                             color: color
                         )}
-                    }
+                    },
+                    onBack: { dismiss() }
                 )
                 .tag(idx)
             }
@@ -250,6 +251,7 @@ struct ReaderPageView: View {
     var pageStartOffset: Int = 0
     var highlights: [BookHighlight] = []
     var onHighlight: ((Int, Int, String, Int) -> Void)? = nil
+    var onBack: (() -> Void)? = nil     // 点击左上 < 返回书架
 
     @StateObject private var settings = ReaderSettings.shared
     @StateObject private var battery  = BatteryMonitor.shared
@@ -288,29 +290,37 @@ struct ReaderPageView: View {
             .padding(.top, settings.topMargin)
             .padding(.bottom, settings.bottomMargin)
 
-            // 页眉
-            if settings.showHeaderTime || settings.showHeaderProgress || settings.showHeaderBattery {
-                HStack {
-                    if settings.showHeaderTime {
-                        Text(currentTime)
+            // 页眉：左侧章节导航（固定显示），右侧章节进度（受 showHeaderProgress 控制）
+            HStack(spacing: 4) {
+                // 左侧：返回 + 章节标题（始终显示，不受开关控制）
+                Button(action: { onBack?() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("第\(chapterIndex + 1)章 \(applyTraditional(chapterTitle))")
                             .font(.system(size: 11))
-                            .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
+                            .lineLimit(1)
                     }
-                    Spacer()
-                    if settings.showHeaderProgress, totalChapters > 0 {
-                        Text("\(chapterIndex + 1)/\(totalChapters)章")
-                            .font(.system(size: 11))
-                            .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
-                    }
-                    if settings.showHeaderBattery {
-                        Text("\(Int(battery.level * 100))%")
-                            .font(.system(size: 11))
-                            .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
-                    }
+                    .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
                 }
-                .padding(.horizontal, settings.sideMargin)
-                .padding(.top, 8)
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // 右侧：章节总进度（受开关控制）
+                if settings.showHeaderProgress, totalChapters > 0 {
+                    Text("\(chapterIndex + 1) / \(totalChapters)章")
+                        .font(.system(size: 11))
+                        .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
+                }
+                if settings.showHeaderBattery {
+                    Text("\(Int(battery.level * 100))%")
+                        .font(.system(size: 11))
+                        .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
+                }
             }
+            .padding(.horizontal, settings.sideMargin)
+            .padding(.top, 8)
         }
         .onAppear  { battery.enable()  }
         .onDisappear { battery.disable() }
@@ -339,10 +349,6 @@ struct ReaderPageView: View {
         text.components(separatedBy: "\n\n")
             .flatMap { $0.components(separatedBy: "\n") }
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-    }
-
-    private var currentTime: String {
-        let f = DateFormatter(); f.dateFormat = "HH:mm"; return f.string(from: Date())
     }
 
     private func applyTraditional(_ text: String) -> String {
