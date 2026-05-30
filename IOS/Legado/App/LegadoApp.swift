@@ -15,7 +15,7 @@ struct LegadoApp: App {
             }
             .task {
                 await Task.detached(priority: .userInitiated) {
-                    _ = DatabaseManager.shared   // 17ms，不是瓶颈
+                    _ = DatabaseManager.shared
                 }.value
                 dbReady = true
             }
