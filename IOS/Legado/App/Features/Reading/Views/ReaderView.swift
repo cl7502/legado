@@ -253,6 +253,11 @@ struct ReaderPageView: View {
     var onHighlight: ((Int, Int, String, Int) -> Void)? = nil
     var onBack: (() -> Void)? = nil     // 点击左上 < 返回书架
 
+    @State private var footerTime: String = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"
+        return f.string(from: Date())
+    }()
+
     @StateObject private var settings = ReaderSettings.shared
     @StateObject private var battery  = BatteryMonitor.shared
 
@@ -280,7 +285,21 @@ struct ReaderPageView: View {
                 Spacer(minLength: 0)
 
                 HStack {
+                    // 左侧：电池图标 + 时间
+                    HStack(spacing: 0) {
+                        BatteryIconView(
+                            level: battery.level,
+                            isCharging: battery.isCharging,
+                            textColor: settings.currentTheme.textColor
+                        )
+                        Text("\u{2003}\u{2003}\(footerTime)")   // 两个 em-space + HH:mm
+                            .font(.system(size: 11))
+                            .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
+                    }
+
                     Spacer()
+
+                    // 右侧：当前页/总页数（不变）
                     Text(pageLabel)
                         .font(.system(size: 11))
                         .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
@@ -322,7 +341,10 @@ struct ReaderPageView: View {
             .padding(.horizontal, settings.sideMargin)
             .padding(.top, 8)
         }
-        .onAppear  { battery.enable()  }
+        .onAppear {
+            battery.enable()
+            scheduleNextMinuteUpdate()
+        }
         .onDisappear { battery.disable() }
     }
 
@@ -354,6 +376,23 @@ struct ReaderPageView: View {
     private func applyTraditional(_ text: String) -> String {
         guard settings.useTraditionalChinese else { return text }
         return text.applyingTransform(StringTransform("Simplified-Traditional"), reverse: false) ?? text
+    }
+
+    /// 在下一个分钟整点更新 footerTime，然后递归调度，确保时间显示始终与系统时钟对齐。
+    private func scheduleNextMinuteUpdate() {
+        let now = Date()
+        let calendar = Calendar.current
+        guard let nextMinute = calendar.nextDate(
+            after: now,
+            matching: DateComponents(second: 0),
+            matchingPolicy: .nextTime
+        ) else { return }
+        let delay = nextMinute.timeIntervalSinceNow
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            let f = DateFormatter(); f.dateFormat = "HH:mm"
+            footerTime = f.string(from: Date())
+            scheduleNextMinuteUpdate()
+        }
     }
 }
 
