@@ -78,34 +78,46 @@ final class SentenceSplitter {
     private func chopLong(_ piece: RawPiece) -> [RawPiece] {
         guard (piece.text as NSString).length > maxLength else { return [piece] }
         var results: [RawPiece] = []
-        var startIdx = piece.text.startIndex
-        var offsetDelta = 0
-        while startIdx < piece.text.endIndex {
-            let remaining = String(piece.text[startIdx...])
-            if (remaining as NSString).length <= maxLength {
-                results.append(RawPiece(text: remaining, offset: piece.offset + offsetDelta))
+        var segStart: String.Index = piece.text.startIndex
+        var nsOffsetDelta: Int = 0   // NSString (UTF-16) offset from piece.text.startIndex
+
+        while segStart < piece.text.endIndex {
+            let remaining = piece.text[segStart...]
+            let remainingNSLen = (remaining as NSString).length
+            if remainingNSLen <= maxLength {
+                results.append(RawPiece(text: String(remaining),
+                                        offset: piece.offset + nsOffsetDelta))
                 break
             }
-            // 在 50 字附近找最近的软边界
-            let maxOff = min(maxLength - 1, (remaining as NSString).length - 1)
-            var cutOffset = min(50, maxOff)
-            var found = false
-            // 向后搜索软边界直到 maxLength
-            while cutOffset <= maxOff {
-                let idx = remaining.index(remaining.startIndex, offsetBy: cutOffset)
-                if remaining[idx].unicodeScalars.contains(where: softBoundaries.contains) {
-                    cutOffset += 1  // include the boundary char
-                    found = true
-                    break
+            // Walk forward using Swift String.Index (grapheme clusters), tracking NS length
+            var cutIdx = segStart
+            var nsLen = 0
+            var softCutIdx: String.Index? = nil
+            var softNsLen = 0
+
+            while cutIdx < piece.text.endIndex {
+                let ch = piece.text[cutIdx]
+                let chNSLen = (String(ch) as NSString).length
+                if nsLen + chNSLen > maxLength { break }
+                cutIdx = piece.text.index(after: cutIdx)
+                nsLen += chNSLen
+                // Record first soft boundary after position 50 (NS chars)
+                if softCutIdx == nil && nsLen >= 50 &&
+                   ch.unicodeScalars.contains(where: softBoundaries.contains) {
+                    softCutIdx = cutIdx
+                    softNsLen  = nsLen
                 }
-                cutOffset += 1
             }
-            if !found { cutOffset = maxOff + 1 }
-            let cutIdx = remaining.index(remaining.startIndex, offsetBy: cutOffset)
-            let sub = String(remaining[..<cutIdx])
-            results.append(RawPiece(text: sub, offset: piece.offset + offsetDelta))
-            offsetDelta += (sub as NSString).length
-            startIdx = piece.text.index(startIdx, offsetBy: (sub as NSString).length)
+
+            // Use soft boundary if found, else hard cut at maxLength
+            let (finalCutIdx, finalNsLen) = softCutIdx != nil
+                ? (softCutIdx!, softNsLen)
+                : (cutIdx, nsLen)
+
+            let sub = String(piece.text[segStart..<finalCutIdx])
+            results.append(RawPiece(text: sub, offset: piece.offset + nsOffsetDelta))
+            nsOffsetDelta += finalNsLen
+            segStart = finalCutIdx
         }
         return results
     }
