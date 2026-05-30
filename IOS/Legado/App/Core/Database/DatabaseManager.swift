@@ -16,222 +16,126 @@ class DatabaseManager {
             let databaseURL = try FileManager.default
                 .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 .appendingPathComponent("legado_v2.sqlite")
-            
+
             var config = Configuration()
             config.prepareDatabase { db in
                 try db.execute(sql: "PRAGMA foreign_keys = ON")
             }
-            
+
             dbPool = try DatabasePool(path: databaseURL.path, configuration: config)
-            
-            // 执行迁移
-            try migrator.migrate(dbPool)
+
+            // 直接建表：新安装时创建所有表，已存在时 IF NOT EXISTS 是 no-op，无需迁移开销
+            try createSchemaIfNeeded()
         } catch {
             fatalError("❌ [DB Error]: Failed to initialize database: \(error)")
         }
     }
-    
-    private var migrator: DatabaseMigrator {
-        var migrator = DatabaseMigrator()
-        
-        migrator.registerMigration("v1-initial") { db in
-            // 1. 书源表
-            try db.create(table: "book_source") { t in
-                t.column("bookSourceUrl", .text).primaryKey()
-                t.column("bookSourceName", .text).notNull()
-                t.column("bookSourceGroup", .text)
-                t.column("bookSourceType", .integer).defaults(to: 0)
-                t.column("customOrder", .integer).defaults(to: 0)
-                t.column("enabled", .boolean).defaults(to: true).indexed()
-                t.column("lastUpdateTime", .integer).defaults(to: 0)
-                t.column("header", .text)
-                t.column("searchUrl", .text)
-                t.column("ruleSearchUrl", .text)
-                t.column("ruleBookInfo", .text)
-                t.column("ruleToc", .text)
-                t.column("ruleContent", .text)
-                t.column("exploreUrl", .text)
-            }
-            
-            // 2. 书籍表
-            try db.create(table: "book") { t in
-                t.column("bookUrl", .text).primaryKey()
-                t.column("name", .text).notNull().indexed()
-                t.column("author", .text).notNull().indexed()
-                t.column("coverUrl", .text)
-                t.column("origin", .text).notNull().indexed() // 书源 URL
-                t.column("durChapterIndex", .integer).defaults(to: 0)
-                t.column("durChapterPos", .integer).defaults(to: 0)
-                t.column("durChapterTime", .integer).defaults(to: 0).indexed()
-            }
-            
-            // 3. 章节表
-            try db.create(table: "book_chapter") { t in
-                t.column("url", .text).primaryKey()
-                t.column("title", .text).notNull()
-                t.column("index", .integer).notNull()
-                t.column("bookUrl", .text).notNull()
-                    .references("book", column: "bookUrl", onDelete: .cascade)
-            }
-            try db.create(index: "idx_chapter_book_index", on: "book_chapter", columns: ["bookUrl", "index"])
-            
-            // 4. 净化规则表
-            try db.create(table: "replace_rule") { t in
-                t.autoIncrementedPrimaryKey("id")
-                t.column("name", .text).notNull()
-                t.column("pattern", .text).notNull()
-                t.column("replacement", .text).defaults(to: "")
-                t.column("isEnabled", .boolean).defaults(to: true)
-                t.column("order", .integer).defaults(to: 0)
-            }
-        }
-        
-        // v2: 补充所有规则字段列（v1 只有 JSON blob 列，规则字段全部缺失）
-        migrator.registerMigration("v2-rule-columns") { db in
-            try db.alter(table: "book_source") { t in
-                t.add(column: "bookSourceComment",    .text)
-                t.add(column: "weight",               .integer).defaults(to: 0)
-                t.add(column: "bookUrlPattern",       .text)
-                t.add(column: "jsLib",                .text)
-                t.add(column: "loginUrl",             .text)
-                t.add(column: "loginUi",              .text)
-                t.add(column: "loginCheckJs",         .text)
-                t.add(column: "concurrentRate",       .text)
-                t.add(column: "enabledCookieJar",     .boolean).defaults(to: false)
-                t.add(column: "variableComment",      .text)
-                t.add(column: "respondTime",          .integer).defaults(to: 0)
-                // 搜索规则
-                t.add(column: "ruleSearchList",       .text)
-                t.add(column: "ruleSearchName",       .text)
-                t.add(column: "ruleSearchAuthor",     .text)
-                t.add(column: "ruleSearchKind",       .text)
-                t.add(column: "ruleSearchLastChapter",.text)
-                t.add(column: "ruleSearchCoverUrl",   .text)
-                t.add(column: "ruleSearchNoteUrl",    .text)
-                // 详情页规则
-                t.add(column: "ruleBookInfoInit",     .text)
-                t.add(column: "ruleBookName",         .text)
-                t.add(column: "ruleBookAuthor",       .text)
-                t.add(column: "ruleBookIntro",        .text)
-                t.add(column: "ruleBookKind",         .text)
-                t.add(column: "ruleBookLastChapter",  .text)
-                t.add(column: "ruleBookCoverUrl",     .text)
-                t.add(column: "ruleTocUrl",           .text)
-                // 目录规则
-                t.add(column: "ruleTocList",          .text)
-                t.add(column: "ruleChapterName",      .text)
-                t.add(column: "ruleChapterUrl",       .text)
-                t.add(column: "ruleChapterVip",       .text)
-                t.add(column: "ruleTocNextUrl",       .text)
-                // 正文规则（ruleContent 已在 v1，只补其余）
-                t.add(column: "ruleContentNextUrl",   .text)
-                t.add(column: "ruleContentReplace",   .text)
-                // 发现规则
-                t.add(column: "ruleExploreList",      .text)
-                t.add(column: "ruleExploreName",      .text)
-                t.add(column: "ruleExploreAuthor",    .text)
-                t.add(column: "ruleExploreKind",      .text)
-                t.add(column: "ruleExploreCoverUrl",  .text)
-                t.add(column: "ruleExploreNoteUrl",   .text)
-            }
-        }
 
-        // v3: 书籍表补充缺失列
-        migrator.registerMigration("v3-book-columns") { db in
-            try db.alter(table: "book") { t in
-                t.add(column: "kind",               .text)
-                t.add(column: "wordCount",          .text)
-                t.add(column: "intro",              .text)
-                t.add(column: "originName",         .text)
-                t.add(column: "variable",           .text)
-                t.add(column: "infoHtml",           .text)
-                t.add(column: "totalChapterNum",    .integer).defaults(to: 0)
-                t.add(column: "latestChapterTitle", .text)
-                t.add(column: "latestChapterUrl",   .text)
-                t.add(column: "durChapterTitle",    .text)
-                t.add(column: "lastCheckTime",      .integer).defaults(to: 0)
-                t.add(column: "canUpdate",          .boolean).defaults(to: true)
-                t.add(column: "useReplaceRule",     .boolean).defaults(to: true)
-                t.add(column: "tocUrl",             .text)
-            }
-        }
+    private func createSchemaIfNeeded() throws {
+        try dbPool.write { db in
+            // ── 书源表 ─────────────────────────────────────────────────────────────
+            try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS book_source (
+                bookSourceUrl TEXT PRIMARY KEY,
+                bookSourceName TEXT NOT NULL,
+                bookSourceGroup TEXT,
+                bookSourceType INTEGER DEFAULT 0,
+                customOrder INTEGER DEFAULT 0,
+                enabled INTEGER DEFAULT 1,
+                lastUpdateTime INTEGER DEFAULT 0,
+                header TEXT, searchUrl TEXT,
+                ruleSearchUrl TEXT, ruleBookInfo TEXT, ruleToc TEXT, ruleContent TEXT, exploreUrl TEXT,
+                bookSourceComment TEXT, weight INTEGER DEFAULT 0, bookUrlPattern TEXT,
+                jsLib TEXT, loginUrl TEXT, loginUi TEXT, loginCheckJs TEXT,
+                concurrentRate TEXT, enabledCookieJar INTEGER DEFAULT 0,
+                variableComment TEXT, respondTime INTEGER DEFAULT 0,
+                ruleSearchList TEXT, ruleSearchName TEXT, ruleSearchAuthor TEXT,
+                ruleSearchKind TEXT, ruleSearchLastChapter TEXT, ruleSearchCoverUrl TEXT, ruleSearchNoteUrl TEXT,
+                ruleBookInfoInit TEXT, ruleBookName TEXT, ruleBookAuthor TEXT,
+                ruleBookIntro TEXT, ruleBookKind TEXT, ruleBookLastChapter TEXT, ruleBookCoverUrl TEXT,
+                ruleTocUrl TEXT, ruleTocList TEXT, ruleChapterName TEXT, ruleChapterUrl TEXT,
+                ruleChapterVip TEXT, ruleTocNextUrl TEXT, ruleContentNextUrl TEXT, ruleContentReplace TEXT,
+                ruleExploreList TEXT, ruleExploreName TEXT, ruleExploreAuthor TEXT,
+                ruleExploreKind TEXT, ruleExploreCoverUrl TEXT, ruleExploreNoteUrl TEXT,
+                enabledExplore INTEGER DEFAULT 1, coverDecodeJs TEXT, exploreScreen TEXT,
+                ruleSearchIntro TEXT, ruleSearchUpdateTime TEXT, ruleSearchWordCount TEXT,
+                ruleChapterUpdateTime TEXT, ruleTocPreUpdateJs TEXT, ruleTocFormatJs TEXT,
+                checkState INTEGER DEFAULT 0
+            )
+            """)
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_book_source_enabled ON book_source (enabled)")
 
-        // v4: 章节表补充缺失列
-        migrator.registerMigration("v4-chapter-columns") { db in
-            try db.alter(table: "book_chapter") { t in
-                t.add(column: "tag",         .text)
-                t.add(column: "volume",      .text)
-                t.add(column: "resourceUrl", .text)
-                t.add(column: "pay",         .boolean).defaults(to: false)
-                t.add(column: "vip",         .boolean).defaults(to: false)
-                t.add(column: "updateTime",  .integer).defaults(to: 0)
-            }
-        }
+            // ── 书籍表 ─────────────────────────────────────────────────────────────
+            try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS book (
+                bookUrl TEXT PRIMARY KEY,
+                name TEXT NOT NULL, author TEXT NOT NULL,
+                coverUrl TEXT, origin TEXT NOT NULL,
+                durChapterIndex INTEGER DEFAULT 0, durChapterPos INTEGER DEFAULT 0,
+                durChapterTime INTEGER DEFAULT 0,
+                kind TEXT, wordCount TEXT, intro TEXT, originName TEXT, variable TEXT,
+                infoHtml TEXT, totalChapterNum INTEGER DEFAULT 0,
+                latestChapterTitle TEXT, latestChapterUrl TEXT, durChapterTitle TEXT,
+                lastCheckTime INTEGER DEFAULT 0, canUpdate INTEGER DEFAULT 1,
+                useReplaceRule INTEGER DEFAULT 1, tocUrl TEXT
+            )
+            """)
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_book_name   ON book (name)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_book_author ON book (author)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_book_origin ON book (origin)")
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_book_time   ON book (durChapterTime)")
 
-        // v5: 补充 replace_rule 缺失的 regex / scope 列，以及为 save/delete 所需的正确 id 支持
-        migrator.registerMigration("v5-replace-rule-columns") { db in
-            try db.alter(table: "replace_rule") { t in
-                t.add(column: "regex", .boolean).defaults(to: true)
-                t.add(column: "scope", .text)
-            }
-        }
+            // ── 章节表 ─────────────────────────────────────────────────────────────
+            try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS book_chapter (
+                url TEXT PRIMARY KEY,
+                title TEXT NOT NULL, `index` INTEGER NOT NULL,
+                bookUrl TEXT NOT NULL REFERENCES book(bookUrl) ON DELETE CASCADE,
+                tag TEXT, volume TEXT, resourceUrl TEXT,
+                pay INTEGER DEFAULT 0, vip INTEGER DEFAULT 0,
+                updateTime INTEGER DEFAULT 0, content TEXT
+            )
+            """)
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_chapter_book_index ON book_chapter (bookUrl, `index`)")
 
-        // v6: book_source 补充 ISSUE-019 新增字段（enabledExplore / coverDecodeJs 等）
-        migrator.registerMigration("v6-book-source-issue019") { db in
-            try db.alter(table: "book_source") { t in
-                t.add(column: "enabledExplore",       .boolean).defaults(to: true)
-                t.add(column: "coverDecodeJs",        .text)
-                t.add(column: "exploreScreen",        .text)
-                t.add(column: "ruleSearchIntro",      .text)
-                t.add(column: "ruleSearchUpdateTime", .text)
-                t.add(column: "ruleSearchWordCount",  .text)
-                t.add(column: "ruleChapterUpdateTime",.text)
-                t.add(column: "ruleTocPreUpdateJs",   .text)
-                t.add(column: "ruleTocFormatJs",      .text)
-            }
-        }
+            // ── 净化规则表 ────────────────────────────────────────────────────────
+            try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS replace_rule (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL, pattern TEXT NOT NULL,
+                replacement TEXT DEFAULT '', isEnabled INTEGER DEFAULT 1,
+                `order` INTEGER DEFAULT 0, regex INTEGER DEFAULT 1, scope TEXT
+            )
+            """)
 
-        migrator.registerMigration("v7-check-state") { db in
-            try db.alter(table: "book_source") { t in
-                // 0=未检测 1=正常 2=慢速 3=失败
-                t.add(column: "checkState", .integer).defaults(to: 0)
-            }
-        }
+            // ── 书签表 ────────────────────────────────────────────────────────────
+            try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS bookmarks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bookUrl TEXT NOT NULL, chapterIndex INTEGER NOT NULL,
+                chapterTitle TEXT NOT NULL, chapterPos INTEGER DEFAULT 0,
+                content TEXT DEFAULT '', createdAt DATETIME NOT NULL
+            )
+            """)
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON bookmarks (bookUrl)")
 
-        migrator.registerMigration("v8-bookmarks") { db in
-            try db.create(table: "bookmarks", ifNotExists: true) { t in
-                t.autoIncrementedPrimaryKey("id")
-                t.column("bookUrl",      .text).notNull().indexed()
-                t.column("chapterIndex", .integer).notNull()
-                t.column("chapterTitle", .text).notNull()
-                t.column("chapterPos",   .integer).notNull().defaults(to: 0)
-                t.column("content",      .text).notNull().defaults(to: "")
-                t.column("createdAt",    .datetime).notNull()
-            }
+            // ── 高亮划线表 ────────────────────────────────────────────────────────
+            try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS book_highlights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bookUrl TEXT NOT NULL, chapterIndex INTEGER NOT NULL,
+                startOffset INTEGER NOT NULL, endOffset INTEGER NOT NULL,
+                selectedText TEXT DEFAULT '', color INTEGER DEFAULT 0,
+                note TEXT, createdAt DATETIME NOT NULL
+            )
+            """)
+            try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_highlights_book ON book_highlights (bookUrl)")
         }
-
-        migrator.registerMigration("v9-highlights") { db in
-            try db.create(table: "book_highlights", ifNotExists: true) { t in
-                t.autoIncrementedPrimaryKey("id")
-                t.column("bookUrl",      .text).notNull().indexed()
-                t.column("chapterIndex", .integer).notNull()
-                t.column("startOffset",  .integer).notNull()
-                t.column("endOffset",    .integer).notNull()
-                t.column("selectedText", .text).notNull().defaults(to: "")
-                t.column("color",        .integer).notNull().defaults(to: 0)
-                t.column("note",         .text)
-                t.column("createdAt",    .datetime).notNull()
-            }
-        }
-
-        migrator.registerMigration("v10-chapter-content-cache") { db in
-            try db.alter(table: "book_chapter") { t in
-                t.add(column: "content", .text)
-            }
-        }
-
-        return migrator
     }
+
+    // migrator 属性已删除：不再使用 GRDB 迁移系统，改为 CREATE TABLE IF NOT EXISTS。
+    // 如未来需要修改已有表结构，直接在 createSchemaIfNeeded 中用 ALTER TABLE 处理，
+    // 并通过 UserDefaults 标记版本号按需执行一次。
 }
 
 // MARK: - 数据访问扩展 (DAO)

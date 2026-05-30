@@ -2,9 +2,38 @@ import SwiftUI
 
 @main
 struct LegadoApp: App {
+    @State private var dbReady = false
+
     var body: some Scene {
         WindowGroup {
-            MainTabView()
+            Group {
+                if dbReady {
+                    MainTabView()
+                } else {
+                    AppLaunchView()
+                }
+            }
+            .task {
+                await Task.detached(priority: .userInitiated) {
+                    _ = DatabaseManager.shared   // 17ms，不是瓶颈
+                }.value
+                dbReady = true
+            }
         }
+    }
+}
+
+private struct AppLaunchView: View {
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "books.vertical.fill")
+                .font(.system(size: 64))
+                .foregroundColor(.accentColor)
+            Text("Legado")
+                .font(.largeTitle.bold())
+            ProgressView().scaleEffect(1.2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
     }
 }
