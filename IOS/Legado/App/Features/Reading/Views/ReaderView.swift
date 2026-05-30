@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AVFoundation
 
 // MARK: - ReaderView
 
@@ -412,6 +413,9 @@ struct ReaderMenuView: View {
     @State private var showingHighlights  = false
     @State private var showingSourceSelection = false
     @State private var bookmarkAdded = false
+    @State private var ttsTimerSelection: Int? = nil
+    @State private var showCustomTimer = false
+    @State private var customTimerInput = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -616,34 +620,36 @@ struct ReaderMenuView: View {
             }
             .padding(.horizontal)
 
-            // 功能按钮行
-            HStack(spacing: 0) {
-                menuButton(icon: viewModel.isTTSEnabled ? "headphones.circle.fill" : "headphones",
-                           label: "朗读",
-                           tint: viewModel.isTTSEnabled ? .blue : .primary) {
-                    viewModel.toggleTTS()
-                }
-                menuButton(icon: "list.bullet", label: "目录") { showingTOC = true }
-                menuButton(icon: settings.pageMode == .scroll ? "book" : "scroll",
-                           label: settings.pageMode == .scroll ? "翻页" : "滚动") {
-                    settings.pageMode = settings.pageMode == .scroll ? .page : .scroll
-                }
-                // B2修复：夜间/白天保存切换前的主题
-                menuButton(icon: settings.currentTheme.id == "dark" ? "sun.max" : "moon",
-                           label: settings.currentTheme.id == "dark" ? "白天" : "夜间") {
-                    if settings.currentTheme.id == "dark" {
-                        settings.themeId = settings.preNightThemeId.isEmpty ? "parchment" : settings.preNightThemeId
-                    } else {
-                        settings.preNightThemeId = settings.themeId
-                        settings.themeId = "dark"
+            if viewModel.isTTSEnabled {
+                // ── TTS 控制面板（激活朗读时取代功能按钮行）──────────
+                ttsPanelView
+            } else {
+                // ── 原有五功能按钮行 ─────────────────────────────────
+                HStack(spacing: 0) {
+                    menuButton(icon: "headphones", label: "朗读") {
+                        viewModel.toggleTTS()
                     }
+                    menuButton(icon: "list.bullet", label: "目录") { showingTOC = true }
+                    menuButton(icon: settings.pageMode == .scroll ? "book" : "scroll",
+                               label: settings.pageMode == .scroll ? "翻页" : "滚动") {
+                        settings.pageMode = settings.pageMode == .scroll ? .page : .scroll
+                    }
+                    menuButton(icon: settings.currentTheme.id == "dark" ? "sun.max" : "moon",
+                               label: settings.currentTheme.id == "dark" ? "白天" : "夜间") {
+                        if settings.currentTheme.id == "dark" {
+                            settings.themeId = settings.preNightThemeId.isEmpty ? "parchment" : settings.preNightThemeId
+                        } else {
+                            settings.preNightThemeId = settings.themeId
+                            settings.themeId = "dark"
+                        }
+                    }
+                    menuButton(icon: "textformat.size", label: "设置") { showingSettings = true }
                 }
-                menuButton(icon: "textformat.size", label: "设置") { showingSettings = true }
-            }
 
-            if viewModel.chapters.count > 0 {
-                Text("第\(viewModel.currentChapterIndex + 1)章 / 共\(viewModel.chapters.count)章")
-                    .font(.caption2).foregroundColor(.secondary)
+                if viewModel.chapters.count > 0 {
+                    Text("第\(viewModel.currentChapterIndex + 1)章 / 共\(viewModel.chapters.count)章")
+                        .font(.caption2).foregroundColor(.secondary)
+                }
             }
         }
         .padding(.top, 12)
@@ -667,6 +673,177 @@ struct ReaderMenuView: View {
             }
             .frame(maxWidth: .infinity)
         }
+    }
+
+    // MARK: TTS 控制面板
+
+    @ViewBuilder
+    private var ttsPanelView: some View {
+        let ttsManager = viewModel.ttsManager
+
+        VStack(spacing: 10) {
+
+            // 语速
+            HStack(spacing: 8) {
+                Text("语速").font(.caption).foregroundColor(.secondary).frame(width: 36, alignment: .leading)
+                Text("慢").font(.caption2).foregroundColor(.secondary)
+                Slider(
+                    value: Binding(
+                        get: { Double(settings.ttsRate) },
+                        set: { settings.ttsRate = Float($0) }
+                    ),
+                    in: 0.25...2.0
+                )
+                Text("快").font(.caption2).foregroundColor(.secondary)
+                Text(String(format: "%.1fx", settings.ttsRate))
+                    .font(.caption).frame(width: 36, alignment: .trailing)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal)
+
+            // 发音选择
+            HStack {
+                Text("发音").font(.caption).foregroundColor(.secondary).frame(width: 36, alignment: .leading)
+                Picker("发音", selection: Binding(
+                    get: { ttsManager.selectedVoice?.identifier ?? "" },
+                    set: { id in
+                        ttsManager.selectedVoice = id.isEmpty
+                            ? nil
+                            : AVSpeechSynthesisVoice(identifier: id)
+                    }
+                )) {
+                    Text("系统默认").tag("")
+                    ForEach(chineseVoices, id: \.identifier) { voice in
+                        Text(voiceDisplayName(voice)).tag(voice.identifier)
+                    }
+                }
+                .pickerStyle(.menu)
+                Spacer()
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Text("下载更多 →").font(.caption2).foregroundColor(.blue)
+                }
+            }
+            .padding(.horizontal)
+
+            // 定时
+            HStack(spacing: 6) {
+                Text("定时").font(.caption).foregroundColor(.secondary).frame(width: 36, alignment: .leading)
+                ForEach([5, 15, 30, 60], id: \.self) { min in
+                    timerButton(minutes: min, ttsManager: ttsManager)
+                }
+                Button {
+                    showCustomTimer = true
+                } label: {
+                    let isCustomActive = ttsTimerSelection != nil && ![5,15,30,60].contains(ttsTimerSelection!)
+                    Text(isCustomActive ? "\(ttsTimerSelection!)分" : "自定义")
+                        .font(.caption)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(isCustomActive ? Color.blue : Color(.systemGray5))
+                        .foregroundColor(isCustomActive ? .white : .primary)
+                        .cornerRadius(6)
+                }
+                if let remaining = ttsManager.remainingSeconds {
+                    Text(formatRemaining(remaining))
+                        .font(.caption2).foregroundColor(.secondary)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.horizontal)
+
+            // 退出 + 暂停/继续
+            HStack(spacing: 16) {
+                Button(role: .destructive) {
+                    viewModel.stopTTS()
+                    ttsTimerSelection = nil
+                } label: {
+                    Text("退出朗读")
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color(.systemGray5))
+                        .foregroundColor(.red)
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    if ttsManager.isPlaying { ttsManager.pause() } else { ttsManager.resume() }
+                } label: {
+                    HStack {
+                        Image(systemName: ttsManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        Text(ttsManager.isPlaying ? "暂停" : "继续")
+                    }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal)
+        }
+        .padding(.vertical, 8)
+        .alert("自定义定时（分钟）", isPresented: $showCustomTimer) {
+            TextField("输入分钟数", text: $customTimerInput)
+                .keyboardType(.numberPad)
+            Button("确定") {
+                if let min = Int(customTimerInput), min > 0, min <= 999 {
+                    ttsTimerSelection = min
+                    ttsManager.startTimer(minutes: min)
+                }
+                customTimerInput = ""
+            }
+            Button("取消", role: .cancel) { customTimerInput = "" }
+        }
+    }
+
+    private var chineseVoices: [AVSpeechSynthesisVoice] {
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix("zh") }
+            .sorted { $0.language < $1.language }
+    }
+
+    private func voiceDisplayName(_ voice: AVSpeechSynthesisVoice) -> String {
+        let langMap = ["zh-CN": "普通话", "zh-HK": "粤语", "zh-TW": "台湾中文"]
+        let lang = langMap[voice.language] ?? voice.language
+        let quality: String
+        switch voice.quality {
+        case .enhanced: quality = "增强版"
+        case .premium:  quality = "高级版"
+        default:        quality = "标准"
+        }
+        return "\(lang) - \(voice.name) (\(quality))"
+    }
+
+    @ViewBuilder
+    private func timerButton(minutes: Int, ttsManager: TTSManager) -> some View {
+        let isSelected = ttsTimerSelection == minutes
+        Button {
+            if isSelected {
+                ttsTimerSelection = nil
+                ttsManager.cancelTimer()
+            } else {
+                ttsTimerSelection = minutes
+                ttsManager.startTimer(minutes: minutes)
+            }
+        } label: {
+            Text("\(minutes)分")
+                .font(.caption)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(isSelected ? Color.blue : Color(.systemGray5))
+                .foregroundColor(isSelected ? .white : .primary)
+                .cornerRadius(6)
+        }
+    }
+
+    private func formatRemaining(_ seconds: Int) -> String {
+        String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 }
 
