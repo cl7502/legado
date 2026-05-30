@@ -307,7 +307,7 @@ struct ReaderView: View {
                     .frame(width: geo.size.width / 3)
             }
         }
-        .ignoresSafeArea()
+        // 不能用 .ignoresSafeArea()：会扩展到全屏并拦截 header 区域的 "<" 按钮
     }
 
     private var loadingPlaceholder: some View {
