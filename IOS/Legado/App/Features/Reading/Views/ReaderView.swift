@@ -190,32 +190,49 @@ struct ReaderView: View {
                     .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
             }
         }
-        .padding(.horizontal, settings.sideMargin)
+        // 圆角设备：计算 header 中线处被圆弧遮蔽的水平宽度，并留出舒适边距
+        .padding(.horizontal, headerCornerAwarePad)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(settings.currentTheme.backgroundColor)
     }
 
-    // MARK: 固定 Footer 栏
+    /// 圆角感知的 Header 水平内边距：确保圆角设备上内容不落入弧形遮盖区。
+    /// 公式：在 y = headerH/2 处，圆角水平遮盖宽度 = r - sqrt(r² - (r - y)²)
+    private var headerCornerAwarePad: CGFloat {
+        let r = (UIScreen.main.value(forKey: "displayCornerRadius") as? CGFloat) ?? 0
+        guard r > 1 else { return settings.sideMargin }       // 直角设备直接用 sideMargin
+        let y = ReaderLayout.headerH / 2                       // header 中线距屏顶高度
+        guard y < r else { return settings.sideMargin }
+        let arcInset = r - sqrt(r * r - (r - y) * (r - y))   // 该高度处圆角水平遮盖量
+        return max(settings.sideMargin, ceil(arcInset) + 10)  // +10pt 舒适边距
+    }
+
+    // MARK: 固定 Footer 栏（内容居中显示）
     private var readerFooterBar: some View {
-        HStack {
+        let pageLabel = viewModel.currentPageIndex < viewModel.currentPages.count
+            ? "\(viewModel.currentPageIndex + 1) / \(viewModel.currentPages.count)" : ""
+        return HStack(spacing: 8) {
+            // 电池图标 + 时间
             HStack(spacing: 0) {
                 BatteryIconView(
                     level: battery.level,
                     isCharging: battery.isCharging,
                     textColor: settings.currentTheme.textColor
                 )
-                Text("\u{2003}\u{2003}\(footerTime)")
+                Text("\u{2002}\(footerTime)")       // 1 en-space + HH:mm
                     .font(.system(size: 11))
                     .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
             }
-            Spacer()
-            let pageLabel = viewModel.currentPageIndex < viewModel.currentPages.count
-                ? "\(viewModel.currentPageIndex + 1) / \(viewModel.currentPages.count)" : ""
+            // 分隔点
+            Text("·")
+                .font(.system(size: 11))
+                .foregroundColor(settings.currentTheme.textColor.opacity(0.3))
+            // 页码
             Text(pageLabel)
                 .font(.system(size: 11))
                 .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
         }
-        .padding(.horizontal, settings.sideMargin)
+        .frame(maxWidth: .infinity, alignment: .center)   // 整体居中
         .background(settings.currentTheme.backgroundColor)
     }
 
