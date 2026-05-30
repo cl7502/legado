@@ -81,6 +81,7 @@
 		TT5PRO7000000000000002B /* TTSProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5PRO7000000000000001A /* TTSProtocol.swift */; };
 		TT5ENG0000000000000002B /* TTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ENG0000000000000001A /* TTSEngine.swift */; };
 		TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */; };
+		TXNRM0000000000000002B /* TextNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXNRM0000000000000001A /* TextNormalizer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -155,6 +156,7 @@
 		TT5PRO7000000000000001A /* TTSProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSProtocol.swift; sourceTree = "<group>"; };
 		TT5ENG0000000000000001A /* TTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngine.swift; sourceTree = "<group>"; };
 		TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipVoiceEngine.swift; sourceTree = "<group>"; };
+		TXNRM0000000000000001A /* TextNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextNormalizer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -176,6 +178,7 @@
 			children = (
 				TT5PRO7000000000000001A /* TTSProtocol.swift */,
 				TT5GRP0000000000000003E /* Engines */,
+				TXNRM0000000000000003G /* Pipeline */,
 				94D5BD031138372332E5877B /* ViewModels */,
 			);
 			path = TTS;
@@ -440,6 +443,14 @@
 			path = Engines;
 			sourceTree = "<group>";
 		};
+		TXNRM0000000000000003G /* Pipeline */ = {
+			isa = PBXGroup;
+			children = (
+				TXNRM0000000000000001A /* TextNormalizer.swift */,
+			);
+			path = Pipeline;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -577,6 +588,7 @@
 				TT5PRO7000000000000002B /* TTSProtocol.swift in Sources */,
 				TT5ENG0000000000000002B /* TTSEngine.swift in Sources */,
 				TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */,
+				TXNRM0000000000000002B /* TextNormalizer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
