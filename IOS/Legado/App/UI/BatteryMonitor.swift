@@ -10,6 +10,7 @@ final class BatteryMonitor: ObservableObject {
     @Published private(set) var isCharging: Bool = false
 
     private var cancellables = Set<AnyCancellable>()
+    private var enableRefCount: Int = 0
 
     private init() {
         refresh()
@@ -23,15 +24,21 @@ final class BatteryMonitor: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// 视图出现时调用，启用系统电量监听
+    /// 视图出现时调用，启用系统电量监听（引用计数）
     func enable() {
-        UIDevice.current.isBatteryMonitoringEnabled = true
-        refresh()
+        enableRefCount += 1
+        if enableRefCount == 1 {
+            UIDevice.current.isBatteryMonitoringEnabled = true
+            refresh()
+        }
     }
 
-    /// 视图消失时调用，关闭系统监听节省资源
+    /// 视图消失时调用，关闭系统监听节省资源（引用计数）
     func disable() {
-        UIDevice.current.isBatteryMonitoringEnabled = false
+        enableRefCount = max(0, enableRefCount - 1)
+        if enableRefCount == 0 {
+            UIDevice.current.isBatteryMonitoringEnabled = false
+        }
     }
 
     private func refresh() {

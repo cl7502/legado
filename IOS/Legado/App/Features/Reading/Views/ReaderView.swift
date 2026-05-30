@@ -258,6 +258,7 @@ struct ReaderPageView: View {
         let f = DateFormatter(); f.dateFormat = "HH:mm"
         return f.string(from: Date())
     }()
+    @State private var minuteWorkItem: DispatchWorkItem? = nil
 
     @StateObject private var settings = ReaderSettings.shared
     @StateObject private var battery  = BatteryMonitor.shared
@@ -346,7 +347,11 @@ struct ReaderPageView: View {
             battery.enable()
             scheduleNextMinuteUpdate()
         }
-        .onDisappear { battery.disable() }
+        .onDisappear {
+            battery.disable()
+            minuteWorkItem?.cancel()
+            minuteWorkItem = nil
+        }
     }
 
     /// 构建与 ChapterPaginator.makeAttrString 完全相同的 AttributedString，
@@ -381,19 +386,19 @@ struct ReaderPageView: View {
 
     /// 在下一个分钟整点更新 footerTime，然后递归调度，确保时间显示始终与系统时钟对齐。
     private func scheduleNextMinuteUpdate() {
+        minuteWorkItem?.cancel()
         let now = Date()
-        let calendar = Calendar.current
-        guard let nextMinute = calendar.nextDate(
-            after: now,
-            matching: DateComponents(second: 0),
-            matchingPolicy: .nextTime
+        guard let nextMinute = Calendar.current.nextDate(
+            after: now, matching: DateComponents(second: 0), matchingPolicy: .nextTime
         ) else { return }
         let delay = nextMinute.timeIntervalSinceNow
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        let work = DispatchWorkItem {
             let f = DateFormatter(); f.dateFormat = "HH:mm"
             footerTime = f.string(from: Date())
             scheduleNextMinuteUpdate()
         }
+        minuteWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 }
 
