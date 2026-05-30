@@ -142,10 +142,11 @@ extension Color {
         )
     }
 
-    /// 转换为 "#RRGGBB" 字符串
+    /// 转换为 "#RRGGBB" 字符串（使用 getRed 避免灰阶色空间 components 越界，IM-07）
     func toHex() -> String? {
-        guard let comps = UIColor(self).cgColor.components, comps.count >= 3 else { return nil }
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
         return String(format: "#%02X%02X%02X",
-                      Int(comps[0] * 255), Int(comps[1] * 255), Int(comps[2] * 255))
+                      Int(r * 255), Int(g * 255), Int(b * 255))
     }
 }

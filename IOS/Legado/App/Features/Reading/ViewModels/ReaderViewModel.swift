@@ -53,14 +53,31 @@ class ReaderViewModel: ObservableObject {
     }
 
     /// 切换书源后重新加载目录和章节内容，保留当前章节索引
+    /// 若换源后目录为空则回滚到原书源（CR-04）
     func changeSource(to source: BookSource) async {
         let savedChapterIndex = currentChapterIndex
+        let savedOrigin = book.origin
+        let savedOriginName = book.originName
+
         book.origin = source.bookSourceUrl
         book.originName = source.bookSourceName
         try? await DatabaseManager.shared.saveBook(book)
+
         chapterContents.removeAll()
+        currentPages = []
+        currentPageIndex = 0
         await loadChapters()
-        jumpToChapter(min(savedChapterIndex, max(0, chapters.count - 1)))
+
+        guard !chapters.isEmpty else {
+            // 换源失败，回滚到原书源
+            book.origin = savedOrigin
+            book.originName = savedOriginName
+            try? await DatabaseManager.shared.saveBook(book)
+            await loadChapters()
+            return
+        }
+        let target = max(0, min(savedChapterIndex, chapters.count - 1))
+        jumpToChapter(target)
     }
     
     func startTTS() {

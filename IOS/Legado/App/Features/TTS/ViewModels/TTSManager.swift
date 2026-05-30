@@ -131,14 +131,13 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
         DispatchQueue.main.async { self.remainingSeconds = seconds }
         timerTask = Task { @MainActor in
             var remaining = seconds
-            while remaining > 0, !Task.isCancelled {
+            while remaining > 0 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if Task.isCancelled { return }   // sleep 后立即检查取消（CR-05）
                 remaining -= 1
                 self.remainingSeconds = remaining
             }
-            if !Task.isCancelled {
-                self.stop()
-            }
+            self.stop()
         }
     }
 
