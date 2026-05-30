@@ -681,9 +681,8 @@ struct ReaderSettingsSheet: View {
                     .pickerStyle(.segmented)
                 }
                 Section("页眉信息") {
-                    Toggle("显示时间",     isOn: $settings.showHeaderTime)
                     Toggle("显示章节进度", isOn: $settings.showHeaderProgress)
-                    Toggle("显示电量",     isOn: $settings.showHeaderBattery)
+                    Toggle("显示右上电量", isOn: $settings.showHeaderBattery)
                 }
                 Section("高级") {
                     Toggle("屏幕常亮", isOn: $settings.keepScreenOn)
