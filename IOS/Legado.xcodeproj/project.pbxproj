@@ -82,6 +82,7 @@
 		TT5ENG0000000000000002B /* TTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ENG0000000000000001A /* TTSEngine.swift */; };
 		TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */; };
 		TXNRM0000000000000002B /* TextNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXNRM0000000000000001A /* TextNormalizer.swift */; };
+		SNTSPL0000000000000002B /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SNTSPL0000000000000001A /* SentenceSplitter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -157,6 +158,7 @@
 		TT5ENG0000000000000001A /* TTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngine.swift; sourceTree = "<group>"; };
 		TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipVoiceEngine.swift; sourceTree = "<group>"; };
 		TXNRM0000000000000001A /* TextNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextNormalizer.swift; sourceTree = "<group>"; };
+		SNTSPL0000000000000001A /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -447,6 +449,7 @@
 			isa = PBXGroup;
 			children = (
 				TXNRM0000000000000001A /* TextNormalizer.swift */,
+				SNTSPL0000000000000001A /* SentenceSplitter.swift */,
 			);
 			path = Pipeline;
 			sourceTree = "<group>";
@@ -589,6 +592,7 @@
 				TT5ENG0000000000000002B /* TTSEngine.swift in Sources */,
 				TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */,
 				TXNRM0000000000000002B /* TextNormalizer.swift in Sources */,
+				SNTSPL0000000000000002B /* SentenceSplitter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
