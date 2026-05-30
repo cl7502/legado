@@ -428,14 +428,12 @@ struct ReaderMenuView: View {
         .sheet(isPresented: $showingTOC)      { TOCView(viewModel: viewModel) }
         .sheet(isPresented: $showingSettings) { ReaderSettingsSheet() }
         .sheet(isPresented: $showingSourceSelection) {
-            NavigationView {
-                Text("换源功能（Plan C 实现）")
-                    .navigationTitle("选择来源")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { showingSourceSelection = false }
-                        }
-                    }
+            SourceSelectionView(
+                currentSourceUrl: viewModel.book.origin,
+                bookName: viewModel.book.name,
+                currentChapterIndex: viewModel.currentChapterIndex
+            ) { source in
+                Task { await viewModel.changeSource(to: source) }
             }
         }
     }

@@ -51,6 +51,17 @@ class ReaderViewModel: ObservableObject {
         ttsManager.stop()
         isTTSEnabled = false
     }
+
+    /// 切换书源后重新加载目录和章节内容，保留当前章节索引
+    func changeSource(to source: BookSource) async {
+        let savedChapterIndex = currentChapterIndex
+        book.origin = source.bookSourceUrl
+        book.originName = source.bookSourceName
+        try? await DatabaseManager.shared.saveBook(book)
+        chapterContents.removeAll()
+        await loadChapters()
+        jumpToChapter(min(savedChapterIndex, max(0, chapters.count - 1)))
+    }
     
     func startTTS() {
         guard let content = chapterContents[currentChapterIndex] else { return }
