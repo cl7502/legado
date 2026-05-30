@@ -66,9 +66,9 @@ class ReaderSettings: ObservableObject {
     @AppStorage("reader.lineSpacing")     private var _lineSpacing:     Double = 8
     @AppStorage("reader.letterSpacing")   private var _letterSpacing:   Double = 0   // 字间距
     @AppStorage("reader.paragraphSpacing") private var _paragraphSpacing: Double = 12 // 段间距
-    @AppStorage("reader.sideMargin")      private var _sideMargin:      Double = 20
-    @AppStorage("reader.topMargin")       private var _topMargin:       Double = 40
-    @AppStorage("reader.bottomMargin")    private var _bottomMargin:    Double = 40
+    @AppStorage("reader.sideMargin")       private var _sideMargin:      Double = 20
+    @AppStorage("reader.topMarginV2")      private var _topMargin:       Double = 8
+    @AppStorage("reader.bottomMarginV2")   private var _bottomMargin:    Double = 8
 
     var fontSize:          CGFloat { get { CGFloat(_fontSize) }          set { _fontSize          = Double(newValue) } }
     var lineSpacing:       CGFloat { get { CGFloat(_lineSpacing) }       set { _lineSpacing       = Double(newValue) } }
