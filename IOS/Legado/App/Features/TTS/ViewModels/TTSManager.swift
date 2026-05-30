@@ -179,12 +179,44 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
         onChapterFinish?()
     }
 
-    /// 当前正在朗读的字符范围（用于正文高亮）
+    /// 将当前朗读的小范围扩展到整句，再发布给 UI 高亮
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
                            willSpeakRangeOfSpeechString characterRange: NSRange,
                            utterance: AVSpeechUtterance) {
+        let sentenceRange = expandToSentence(in: utterance.speechString, around: characterRange)
         DispatchQueue.main.async {
-            self.speakingRange = characterRange
+            self.speakingRange = sentenceRange
         }
+    }
+
+    /// 把 range 向前/后扩展到最近的句子边界（。！？…\n 等），至少覆盖整句。
+    private func expandToSentence(in text: String, around range: NSRange) -> NSRange {
+        let ns = text as NSString
+        let len = ns.length
+        // 中英文句子结束符
+        let enders: Set<unichar> = [
+            0x3002,  // 。
+            0xFF01,  // ！
+            0xFF1F,  // ？
+            0x2026,  // …
+            0x000A,  // \n 换行
+            0x0021,  // !
+            0x003F,  // ?
+            0x002E,  // .
+        ]
+        // 向前找句子起点（上一个结束符的后一位，或文本开头）
+        var start = range.location
+        while start > 0 {
+            if enders.contains(ns.character(at: start - 1)) { break }
+            start -= 1
+        }
+        // 向后找句子终点（下一个结束符，含本身）
+        var end = range.location + range.length
+        while end < len {
+            let c = ns.character(at: end)
+            end += 1
+            if enders.contains(c) { break }
+        }
+        return NSRange(location: start, length: max(0, end - start))
     }
 }
