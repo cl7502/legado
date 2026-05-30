@@ -32,10 +32,33 @@ class ReaderViewModel: ObservableObject {
     private let ruleExecutor = RuleExecutor.shared
     private let contentParser = BookContentParser.shared
     let ttsManager = TTSManager.shared
-    
+    private var cancellables = Set<AnyCancellable>()
+
     init(book: Book) {
         self.book = book
         self.currentChapterIndex = book.durChapterIndex
+        subscribeToTTSSpeakingRange()
+    }
+
+    // TTS 朗读推进时自动翻页
+    private func subscribeToTTSSpeakingRange() {
+        ttsManager.$speakingRange
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] range in
+                guard let self, self.isTTSEnabled else { return }
+                let speakEnd = range.location + range.length
+                for (idx, pageStart) in self.currentPageOffsets.enumerated() {
+                    let pageEnd = idx + 1 < self.currentPageOffsets.count
+                        ? self.currentPageOffsets[idx + 1]
+                        : Int.max
+                    if pageStart <= speakEnd && speakEnd <= pageEnd {
+                        if self.currentPageIndex != idx { self.currentPageIndex = idx }
+                        break
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - TTS 控制
@@ -86,10 +109,15 @@ class ReaderViewModel: ObservableObject {
     }
     
     func startTTS() {
-        guard let content = chapterContents[currentChapterIndex] else { return }
+        guard let rawContent = chapterContents[currentChapterIndex],
+              currentChapterIndex < chapters.count else { return }
         isTTSEnabled = true
 
-        ttsManager.speak(content, bookName: book.name, chapterTitle: chapters[currentChapterIndex].title) { [weak self] in
+        // 与分页器保持相同的文本规范化，确保 speakingRange 偏移和 pageStartOffset 对齐
+        let normalizedContent = rawContent.replacingOccurrences(of: "\n\n", with: "\n")
+        let title = chapters[currentChapterIndex].title
+
+        ttsManager.speak(normalizedContent, bookName: book.name, chapterTitle: title) { [weak self] in
             guard let self, self.isTTSEnabled else { return }  // 已停止则不连读
             self.nextChapterOnly()
             self.startTTS()
