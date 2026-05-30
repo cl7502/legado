@@ -312,6 +312,8 @@ struct ReaderPageView: View {
                 .padding(.top, 8)
             }
         }
+        .onAppear  { battery.enable()  }
+        .onDisappear { battery.disable() }
     }
 
     /// 构建与 ChapterPaginator.makeAttrString 完全相同的 AttributedString，
@@ -346,23 +348,6 @@ struct ReaderPageView: View {
     private func applyTraditional(_ text: String) -> String {
         guard settings.useTraditionalChinese else { return text }
         return text.applyingTransform(StringTransform("Simplified-Traditional"), reverse: false) ?? text
-    }
-}
-
-// MARK: - BatteryMonitor
-
-final class BatteryMonitor: ObservableObject {
-    static let shared = BatteryMonitor()
-    @Published var level: Float = 1.0
-
-    private init() {
-        UIDevice.current.isBatteryMonitoringEnabled = true
-        level = max(UIDevice.current.batteryLevel, 0)
-        NotificationCenter.default.addObserver(self, selector: #selector(batteryLevelChanged),
-            name: UIDevice.batteryLevelDidChangeNotification, object: nil)
-    }
-    @objc private func batteryLevelChanged() {
-        DispatchQueue.main.async { self.level = max(UIDevice.current.batteryLevel, 0) }
     }
 }
 
