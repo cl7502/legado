@@ -656,7 +656,7 @@ struct ReaderSettingsSheet: View {
                 Section("主题") {
                     // B7修复：Form 内 Button 的 tap 区域扩展到整行，用 onTapGesture 代替
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
-                        ForEach(ReaderTheme.allThemes) { theme in
+                        ForEach(ReaderTheme.allThemes()) { theme in
                             VStack(spacing: 4) {
                                 Circle().fill(theme.backgroundColor)
                                     .frame(width: 44, height: 44)

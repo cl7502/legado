@@ -31,7 +31,24 @@ struct ReaderTheme: Identifiable, Equatable {
         textColor: Color(red: 0.12, green: 0.22, blue: 0.32),
         uiAccentColor: .cyan
     )
-    static let allThemes = [parchment, dark, eyeCare, fresh]
+    static let builtinThemes: [ReaderTheme] = [parchment, dark, eyeCare, fresh]
+
+    /// 自定义主题（颜色运行时从 ReaderSettings 读取）
+    static func customTheme() -> ReaderTheme {
+        let s = ReaderSettings.shared
+        return ReaderTheme(
+            id: "custom",
+            name: "自定义",
+            backgroundColor: s.customBgColor,
+            textColor: s.customTextColor,
+            uiAccentColor: .orange
+        )
+    }
+
+    /// 含自定义主题的完整列表（调用时获取最新颜色）
+    static func allThemes() -> [ReaderTheme] {
+        builtinThemes + [customTheme()]
+    }
 }
 
 /// 翻页模式
@@ -65,7 +82,7 @@ class ReaderSettings: ObservableObject {
     @AppStorage("reader.themeId") var themeId: String = "parchment"
 
     var currentTheme: ReaderTheme {
-        ReaderTheme.allThemes.first { $0.id == themeId } ?? .parchment
+        ReaderTheme.allThemes().first { $0.id == themeId } ?? .parchment
     }
 
     // MARK: - 翻页模式
@@ -91,4 +108,44 @@ class ReaderSettings: ObservableObject {
 
     var ttsRate:  Float { get { Float(_ttsRate) }  set { _ttsRate  = Double(newValue) } }
     var ttsPitch: Float { get { Float(_ttsPitch) } set { _ttsPitch = Double(newValue) } }
+
+    // MARK: - 自定义主题颜色（hex string 持久化）
+    @AppStorage("reader.customBgColorHex")   var customBgColorHex:   String = "#F5E6C8"
+    @AppStorage("reader.customTextColorHex") var customTextColorHex: String = "#2C1810"
+    @AppStorage("reader.ttsVoiceIdentifier") var ttsVoiceIdentifier: String = ""
+
+    /// 自定义背景色（从 hex 读写）
+    var customBgColor: Color {
+        get { Color(hex: customBgColorHex) ?? Color(red: 0.96, green: 0.90, blue: 0.78) }
+        set { customBgColorHex = newValue.toHex() ?? customBgColorHex }
+    }
+
+    /// 自定义文字色
+    var customTextColor: Color {
+        get { Color(hex: customTextColorHex) ?? Color(red: 0.17, green: 0.09, blue: 0.06) }
+        set { customTextColorHex = newValue.toHex() ?? customTextColorHex }
+    }
+}
+
+// MARK: - Color hex 互转工具
+
+extension Color {
+    /// 从 "#RRGGBB" 字符串构造 Color
+    init?(hex: String) {
+        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("#") { s = String(s.dropFirst()) }
+        guard s.count == 6, let value = UInt64(s, radix: 16) else { return nil }
+        self.init(
+            red:   Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >>  8) & 0xFF) / 255,
+            blue:  Double( value        & 0xFF) / 255
+        )
+    }
+
+    /// 转换为 "#RRGGBB" 字符串
+    func toHex() -> String? {
+        guard let comps = UIColor(self).cgColor.components, comps.count >= 3 else { return nil }
+        return String(format: "#%02X%02X%02X",
+                      Int(comps[0] * 255), Int(comps[1] * 255), Int(comps[2] * 255))
+    }
 }
