@@ -161,6 +161,25 @@ struct SentenceUnit {
 
 未命中 → 返回 nil → 交给 `LLMCharacterAnalyzer`（已有角色表，实时推断约 100-200ms）。
 
+**可扩展性**：规则存储在 App Bundle 内的 `dialogue_rules.json`（数据驱动）：
+
+```json
+{
+  "verbList": ["说", "道", "问", "答", "喊", "叫", "冷声道", "厉声道"],
+  "patterns": [
+    { "id": "name_verb_quote", "priority": 1,
+      "regex": "(.{1,6}?)(?:说|道|问)[：:""「]" },
+    { "id": "bracket_name",   "priority": 2,
+      "regex": "【(.{1,6}?)】[：:]" },
+    { "id": "angle_name",     "priority": 3,
+      "regex": "<(.{1,6}?)>[：:]" }
+  ]
+}
+```
+
+扩展方式：追加动词只需在 `verbList` 加词；新格式只需加一个 `patterns` 对象；
+支持后台下发新版配置文件热更新，无需发版。
+
 ### 6.3 LLMCharacterAnalyzer
 
 **章节预处理 Prompt（建角色表）**：
@@ -305,6 +324,25 @@ protocol TTSEngine {
 
 **Phase 1a 专项工作**：集成 Sherpa-ONNX + Kokoro 后，对全部 103 个 speaker 生成
 15 秒中文样本，由产品确认每个角色槽位对应哪个 Speaker ID，耗时约半天。
+
+**可扩展性**：预设声音存储在 App Bundle 内的 `preset_voices.json`（数据驱动）：
+
+```json
+[
+  { "id": "narrator",    "displayName": "旁白", "kokoroSpeakerId": "待确认",
+    "gender": "female", "ageGroup": "adult" },
+  { "id": "protagonist", "displayName": "男主", "kokoroSpeakerId": "待确认",
+    "gender": "male",   "ageGroup": "young" }
+]
+```
+
+扩展方式：追加角色只需加一个 JSON 对象；调整 Speaker ID 改一行；
+Phase 2 切换 ZipVoice 后加 `zipvoiceSpeakerId` 字段，按引擎读取不同字段。
+
+**三层优先级**（低 → 高）：
+1. Bundle `preset_voices.json`（出厂默认）
+2. UserDefaults 用户手动调整（在设置里改了某角色的声音）
+3. 用户克隆声音（`VoiceCloneManager`，优先级最高）
 
 ### 8.2 用户音色克隆（VoiceCloneManager）
 
