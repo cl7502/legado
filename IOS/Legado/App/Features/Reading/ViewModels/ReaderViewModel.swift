@@ -65,7 +65,9 @@ class ReaderViewModel: ObservableObject {
 
         chapterContents.removeAll()
         currentPages = []
+        currentPageOffsets = []
         currentPageIndex = 0
+        currentHighlights = []
         await loadChapters()
 
         guard !chapters.isEmpty else {

@@ -982,6 +982,7 @@ struct ReaderSettingsSheet: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            settings.preNightThemeId = "custom"   // 记录夜间切回时的目标主题
             settings.themeId = "custom"
         }
     }

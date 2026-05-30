@@ -52,19 +52,20 @@ struct BatteryIconView: View {
             }
             .frame(width: 28, height: 14)
 
-            // 叠加文字（百分比或充电符号），向左偏移 1.5pt 使其居中于电池本体
+            // 叠加文字：填充比例高时用白字，填充少时用主题文字色（确保在浅色主题可见）
+            let labelColor: Color = level > 0.3 || isCharging ? .white : textColor.opacity(0.9)
             Group {
                 if isCharging {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 7, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(labelColor)
                 } else {
                     Text("\(Int(level * 100))%")
                         .font(.system(size: 8))
-                        .foregroundColor(.white)
+                        .foregroundColor(labelColor)
                 }
             }
-            .offset(x: -1.5)  // 修正右侧电极凸起导致的视觉偏移
+            .offset(x: -1.5)
         }
         .frame(width: 28, height: 14)
     }

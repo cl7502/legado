@@ -14,14 +14,10 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     @Published var rate: Float = 0.5 // 0.0 ~ 1.0
     @Published var pitch: Float = 1.0 // 0.5 ~ 2.0
 
-    // P2-B: 自定义语音支持
-    @Published var selectedVoiceIdentifier: String = ""
-    var availableVoices: [AVSpeechSynthesisVoice] = []
-
-    // NSObject 子类不能使用 @AppStorage，改用 UserDefaults
-    var savedVoiceId: String {
-        get { UserDefaults.standard.string(forKey: "tts.voiceIdentifier") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "tts.voiceIdentifier") }
+    // P2-B: 自定义语音支持（统一使用 ReaderSettings.ttsVoiceIdentifier 持久化，废弃旧 savedVoiceId）
+    /// 用户选定的 AVSpeechSynthesisVoice（nil = 系统默认）
+    var selectedVoice: AVSpeechSynthesisVoice? = nil {
+        didSet { ReaderSettings.shared.ttsVoiceIdentifier = selectedVoice?.identifier ?? "" }
     }
 
     /// 当前是否正在朗读（非暂停状态）
@@ -30,11 +26,6 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     /// 定时停止倒计时（秒），nil = 无定时
     @Published private(set) var remainingSeconds: Int? = nil
 
-    /// 用户选定的 AVSpeechSynthesisVoice（nil = 系统默认）
-    var selectedVoice: AVSpeechSynthesisVoice? = nil {
-        didSet { ReaderSettings.shared.ttsVoiceIdentifier = selectedVoice?.identifier ?? "" }
-    }
-
     private var timerTask: Task<Void, Never>?
 
     private var onChapterFinish: (() -> Void)?
@@ -42,12 +33,9 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     override init() {
         super.init()
         synthesizer.delegate = self
-        loadAvailableVoices()
-        // 恢复上次保存的语音
-        selectedVoiceIdentifier = savedVoiceId
         setupAudioSession()
         setupRemoteCommandCenter()
-        // 恢复上次选择的声音
+        // 从 ReaderSettings 恢复已选声音（单一来源）
         let savedId = ReaderSettings.shared.ttsVoiceIdentifier
         if !savedId.isEmpty {
             selectedVoice = AVSpeechSynthesisVoice(identifier: savedId)
@@ -55,11 +43,7 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     }
 
     // 过滤中文和英文语音
-    private func loadAvailableVoices() {
-        availableVoices = AVSpeechSynthesisVoice.speechVoices().filter { voice in
-            voice.language.hasPrefix("zh") || voice.language.hasPrefix("en")
-        }
-    }
+    private func loadAvailableVoices() {}
 
     /// 配置音频会话 (核心：支持后台)
     private func setupAudioSession() {
@@ -82,15 +66,8 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
         utterance.rate = rate
         utterance.pitchMultiplier = pitch
 
-        // 优先使用 selectedVoice 对象，其次 selectedVoiceIdentifier 字符串，最后降级为 zh-CN
-        if let voice = selectedVoice {
-            utterance.voice = voice
-        } else if !selectedVoiceIdentifier.isEmpty,
-                  let voice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
-            utterance.voice = voice
-        } else {
-            utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
-        }
+        // 统一使用 selectedVoice，无则降级 zh-CN
+        utterance.voice = selectedVoice ?? AVSpeechSynthesisVoice(language: "zh-CN")
 
         synthesizer.speak(utterance)
         isSpeaking = true
