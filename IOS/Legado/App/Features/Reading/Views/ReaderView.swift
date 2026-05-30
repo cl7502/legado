@@ -165,13 +165,12 @@ struct ReaderView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 11, weight: .medium))
-                    if viewModel.currentPageIndex == 0 {
-                        Text(currentChapterTitle.isEmpty
-                             ? "第\(viewModel.currentChapterIndex + 1)章"
-                             : applyTraditional(currentChapterTitle))
-                            .font(.system(size: 11))
-                            .lineLimit(1)
-                    }
+                    // 始终显示当前章节标题（第一页时内容区域顶部也会显示大号标题）
+                    Text(currentChapterTitle.isEmpty
+                         ? "第\(viewModel.currentChapterIndex + 1)章"
+                         : applyTraditional(currentChapterTitle))
+                        .font(.system(size: 11))
+                        .lineLimit(1)
                 }
                 .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
             }
