@@ -46,11 +46,18 @@ private class CoverImageLoader: ObservableObject {
     private static var cache = NSCache<NSString, UIImage>()
 
     func load(url urlStr: String?, referer: String?) async {
-        guard let urlStr, !urlStr.isEmpty, let url = URL(string: urlStr) else {
-            image = nil; return
+        guard let urlStr, !urlStr.isEmpty else { image = nil; return }
+        // Strip spurious trailing slash from image URLs (e.g. ".jpg/") to avoid 404s.
+        // This artifact appears when a regex replacement matches a path segment
+        // like "/101045" from "/101045/" without consuming the trailing slash.
+        var cleanUrl = urlStr
+        if cleanUrl.hasPrefix("http"), cleanUrl.hasSuffix("/"),
+           let ext = URL(string: cleanUrl)?.pathExtension, !ext.isEmpty {
+            cleanUrl = String(cleanUrl.dropLast())
         }
+        guard let url = URL(string: cleanUrl) else { image = nil; return }
 
-        let key = urlStr as NSString
+        let key = cleanUrl as NSString
         if let cached = Self.cache.object(forKey: key) {
             image = cached; return
         }

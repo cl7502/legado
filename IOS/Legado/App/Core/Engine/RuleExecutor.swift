@@ -276,15 +276,43 @@ class RuleExecutor {
         do {
             let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
             let range = NSRange(text.startIndex..., in: text)
+            let result: String
             if replaceFirst {
                 // 无匹配时返回原文（Android 行为），而非 replacement 本身
                 if let match = regex.firstMatch(in: text, range: range) {
-                    return regex.stringByReplacingMatches(in: text, range: match.range, withTemplate: replacement)
+                    result = regex.stringByReplacingMatches(in: text, range: match.range, withTemplate: replacement)
+                } else {
+                    return text
                 }
-                return text
             } else {
-                return regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
+                result = regex.stringByReplacingMatches(in: text, range: range, withTemplate: replacement)
             }
+            var cleaned = result
+            // Fix: when the regex matched a substring INSIDE an absolute URL (e.g. "/101045" inside
+            // "https://www.biquge.casa/101045/"), the result may be "https://source.comhttps://cdn.com/...".
+            // Detect and strip only when the prefix before the embedded scheme is purely scheme+host
+            // (i.e., contains no "/" beyond the "//" in "https://"), to avoid breaking rules like
+            // img@src##(.*)##$1,{"headers":{"Referer":"$1"}} where the Referer also contains "https://".
+            if cleaned.hasPrefix("http"), cleaned.count > 8 {
+                let afterScheme = cleaned.index(cleaned.startIndex, offsetBy: min(8, cleaned.count))
+                if let r = cleaned.range(of: "https://", range: afterScheme..<cleaned.endIndex)
+                         ?? cleaned.range(of: "http://",  range: afterScheme..<cleaned.endIndex) {
+                    let prefix = String(cleaned[..<r.lowerBound])
+                    // Only strip when prefix is purely scheme+host: exactly 2 slashes ("https://")
+                    // and nothing after host (no path segments like /image/... or /abc.jpg,...).
+                    let slashCount = prefix.filter { $0 == "/" }.count
+                    if slashCount <= 2 {
+                        cleaned = String(cleaned[r.lowerBound...])
+                    }
+                }
+            }
+            // Strip trailing slash from image URLs (artifact of regex not consuming the full path
+            // including its trailing slash, e.g. ".jpg/" left over from "/101045/").
+            if cleaned.hasPrefix("http"), cleaned.hasSuffix("/"),
+               let pathExt = URL(string: cleaned)?.pathExtension, !pathExt.isEmpty {
+                cleaned = String(cleaned.dropLast())
+            }
+            return cleaned
         } catch {
             return text.replacingOccurrences(of: pattern, with: replacement)
         }
