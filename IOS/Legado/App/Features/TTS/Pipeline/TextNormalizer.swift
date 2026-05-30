@@ -33,16 +33,16 @@ final class TextNormalizer {
         let pattern = #"(\d{4})年"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return s }
         var result = s
-        let matches = regex.matches(in: s, range: NSRange(s.startIndex..., in: s))
+        // Work backwards so replacements don't shift earlier indices
+        let ns = s as NSString
+        let matches = regex.matches(in: s, range: NSRange(location: 0, length: ns.length))
         for match in matches.reversed() {
-            guard let range = Range(match.range(at: 1), in: result) else { continue }
-            let digits = String(result[range])
+            // match.range covers e.g. "2024年" (5 chars); range(at:1) covers "2024" (4 chars)
+            guard let digitRange = Range(match.range(at: 1), in: result),
+                  let fullRange  = Range(match.range,         in: result) else { continue }
+            let digits = String(result[digitRange])
             let cn = digits.compactMap { Int(String($0)).map { Self.chineseDigits[$0] } }.joined()
-            // 搜索并替换 digits+"年" 组合
-            let searchStr = digits + "年"
-            if let replRange = result.range(of: searchStr) {
-                result.replaceSubrange(replRange, with: cn + "年")
-            }
+            result.replaceSubrange(fullRange, with: cn + "年")
         }
         return result
     }
