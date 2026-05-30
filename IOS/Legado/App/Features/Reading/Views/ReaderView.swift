@@ -704,9 +704,7 @@ struct ReaderSettingsSheet: View {
                 }
             }
             .sheet(isPresented: $showPreferences) {
-                // TODO: 替换为 ReadingPreferencesView() — 待该 View 实现后接入
-                Text("更多设置（开发中）")
-                    .padding()
+                ReadingPreferencesView()
             }
         }
     }
@@ -893,6 +891,106 @@ private struct MixedContentView: View {
     private func attributedText(_ text: String) -> AttributedString {
         let ns = nsAttributedText(text)
         return (try? AttributedString(ns, including: \.uiKit)) ?? AttributedString(text)
+    }
+}
+
+// MARK: - ReadingPreferencesView（阅读偏好）
+
+struct ReadingPreferencesView: View {
+    @StateObject private var settings = ReaderSettings.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var brightness: Double = Double(UIScreen.main.brightness)
+
+    var body: some View {
+        NavigationView {
+            Form {
+                // ── 布局预设 ──────────────────────────────────
+                Section("布局预设") {
+                    HStack(spacing: 12) {
+                        presetButton(label: "正常",  fontSize: 18, lineSpacing: 8,  sideMargin: 20)
+                        presetButton(label: "舒适",  fontSize: 19, lineSpacing: 12, sideMargin: 24)
+                        presetButton(label: "紧凑",  fontSize: 17, lineSpacing: 6,  sideMargin: 16)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                // ── 亮度 ──────────────────────────────────────
+                Section("亮度") {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sun.min").font(.caption).foregroundColor(.secondary)
+                        Slider(value: $brightness, in: 0.05...1.0) { _ in
+                            UIScreen.main.brightness = CGFloat(brightness)
+                        }
+                        Image(systemName: "sun.max").font(.caption).foregroundColor(.secondary)
+                    }
+                }
+
+                // ── 页眉信息 ──────────────────────────────────
+                Section("页眉信息") {
+                    Toggle("显示章节进度", isOn: $settings.showHeaderProgress)
+                    Toggle("显示右上电量", isOn: $settings.showHeaderBattery)
+                }
+
+                // ── 高级 ──────────────────────────────────────
+                Section("高级") {
+                    Toggle("屏幕常亮", isOn: $settings.keepScreenOn)
+                        .onChange(of: settings.keepScreenOn) { val in
+                            UIApplication.shared.isIdleTimerDisabled = val
+                        }
+                    Toggle("繁体中文", isOn: $settings.useTraditionalChinese)
+                }
+
+                // ── 缓存 ──────────────────────────────────────
+                Section("缓存") {
+                    HStack {
+                        Text("预缓存章节数")
+                        Spacer()
+                        Button {
+                            settings.prefetchCount = max(1, settings.prefetchCount - 1)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }.buttonStyle(.plain)
+                        Text("\(settings.prefetchCount)章")
+                            .frame(width: 40, alignment: .center)
+                            .monospacedDigit()
+                        Button {
+                            settings.prefetchCount = min(50, settings.prefetchCount + 1)
+                        } label: {
+                            Image(systemName: "plus.circle")
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("阅读偏好")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
+            .onAppear { brightness = Double(UIScreen.main.brightness) }
+        }
+    }
+
+    private func presetButton(label: String, fontSize: CGFloat,
+                               lineSpacing: CGFloat, sideMargin: CGFloat) -> some View {
+        let isActive = abs(settings.fontSize - fontSize) < 0.5
+                    && abs(settings.lineSpacing - lineSpacing) < 0.5
+                    && abs(settings.sideMargin - sideMargin) < 0.5
+        return Button {
+            settings.fontSize    = fontSize
+            settings.lineSpacing = lineSpacing
+            settings.sideMargin  = sideMargin
+        } label: {
+            Text(label)
+                .font(.subheadline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(isActive ? Color.blue : Color(.systemGray5))
+                .foregroundColor(isActive ? .white : .primary)
+                .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
     }
 }
 
