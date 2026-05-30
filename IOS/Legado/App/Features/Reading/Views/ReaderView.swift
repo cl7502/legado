@@ -638,97 +638,158 @@ struct ReaderMenuView: View {
 
 struct ReaderSettingsSheet: View {
     @StateObject private var settings = ReaderSettings.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var showPreferences = false
 
     var body: some View {
         NavigationView {
             Form {
+                // ── 字体排版 ─────────────────────────────────
                 Section("字体排版") {
-                    stepperRow(title: "字号",   value: $settings.fontSize,         range: 12...40, step: 1)
-                    stepperRow(title: "行高",   value: $settings.lineSpacing,       range: 0...30,  step: 1)
-                    stepperRow(title: "字间距", value: $settings.letterSpacing,     range: -3...10, step: 0.5)
-                    stepperRow(title: "段间距", value: $settings.paragraphSpacing,  range: 0...50,  step: 2)
+                    stepperRow(title: "字号",   value: $settings.fontSize,        range: 12...40, step: 1)
+                    stepperRow(title: "行高",   value: $settings.lineSpacing,      range: 0...30,  step: 1)
+                    stepperRow(title: "字间距", value: $settings.letterSpacing,    range: -3...10, step: 0.5)
+                    stepperRow(title: "段间距", value: $settings.paragraphSpacing, range: 0...50,  step: 2)
                 }
-                Section("页面边距") {
-                    stepperRow(title: "左右边距", value: $settings.sideMargin,   range: 0...60, step: 4)
-                    stepperRow(title: "上边距",   value: $settings.topMargin,    range: 0...80, step: 4)
-                    stepperRow(title: "下边距",   value: $settings.bottomMargin, range: 0...80, step: 4)
-                }
+
+                // ── 主题 ─────────────────────────────────────
                 Section("主题") {
-                    // B7修复：Form 内 Button 的 tap 区域扩展到整行，用 onTapGesture 代替
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 12) {
-                        ForEach(ReaderTheme.allThemes()) { theme in
-                            VStack(spacing: 4) {
-                                Circle().fill(theme.backgroundColor)
-                                    .frame(width: 44, height: 44)
-                                    .overlay(Circle().stroke(
-                                        settings.themeId == theme.id ? Color.blue : Color.clear,
-                                        lineWidth: 2.5))
-                                Text(theme.name).font(.caption2).foregroundColor(.primary)
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if theme.id != "dark" { settings.preNightThemeId = theme.id }
-                                settings.themeId = theme.id
-                            }
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible()), count: 5),
+                        spacing: 12
+                    ) {
+                        ForEach(ReaderTheme.builtinThemes) { theme in
+                            themeCircle(theme: theme)
                         }
+                        customThemeCircle
                     }
                     .padding(.vertical, 4)
-                }
-                Section("翻页模式") {
-                    Picker("模式", selection: $settings.pageMode) {
-                        ForEach(PageMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                }
-                Section("页眉信息") {
-                    Toggle("显示章节进度", isOn: $settings.showHeaderProgress)
-                    Toggle("显示右上电量", isOn: $settings.showHeaderBattery)
-                }
-                Section("高级") {
-                    Toggle("屏幕常亮", isOn: $settings.keepScreenOn)
-                        .onChange(of: settings.keepScreenOn) { UIApplication.shared.isIdleTimerDisabled = $0 }
-                    Toggle("繁体中文", isOn: $settings.useTraditionalChinese)
-                }
-                Section("朗读") {
-                    HStack {
-                        Text("语速")
-                        Slider(value: Binding(
-                            get: { Double(settings.ttsRate) },
-                            set: { settings.ttsRate = Float($0) }
-                        ), in: 0.25...2.0)
-                        Text(String(format: "%.1fx", settings.ttsRate))
-                            .font(.caption).frame(width: 36)
+
+                    if settings.themeId == "custom" {
+                        VStack(spacing: 8) {
+                            ColorPicker("背景色", selection: Binding(
+                                get: { settings.customBgColor },
+                                set: { settings.customBgColor = $0 }
+                            ), supportsOpacity: false)
+                            ColorPicker("文字颜色", selection: Binding(
+                                get: { settings.customTextColor },
+                                set: { settings.customTextColor = $0 }
+                            ), supportsOpacity: false)
+                        }
+                        .padding(.top, 4)
                     }
                 }
-                // F1: 预缓存章节数设置
-                Section("缓存") {
-                    HStack {
-                        Text("预缓存章节数")
-                        Spacer()
-                        Button { settings.prefetchCount = max(1, settings.prefetchCount - 1) }
-                            label: { Image(systemName: "minus.circle") }.buttonStyle(.plain)
-                        Text("\(settings.prefetchCount)章")
-                            .font(.system(.body, design: .monospaced)).frame(minWidth: 44)
-                        Button { settings.prefetchCount = min(50, settings.prefetchCount + 1) }
-                            label: { Image(systemName: "plus.circle") }.buttonStyle(.plain)
+
+                // ── 更多设置入口 ──────────────────────────────
+                Section {
+                    Button {
+                        showPreferences = true
+                    } label: {
+                        HStack {
+                            Text("更多阅读设置")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
+                    .foregroundColor(.primary)
                 }
             }
-            .navigationTitle("排版设置")
+            .navigationTitle("阅读设置")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showPreferences) {
+                // TODO: 替换为 ReadingPreferencesView() — 待该 View 实现后接入
+                Text("更多设置（开发中）")
+                    .padding()
+            }
         }
     }
 
-    private func stepperRow(title: String, value: Binding<CGFloat>, range: ClosedRange<CGFloat>, step: CGFloat) -> some View {
+    // MARK: - 主题圆
+
+    @ViewBuilder
+    private func themeCircle(theme: ReaderTheme) -> some View {
+        VStack(spacing: 4) {
+            Circle()
+                .fill(theme.backgroundColor)
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Circle().stroke(
+                        settings.themeId == theme.id ? Color.blue : Color.clear,
+                        lineWidth: 2.5
+                    )
+                )
+            Text(theme.name)
+                .font(.caption2)
+                .foregroundColor(.primary)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if theme.id != "dark" { settings.preNightThemeId = theme.id }
+            settings.themeId = theme.id
+        }
+    }
+
+    @ViewBuilder
+    private var customThemeCircle: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                if settings.themeId == "custom" {
+                    Circle()
+                        .fill(settings.customBgColor)
+                        .frame(width: 44, height: 44)
+                        .overlay(Circle().stroke(Color.blue, lineWidth: 2.5))
+                } else {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [.pink, .purple, .blue],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ))
+                        .frame(width: 44, height: 44)
+                        .overlay(Circle().stroke(Color.clear, lineWidth: 2.5))
+                }
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(
+                        settings.themeId == "custom" ? settings.customTextColor : .white
+                    )
+            }
+            Text("自定义")
+                .font(.caption2)
+                .foregroundColor(.primary)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            settings.themeId = "custom"
+        }
+    }
+
+    // MARK: - Stepper 行
+
+    private func stepperRow(title: String, value: Binding<CGFloat>,
+                             range: ClosedRange<CGFloat>, step: CGFloat) -> some View {
         HStack {
             Text(title)
             Spacer()
-            Button { value.wrappedValue = max(range.lowerBound, value.wrappedValue - step) }
-                label: { Image(systemName: "minus.circle") }.buttonStyle(.plain)
-            Text(String(format: step < 1 ? "%.1f" : "%.0f", Double(value.wrappedValue)))
-                .font(.system(.body, design: .monospaced)).frame(minWidth: 44)
-            Button { value.wrappedValue = min(range.upperBound, value.wrappedValue + step) }
-                label: { Image(systemName: "plus.circle") }.buttonStyle(.plain)
+            Button {
+                if value.wrappedValue > range.lowerBound { value.wrappedValue -= step }
+            } label: {
+                Image(systemName: "minus.circle").foregroundColor(.blue)
+            }.buttonStyle(.plain)
+            Text(String(format: step < 1 ? "%.1f" : "%.0f", value.wrappedValue))
+                .frame(width: 36, alignment: .center)
+                .monospacedDigit()
+            Button {
+                if value.wrappedValue < range.upperBound { value.wrappedValue += step }
+            } label: {
+                Image(systemName: "plus.circle").foregroundColor(.blue)
+            }.buttonStyle(.plain)
         }
     }
 }
