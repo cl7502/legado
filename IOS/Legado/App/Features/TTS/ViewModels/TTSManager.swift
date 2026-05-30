@@ -24,6 +24,19 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "tts.voiceIdentifier") }
     }
 
+    /// 当前是否正在朗读（非暂停状态）
+    @Published private(set) var isPlaying: Bool = false
+
+    /// 定时停止倒计时（秒），nil = 无定时
+    @Published private(set) var remainingSeconds: Int? = nil
+
+    /// 用户选定的 AVSpeechSynthesisVoice（nil = 系统默认）
+    var selectedVoice: AVSpeechSynthesisVoice? = nil {
+        didSet { ReaderSettings.shared.ttsVoiceIdentifier = selectedVoice?.identifier ?? "" }
+    }
+
+    private var timerTask: Task<Void, Never>?
+
     private var onChapterFinish: (() -> Void)?
 
     override init() {
@@ -34,6 +47,11 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
         selectedVoiceIdentifier = savedVoiceId
         setupAudioSession()
         setupRemoteCommandCenter()
+        // 恢复上次选择的声音
+        let savedId = ReaderSettings.shared.ttsVoiceIdentifier
+        if !savedId.isEmpty {
+            selectedVoice = AVSpeechSynthesisVoice(identifier: savedId)
+        }
     }
 
     // 过滤中文和英文语音
@@ -64,9 +82,11 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
         utterance.rate = rate
         utterance.pitchMultiplier = pitch
 
-        // P2-B: 优先使用用户选择的语音，否则降级为 zh-CN
-        if !selectedVoiceIdentifier.isEmpty,
-           let voice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
+        // 优先使用 selectedVoice 对象，其次 selectedVoiceIdentifier 字符串，最后降级为 zh-CN
+        if let voice = selectedVoice {
+            utterance.voice = voice
+        } else if !selectedVoiceIdentifier.isEmpty,
+                  let voice = AVSpeechSynthesisVoice(identifier: selectedVoiceIdentifier) {
             utterance.voice = voice
         } else {
             utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
@@ -74,6 +94,7 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
 
         synthesizer.speak(utterance)
         isSpeaking = true
+        DispatchQueue.main.async { self.isPlaying = true }
 
         updateNowPlayingInfo(title: chapterTitle, artist: bookName)
     }
@@ -81,17 +102,50 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     func pause() {
         synthesizer.pauseSpeaking(at: .immediate)
         isSpeaking = false
+        DispatchQueue.main.async { self.isPlaying = false }
     }
 
     func resume() {
         synthesizer.continueSpeaking()
         isSpeaking = true
+        DispatchQueue.main.async { self.isPlaying = true }
     }
 
     func stop() {
         onChapterFinish = nil  // 先清回调，防止 didFinish 触发连读链
         synthesizer.stopSpeaking(at: .immediate)
         isSpeaking = false
+        DispatchQueue.main.async {
+            self.isPlaying = false
+            self.remainingSeconds = nil
+        }
+        cancelTimer()
+    }
+
+    // MARK: - 定时停止
+
+    /// 开始定时倒计时，到 0 时自动停止朗读
+    func startTimer(minutes: Int) {
+        cancelTimer()
+        let seconds = minutes * 60
+        DispatchQueue.main.async { self.remainingSeconds = seconds }
+        timerTask = Task { @MainActor in
+            var remaining = seconds
+            while remaining > 0, !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                remaining -= 1
+                self.remainingSeconds = remaining
+            }
+            if !Task.isCancelled {
+                self.stop()
+            }
+        }
+    }
+
+    func cancelTimer() {
+        timerTask?.cancel()
+        timerTask = nil
+        DispatchQueue.main.async { self.remainingSeconds = nil }
     }
 
     // MARK: - 锁屏控制 (MPNowPlayingInfoCenter)
@@ -128,6 +182,7 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         isSpeaking = false
+        DispatchQueue.main.async { self.isPlaying = false }
         // 章节朗读结束，触发回调进行下一章连读
         onChapterFinish?()
     }
