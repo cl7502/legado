@@ -92,7 +92,8 @@ struct ReaderView: View {
                             color: color
                         )}
                     },
-                    onBack: { dismiss() }
+                    onBack: { dismiss() },
+                    isFirstPage: idx == 0
                 )
                 .tag(idx)
             }
@@ -252,7 +253,8 @@ struct ReaderPageView: View {
     var pageStartOffset: Int = 0
     var highlights: [BookHighlight] = []
     var onHighlight: ((Int, Int, String, Int) -> Void)? = nil
-    var onBack: (() -> Void)? = nil     // 点击左上 < 返回书架
+    var onBack: (() -> Void)? = nil
+    var isFirstPage: Bool = false   // 控制是否在正文区域顶部显示大号章节标题
 
     @State private var footerTime: String = {
         let f = DateFormatter(); f.dateFormat = "HH:mm"
@@ -266,7 +268,7 @@ struct ReaderPageView: View {
     var body: some View {
         ZStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 0) {
-                if !chapterTitle.isEmpty {
+                if isFirstPage && !chapterTitle.isEmpty {
                     Text(applyTraditional(chapterTitle))
                         .font(.system(size: settings.fontSize + 6, weight: .bold))
                         .foregroundColor(settings.currentTheme.textColor)
