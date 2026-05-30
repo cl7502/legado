@@ -59,20 +59,21 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     }
 
     // MARK: - 朗读
+    // 以下方法均由主线程（SwiftUI 按钮动作）触发，可直接同步更新 @Published 属性
 
     func speak(_ text: String, bookName: String, chapterTitle: String,
                onFinish: @escaping () -> Void) {
-        stopSynthesizer()   // 停止旧句子，但保留定时器
+        stopSynthesizer()
 
-        currentText        = text
-        currentBookName    = bookName
+        currentText         = text
+        currentBookName     = bookName
         currentChapterTitle = chapterTitle
-        onChapterFinish    = onFinish
+        onChapterFinish     = onFinish
 
         let utterance = makeUtterance(text)
         synthesizer.speak(utterance)
         isSpeaking = true
-        DispatchQueue.main.async { self.isPlaying = true }
+        isPlaying  = true   // 同步赋值，面板立即显示"暂停"
 
         updateNowPlayingInfo(title: chapterTitle, artist: bookName)
     }
@@ -84,12 +85,11 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
         let utterance = makeUtterance(currentText)
         synthesizer.speak(utterance)
         isSpeaking = true
-        DispatchQueue.main.async { self.isPlaying = true }
+        isPlaying  = true
     }
 
     private func makeUtterance(_ text: String) -> AVSpeechUtterance {
         let utterance = AVSpeechUtterance(string: text)
-        // 直接使用 ReaderSettings 中存储的原始 rate（0.0-1.0 有效范围）
         utterance.rate = min(
             max(ReaderSettings.shared.ttsRate, AVSpeechUtteranceMinimumSpeechRate),
             AVSpeechUtteranceMaximumSpeechRate
@@ -102,23 +102,21 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     private func stopSynthesizer() {
         onChapterFinish = nil
         synthesizer.stopSpeaking(at: .immediate)
-        isSpeaking = false
-        DispatchQueue.main.async {
-            self.isPlaying = false
-            self.speakingRange = nil
-        }
+        isSpeaking   = false
+        isPlaying    = false   // 同步
+        speakingRange = nil
     }
 
     func pause() {
         synthesizer.pauseSpeaking(at: .immediate)
         isSpeaking = false
-        DispatchQueue.main.async { self.isPlaying = false }
+        isPlaying  = false   // 同步
     }
 
     func resume() {
         synthesizer.continueSpeaking()
         isSpeaking = true
-        DispatchQueue.main.async { self.isPlaying = true }
+        isPlaying  = true    // 同步
     }
 
     func stop() {
