@@ -476,6 +476,7 @@ struct ReaderPageView: View {
 struct ReaderMenuView: View {
     @ObservedObject var viewModel: ReaderViewModel
     @ObservedObject var settings: ReaderSettings
+    @ObservedObject private var ttsManager = TTSManager.shared  // 直接观察，isPlaying 变化触发重绘
     let onBack: () -> Void
 
     @State private var showingTOC      = false
@@ -741,8 +742,6 @@ struct ReaderMenuView: View {
 
     @ViewBuilder
     private var ttsPanelView: some View {
-        let ttsManager = viewModel.ttsManager
-
         VStack(spacing: 10) {
 
             // 语速（rate: 0.1-1.0 对应 iOS AVSpeechUtterance 有效范围；
