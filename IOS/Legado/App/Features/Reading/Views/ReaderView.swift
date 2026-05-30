@@ -658,9 +658,10 @@ struct ReaderMenuView: View {
             // 章节进度条 + B5修复：上一章/下一章做成真正的 Button
             HStack(spacing: 8) {
                 Button {
-                    viewModel.jumpToChapter(max(0, viewModel.currentChapterIndex - 1))
+                    viewModel.jumpToChapter(max(0, viewModel.currentChapterIndex - 1),
+                                            keepMenuOpen: true)
                 } label: {
-                    Text("上一章").font(.caption2).foregroundColor(.blue)
+                    Text("上一章").font(.subheadline).foregroundColor(.blue)
                 }
 
                 Slider(
@@ -674,9 +675,10 @@ struct ReaderMenuView: View {
 
                 Button {
                     let last = viewModel.chapters.count - 1
-                    viewModel.jumpToChapter(min(last, viewModel.currentChapterIndex + 1))
+                    viewModel.jumpToChapter(min(last, viewModel.currentChapterIndex + 1),
+                                            keepMenuOpen: true)
                 } label: {
-                    Text("下一章").font(.caption2).foregroundColor(.blue)
+                    Text("下一章").font(.subheadline).foregroundColor(.blue)
                 }
             }
             .padding(.horizontal)

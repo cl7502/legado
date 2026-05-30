@@ -675,12 +675,12 @@ class ReaderViewModel: ObservableObject {
         }
     }
 
-    func jumpToChapter(_ index: Int) {
+    func jumpToChapter(_ index: Int, keepMenuOpen: Bool = false) {
         cancelPrefetchTasks()  // 取消旧预缓存，当前章节优先
         currentChapterIndex = index
         currentPageIndex = 0
         currentPages = []
-        showingMenu = false
+        if !keepMenuOpen { showingMenu = false }
         var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
         Task {
             await loadChapterContent(at: currentChapterIndex)
