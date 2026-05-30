@@ -23,7 +23,10 @@ class ReaderViewModel: ObservableObject {
     @Published var currentPageIndex: Int = 0
     /// 当前章节的高亮列表
     @Published var currentHighlights: [BookHighlight] = []
-    
+
+    // 预缓存 Task 追踪：切章时取消旧 Task，当前章节优先
+    private var prefetchTasks: [Int: Task<Void, Never>] = [:]
+
     private let db = DatabaseManager.shared
     private let network = NetworkManager.shared
     private let ruleExecutor = RuleExecutor.shared
@@ -331,9 +334,18 @@ class ReaderViewModel: ObservableObject {
             return
         }
 
-        do {
-            let sources = try await db.getAllBookSources()
-            guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
+        // 指数退避重试：最多 3 次，延迟 1s/2s
+        let maxAttempts = 3
+        var lastError: Error? = nil
+        for attempt in 0..<maxAttempts {
+            if attempt > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(1_000_000_000) << (attempt - 1))
+                // 重试前检查是否已被别的路径填充（如跳章节时的直接加载）
+                if chapterContents[index] != nil { return }
+            }
+            do {
+                let sources = try await db.getAllBookSources()
+                guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
             
             var context = AnalyzeContext(source: source, baseUrl: chapter.url)
             let html = try await network.request(chapter.url, source: source)
@@ -387,16 +399,25 @@ class ReaderViewModel: ObservableObject {
                 paginateCurrentChapter()
                 await syncProgress(chapter: chapter)
             }
+            return  // 成功，退出重试循环
         } catch {
-            self.chapterContents[index] = "加载失败: \(error.localizedDescription)"
+            lastError = error
+            // 当前章节加载失败时给用户看提示，但仍会重试
             if index == currentChapterIndex && currentPages.isEmpty {
-                paginateCurrentChapter()  // 即便失败也显示错误文字，不卡在转圈
+                self.chapterContents[index] = "加载失败（第\(attempt + 1)次），重试中..."
+                paginateCurrentChapter()
             }
         }
+    }  // end retry loop
+
+    // 所有重试耗尽
+    self.chapterContents[index] = "加载失败: \(lastError?.localizedDescription ?? "未知错误")"
+    if index == currentChapterIndex && currentPages.isEmpty {
+        paginateCurrentChapter()
     }
+}
     
-    // F1: 后台静默预缓存后面 N 章
-    // 每章独立 Task 并行下载，不阻塞调用方（fire-and-forget）
+    // 预缓存：取消旧 Task，按优先级（近章优先）重新调度
     private func prefetch(around index: Int) {
         let count = ReaderSettings.shared.prefetchCount
         guard count > 0 else { return }
@@ -404,10 +425,21 @@ class ReaderViewModel: ObservableObject {
         let end   = min(start + count - 1, chapters.count - 1)
         guard start <= end else { return }
         for i in start...end {
-            Task { [weak self] in
+            guard prefetchTasks[i] == nil else { continue }  // 已有 Task 则不重复
+            let task = Task(priority: .background) { [weak self] in
                 await self?.loadChapterContent(at: i)
+                await MainActor.run { [weak self] in
+                    self?.prefetchTasks.removeValue(forKey: i)
+                }
             }
+            prefetchTasks[i] = task
         }
+    }
+
+    /// 切章时取消所有预缓存 Task，当前章节优先加载
+    private func cancelPrefetchTasks() {
+        prefetchTasks.values.forEach { $0.cancel() }
+        prefetchTasks.removeAll()
     }
 
     func prefetchNextChapter() {
@@ -478,7 +510,9 @@ class ReaderViewModel: ObservableObject {
 
         let font = UIFont.systemFont(ofSize: settings.fontSize)
         let horizontalPadding = settings.sideMargin * 2
+        // 减去 header 栏、footer 栏、以及上下内边距，确保每页文字刚好填满可见区域
         let verticalPadding   = settings.topMargin + settings.bottomMargin
+                              + ReaderLayout.headerH + ReaderLayout.footerH
         let usableSize = CGSize(
             width:  max(screenSize.width  - horizontalPadding, 100),
             height: max(screenSize.height - verticalPadding,   100)
@@ -612,6 +646,7 @@ class ReaderViewModel: ObservableObject {
     }
 
     func jumpToChapter(_ index: Int) {
+        cancelPrefetchTasks()  // 取消旧预缓存，当前章节优先
         currentChapterIndex = index
         currentPageIndex = 0
         currentPages = []

@@ -56,11 +56,31 @@
   - Cookie 持久化到 `CookieManager`，后续请求携带
 - **状态**：⬜ 待实现
 
-### 正文内链接点击 ⬜
-- **目标**：正文 `<a href>` 可点击（书内跳转章节或打开外链）
-- **复杂度**：小
-- **实现要点**：`BookContentParser` 提取链接标记；`TextKit2TextView` 通过 `UITextViewDelegate.textView(_:shouldInteractWith:in:)` 处理
-- **状态**：⬜ 待实现（推荐优先实现，工作量小）
+### P3 · 阅读器布局高度固定 ✅
+- Header/Footer 从 ReaderPageView 移至 ReaderView.pageModeView 统一管理
+- VStack(headerBar; ZStack{TabView+tapZones}; footerBar)，`frame(height:)` 精确固定高度
+- 分页器 `paginateCurrentChapter` 减去 `ReaderLayout.headerH + footerH`
+
+### P4 · 正文内链接点击 ✅
+- `TextKit2TextView` 启用 `dataDetectorTypes = .link`
+- Coordinator 实现 `shouldInteractWith URL` → SFSafariViewController
+
+### P5 · 文字颜色自定义 ✅
+- `ReaderSettings.textColorOverrideHex`（空=主题默认色）
+- `ReaderSettings.currentTheme` 自动应用覆盖色
+- "阅读偏好" → "文字颜色" 区：Toggle 开关 + ColorPicker + 恢复默认
+
+### P6 · 音量键翻页 ✅
+- `ReaderSettings.volumePageTurn` 开关
+- `AVAudioSession` KVO 监听 `outputVolume`
+- `HiddenVolumeView`（MPVolumeView）抑制系统音量 HUD + 复位音量到 0.5
+- "阅读偏好" → "高级" 区 Toggle
+
+### P7 · 章节缓存策略强化 ✅
+- `loadChapterContent` 指数退避重试（最多 3 次，1s/2s 延迟）
+- `prefetchTasks: [Int: Task]` 追踪预缓存 Task
+- `jumpToChapter` 切章时 `cancelPrefetchTasks()` 取消旧预缓存，当前章节优先
+- 预缓存 Task 以 `.background` 优先级运行，不抢占当前章节加载
 
 ### 自定义字体 ⬜
 - **目标**：用户可导入 TTF/OTF 字体文件并在阅读器使用
@@ -71,29 +91,11 @@
   - `ChapterPaginator` + `TextKit2TextView` 从设置读取字体
 - **状态**：⬜ 待实现
 
-### 文字颜色自定义 ⬜
-- **目标**：独立于主题的正文颜色 color picker
-- **复杂度**：小
-- **实现要点**：`ReaderSettings.customTextColor: Color?`；`ReaderSettingsSheet` 加 `ColorPicker`；优先于主题默认色
-- **状态**：⬜ 待实现
+### 文字颜色自定义 ✅（P5）
 
-### 音量键翻页 ⬜
-- **目标**：按音量键翻页（iOS 需通过 AVAudioSession 监听音量变化实现）
-- **复杂度**：中
-- **实现要点**：
-  - 阅读模式注册 `AVAudioSession` 音量变化通知
-  - 截获事件 → `nextPage()` / `prevPage()`，并还原音量
-  - 设置里开关
-- **状态**：⬜ 待实现
+### 音量键翻页 ✅（P6）
 
-### 章节缓存策略强化 ⬜
-- **目标**：对标 Android 三层缓存 + 失败重试
-- **复杂度**：中
-- **实现要点**：
-  - 当前仅缓存当前章 + 下一章（两层），无失败重试
-  - 加入指数退避重试（最多 3 次）
-  - 缓存队列改为优先级队列（当前章 > 下一章 > 预缓存）
-- **状态**：⬜ 待实现
+### 章节缓存策略强化 ✅（P7）
 
 ### WebDAV 云同步 ⬜
 - **目标**：书架/进度/书签/高亮通过 WebDAV 多设备同步

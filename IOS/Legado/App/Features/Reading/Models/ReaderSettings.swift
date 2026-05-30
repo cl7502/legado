@@ -82,7 +82,13 @@ class ReaderSettings: ObservableObject {
     @AppStorage("reader.themeId") var themeId: String = "parchment"
 
     var currentTheme: ReaderTheme {
-        ReaderTheme.allThemes().first { $0.id == themeId } ?? .parchment
+        let base = ReaderTheme.allThemes().first { $0.id == themeId } ?? .parchment
+        guard let override = textColorOverride else { return base }
+        // 文字颜色全局覆盖：保留背景色，只替换文字色
+        return ReaderTheme(id: base.id, name: base.name,
+                           backgroundColor: base.backgroundColor,
+                           textColor: override,
+                           uiAccentColor: base.uiAccentColor)
     }
 
     // MARK: - 翻页模式
@@ -114,16 +120,31 @@ class ReaderSettings: ObservableObject {
     @AppStorage("reader.customTextColorHex") var customTextColorHex: String = "#2C1810"
     @AppStorage("reader.ttsVoiceIdentifier") var ttsVoiceIdentifier: String = ""
 
+    /// 文字颜色覆盖（空字符串 = 使用主题默认色）
+    @AppStorage("reader.textColorOverrideHex") var textColorOverrideHex: String = ""
+
+    /// 音量键翻页开关
+    @AppStorage("reader.volumePageTurn") var volumePageTurn: Bool = false
+
     /// 自定义背景色（从 hex 读写）
     var customBgColor: Color {
         get { Color(hex: customBgColorHex) ?? Color(red: 0.96, green: 0.90, blue: 0.78) }
         set { customBgColorHex = newValue.toHex() ?? customBgColorHex }
     }
 
-    /// 自定义文字色
+    /// 自定义文字色（仅 custom 主题使用）
     var customTextColor: Color {
         get { Color(hex: customTextColorHex) ?? Color(red: 0.17, green: 0.09, blue: 0.06) }
         set { customTextColorHex = newValue.toHex() ?? customTextColorHex }
+    }
+
+    /// 文字颜色全局覆盖（非空时覆盖所有主题的文字色）
+    var textColorOverride: Color? {
+        get { Color(hex: textColorOverrideHex) }
+        set {
+            if let c = newValue { textColorOverrideHex = c.toHex() ?? "" }
+            else { textColorOverrideHex = "" }
+        }
     }
 }
 

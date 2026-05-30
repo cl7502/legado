@@ -1,6 +1,17 @@
 import SwiftUI
 import UIKit
 import AVFoundation
+import MediaPlayer
+import SafariServices
+
+// MARK: - ReaderLayout（全局布局常量，ViewModel 分页器也使用）
+
+enum ReaderLayout {
+    /// Header 栏固定高度（含上下内边距）
+    static let headerH: CGFloat = 28
+    /// Footer 栏固定高度（含上下内边距）
+    static let footerH: CGFloat = 22
+}
 
 // MARK: - ReaderView
 
@@ -8,6 +19,18 @@ struct ReaderView: View {
     @StateObject var viewModel: ReaderViewModel
     @StateObject var settings  = ReaderSettings.shared
     @Environment(\.dismiss) var dismiss
+
+    // 电量和时间：从 per-page 移到 ReaderView 统一管理，避免翻页时多实例竞争
+    @StateObject private var battery = BatteryMonitor.shared
+    @State private var footerTime: String = {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"
+        return f.string(from: Date())
+    }()
+    @State private var minuteWorkItem: DispatchWorkItem? = nil
+
+    // 音量键翻页
+    @State private var volumeObservation: NSKeyValueObservation? = nil
+    @State private var volumeSlider: UISlider? = nil
 
     var body: some View {
         ZStack {
@@ -27,10 +50,7 @@ struct ReaderView: View {
                 }
             }
 
-            // 三段式点击区（菜单隐藏时）
-            if !viewModel.showingMenu {
-                tapZones
-            }
+            // 三段式点击区已移入 pageModeView 内部，只覆盖正文区域
 
             // 菜单层
             if viewModel.showingMenu {
@@ -56,8 +76,19 @@ struct ReaderView: View {
         }
         .navigationBarHidden(true)
         .statusBar(hidden: !viewModel.showingMenu)
-        .onAppear  { UIApplication.shared.isIdleTimerDisabled = settings.keepScreenOn }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = settings.keepScreenOn
+            battery.enable()
+            scheduleNextMinuteUpdate()
+            setupVolumePageTurn()
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            battery.disable()
+            minuteWorkItem?.cancel()
+            minuteWorkItem = nil
+            teardownVolumePageTurn()
+        }
         // B3修复：排版设置变化 → 重新分页
         .onChange(of: settings.fontSize)          { _ in viewModel.paginateCurrentChapter() }
         .onChange(of: settings.lineSpacing)       { _ in viewModel.paginateCurrentChapter() }
@@ -71,40 +102,121 @@ struct ReaderView: View {
 
     // MARK: 翻页模式
     private var pageModeView: some View {
-        TabView(selection: $viewModel.currentPageIndex) {
-            ForEach(0..<viewModel.currentPages.count, id: \.self) { idx in
-                ReaderPageView(
-                    content: viewModel.currentPages[idx],
-                    chapterTitle: currentChapterTitle,   // 每页都传入，不再只传第0页
-                    pageLabel: "\(idx + 1) / \(viewModel.currentPages.count)",
-                    totalChapters: viewModel.chapters.count,
-                    chapterIndex: viewModel.currentChapterIndex,
-                    sourceOrigin: viewModel.book.origin,
-                    pageStartOffset: idx < viewModel.currentPageOffsets.count
-                        ? viewModel.currentPageOffsets[idx] : 0,
-                    highlights: viewModel.currentHighlights,
-                    onHighlight: { localStart, localEnd, text, color in
-                        Task { await viewModel.addHighlight(
-                            pageIndex: idx,
-                            pageLocalStart: localStart,
-                            pageLocalEnd: localEnd,
-                            selectedText: text,
-                            color: color
-                        )}
-                    },
-                    onBack: { dismiss() },
-                    isFirstPage: idx == 0
-                )
-                .tag(idx)
+        VStack(spacing: 0) {
+            // ── 固定 Header 栏（精确高度，不随页面内容变化）──────────────
+            readerHeaderBar
+                .frame(height: ReaderLayout.headerH)
+
+            // ── 正文 TabView + 三段式点击区（只覆盖正文区域）──────────
+            ZStack {
+                TabView(selection: $viewModel.currentPageIndex) {
+                    ForEach(0..<viewModel.currentPages.count, id: \.self) { idx in
+                        ReaderPageView(
+                            content: viewModel.currentPages[idx],
+                            chapterTitle: currentChapterTitle,
+                            sourceOrigin: viewModel.book.origin,
+                            pageStartOffset: idx < viewModel.currentPageOffsets.count
+                                ? viewModel.currentPageOffsets[idx] : 0,
+                            highlights: viewModel.currentHighlights,
+                            onHighlight: { localStart, localEnd, text, color in
+                                Task { await viewModel.addHighlight(
+                                    pageIndex: idx,
+                                    pageLocalStart: localStart,
+                                    pageLocalEnd: localEnd,
+                                    selectedText: text,
+                                    color: color
+                                )}
+                            },
+                            isFirstPage: idx == 0
+                        )
+                        .tag(idx)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .onChange(of: viewModel.currentPageIndex) { newIdx in
+                    if newIdx == viewModel.currentPages.count - 1 {
+                        viewModel.prefetchNextChapter()
+                    }
+                }
+
+                // 三段式点击区（仅在菜单隐藏时，且只覆盖正文区域）
+                if !viewModel.showingMenu {
+                    tapZones
+                }
             }
+
+            // ── 固定 Footer 栏（精确高度，不随页面内容变化）──────────────
+            readerFooterBar
+                .frame(height: ReaderLayout.footerH)
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
         .ignoresSafeArea()
-        .onChange(of: viewModel.currentPageIndex) { newIdx in
-            if newIdx == viewModel.currentPages.count - 1 {
-                viewModel.prefetchNextChapter()
+        // 音量键翻页：隐藏 MPVolumeView 抑制系统音量 HUD，同时保持视图不可见
+        .background(
+            settings.volumePageTurn
+                ? AnyView(HiddenVolumeView(sliderRef: $volumeSlider).frame(width: 1, height: 1))
+                : AnyView(EmptyView())
+        )
+    }
+
+    // MARK: 固定 Header 栏
+    private var readerHeaderBar: some View {
+        HStack(spacing: 4) {
+            Button(action: { dismiss() }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 11, weight: .medium))
+                    if viewModel.currentPageIndex == 0 {
+                        Text(currentChapterTitle.isEmpty
+                             ? "第\(viewModel.currentChapterIndex + 1)章"
+                             : applyTraditional(currentChapterTitle))
+                            .font(.system(size: 11))
+                            .lineLimit(1)
+                    }
+                }
+                .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            if settings.showHeaderProgress, viewModel.chapters.count > 0 {
+                Text("\(viewModel.currentChapterIndex + 1) / \(viewModel.chapters.count)章")
+                    .font(.system(size: 11))
+                    .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
+            }
+            if settings.showHeaderBattery {
+                Text("\(Int(battery.level * 100))%")
+                    .font(.system(size: 11))
+                    .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
             }
         }
+        .padding(.horizontal, settings.sideMargin)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(settings.currentTheme.backgroundColor)
+    }
+
+    // MARK: 固定 Footer 栏
+    private var readerFooterBar: some View {
+        HStack {
+            HStack(spacing: 0) {
+                BatteryIconView(
+                    level: battery.level,
+                    isCharging: battery.isCharging,
+                    textColor: settings.currentTheme.textColor
+                )
+                Text("\u{2003}\u{2003}\(footerTime)")
+                    .font(.system(size: 11))
+                    .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
+            }
+            Spacer()
+            let pageLabel = viewModel.currentPageIndex < viewModel.currentPages.count
+                ? "\(viewModel.currentPageIndex + 1) / \(viewModel.currentPages.count)" : ""
+            Text(pageLabel)
+                .font(.system(size: 11))
+                .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
+        }
+        .padding(.horizontal, settings.sideMargin)
+        .background(settings.currentTheme.backgroundColor)
     }
 
     // MARK: 滚动模式（连续正文 + 章节底部导航按钮）
@@ -239,156 +351,6 @@ struct ReaderView: View {
         guard settings.useTraditionalChinese else { return text }
         return text.applyingTransform(StringTransform("Simplified-Traditional"), reverse: false) ?? text
     }
-}
-
-// MARK: - ReaderPageView
-
-struct ReaderPageView: View {
-    let content: String
-    let chapterTitle: String
-    let pageLabel: String
-    let totalChapters: Int
-    let chapterIndex: Int
-    var sourceOrigin: String = ""
-    var pageStartOffset: Int = 0
-    var highlights: [BookHighlight] = []
-    var onHighlight: ((Int, Int, String, Int) -> Void)? = nil
-    var onBack: (() -> Void)? = nil
-    var isFirstPage: Bool = false   // 控制是否在正文区域顶部显示大号章节标题
-
-    @State private var footerTime: String = {
-        let f = DateFormatter(); f.dateFormat = "HH:mm"
-        return f.string(from: Date())
-    }()
-    @State private var minuteWorkItem: DispatchWorkItem? = nil
-
-    @StateObject private var settings = ReaderSettings.shared
-    @StateObject private var battery  = BatteryMonitor.shared
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 0) {
-                if isFirstPage && !chapterTitle.isEmpty {
-                    Text(applyTraditional(chapterTitle))
-                        .font(.system(size: settings.fontSize + 6, weight: .bold))
-                        .foregroundColor(settings.currentTheme.textColor)
-                        .padding(.bottom, 20)
-                }
-
-                // 混合内容渲染：识别 ⟨IMG:url⟩ 标记行，分别渲染为图片或文字
-                MixedContentView(
-                    content: applyTraditional(content),
-                    settings: settings,
-                    sourceOrigin: sourceOrigin,
-                    pageStartOffset: pageStartOffset,
-                    highlights: highlights,
-                    onHighlight: onHighlight
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Spacer(minLength: 0)
-
-                HStack {
-                    // 左侧：电池图标 + 时间
-                    HStack(spacing: 0) {
-                        BatteryIconView(
-                            level: battery.level,
-                            isCharging: battery.isCharging,
-                            textColor: settings.currentTheme.textColor
-                        )
-                        Text("\u{2003}\u{2003}\(footerTime)")   // 两个 em-space + HH:mm
-                            .font(.system(size: 11))
-                            .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
-                    }
-
-                    Spacer()
-
-                    // 右侧：当前页/总页数（不变）
-                    Text(pageLabel)
-                        .font(.system(size: 11))
-                        .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
-                }
-            }
-            .padding(.horizontal, settings.sideMargin)
-            .padding(.top, settings.topMargin)
-            .padding(.bottom, settings.bottomMargin)
-
-            // 页眉：左侧章节导航（固定显示），右侧章节进度（受 showHeaderProgress 控制）
-            HStack(spacing: 4) {
-                // 左侧：返回箭头；第一页额外显示章节标题，后续页只显示箭头
-                Button(action: { onBack?() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 11, weight: .medium))
-                        if isFirstPage {
-                            Text(chapterTitle.isEmpty
-                                 ? "第\(chapterIndex + 1)章"
-                                 : applyTraditional(chapterTitle))
-                                .font(.system(size: 11))
-                                .lineLimit(1)
-                        }
-                    }
-                    .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                // 右侧：章节总进度（受开关控制）
-                if settings.showHeaderProgress, totalChapters > 0 {
-                    Text("\(chapterIndex + 1) / \(totalChapters)章")
-                        .font(.system(size: 11))
-                        .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
-                }
-                if settings.showHeaderBattery {
-                    Text("\(Int(battery.level * 100))%")
-                        .font(.system(size: 11))
-                        .foregroundColor(settings.currentTheme.textColor.opacity(0.5))
-                }
-            }
-            .padding(.horizontal, settings.sideMargin)
-            .padding(.top, 8)
-        }
-        .onAppear {
-            battery.enable()
-            scheduleNextMinuteUpdate()
-        }
-        .onDisappear {
-            battery.disable()
-            minuteWorkItem?.cancel()
-            minuteWorkItem = nil
-        }
-    }
-
-    /// 构建与 ChapterPaginator.makeAttrString 完全相同的 AttributedString，
-    /// 确保渲染高度 = 分页器测量高度，消除底部空白偏大
-    private func pageAttributedString(_ text: String) -> AttributedString {
-        let font     = UIFont.systemFont(ofSize: settings.fontSize)
-        let fixedLineH = font.lineHeight + settings.lineSpacing
-        let para = NSMutableParagraphStyle()
-        para.minimumLineHeight = fixedLineH
-        para.maximumLineHeight = fixedLineH
-        para.paragraphSpacing  = settings.paragraphSpacing
-        let nsAttr = NSMutableAttributedString(string: text, attributes: [
-            .font:            font,
-            .paragraphStyle:  para,
-            .kern:            settings.letterSpacing,
-            .foregroundColor: UIColor(settings.currentTheme.textColor),
-        ])
-        return (try? AttributedString(nsAttr, including: \.uiKit))
-               ?? AttributedString(text)
-    }
-
-    private func paragraphs(_ text: String) -> [String] {
-        text.components(separatedBy: "\n\n")
-            .flatMap { $0.components(separatedBy: "\n") }
-            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-    }
-
-    private func applyTraditional(_ text: String) -> String {
-        guard settings.useTraditionalChinese else { return text }
-        return text.applyingTransform(StringTransform("Simplified-Traditional"), reverse: false) ?? text
-    }
 
     /// 在下一个分钟整点更新 footerTime，然后递归调度，确保时间显示始终与系统时钟对齐。
     private func scheduleNextMinuteUpdate() {
@@ -405,6 +367,88 @@ struct ReaderPageView: View {
         }
         minuteWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    /// 启动音量键翻页监听（AVAudioSession KVO）
+    private func setupVolumePageTurn() {
+        guard settings.volumePageTurn else { return }
+        let session = AVAudioSession.sharedInstance()
+        try? session.setActive(true)
+        volumeObservation = session.observe(\.outputVolume, options: [.new, .old]) { _, change in
+            guard let newVol = change.newValue, let oldVol = change.oldValue else { return }
+            DispatchQueue.main.async {
+                guard settings.volumePageTurn else { return }
+                if newVol > oldVol + 0.01 {
+                    withAnimation(.easeInOut(duration: 0.2)) { viewModel.nextPage() }
+                } else if newVol < oldVol - 0.01 {
+                    withAnimation(.easeInOut(duration: 0.2)) { viewModel.prevPage() }
+                }
+                // 恢复音量到中间值，保证两个方向都能继续使用
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    volumeSlider?.setValue(0.5, animated: false)
+                }
+            }
+        }
+        // 设初始音量到中间值（留出上下各半格余量）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            volumeSlider?.setValue(0.5, animated: false)
+        }
+    }
+
+    private func teardownVolumePageTurn() {
+        volumeObservation?.invalidate()
+        volumeObservation = nil
+    }
+}
+
+// MARK: - ReaderPageView
+// 纯正文渲染，不含 header/footer（已移至 ReaderView.pageModeView 统一管理）
+
+struct ReaderPageView: View {
+    let content: String
+    let chapterTitle: String
+    // 以下参数保留供 SimulationPagingView 兼容，本视图不再使用
+    var pageLabel: String = ""
+    var totalChapters: Int = 0
+    var chapterIndex: Int = 0
+    var sourceOrigin: String = ""
+    var pageStartOffset: Int = 0
+    var highlights: [BookHighlight] = []
+    var onHighlight: ((Int, Int, String, Int) -> Void)? = nil
+    var onBack: (() -> Void)? = nil
+    var isFirstPage: Bool = false
+
+    @StateObject private var settings = ReaderSettings.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if isFirstPage && !chapterTitle.isEmpty {
+                Text(applyTraditional(chapterTitle))
+                    .font(.system(size: settings.fontSize + 6, weight: .bold))
+                    .foregroundColor(settings.currentTheme.textColor)
+                    .padding(.bottom, 20)
+            }
+
+            // 混合内容渲染：识别 ⟨IMG:url⟩ 标记行，分别渲染为图片或文字
+            MixedContentView(
+                content: applyTraditional(content),
+                settings: settings,
+                sourceOrigin: sourceOrigin,
+                pageStartOffset: pageStartOffset,
+                highlights: highlights,
+                onHighlight: onHighlight
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, settings.sideMargin)
+        .padding(.top, settings.topMargin)
+        .padding(.bottom, settings.bottomMargin)
+    }
+
+    private func applyTraditional(_ text: String) -> String {
+        guard settings.useTraditionalChinese else { return text }
+        return text.applyingTransform(StringTransform("Simplified-Traditional"), reverse: false) ?? text
     }
 }
 
@@ -1161,6 +1205,28 @@ struct ReadingPreferencesView: View {
                             UIApplication.shared.isIdleTimerDisabled = val
                         }
                     Toggle("繁体中文", isOn: $settings.useTraditionalChinese)
+                    Toggle("音量键翻页", isOn: $settings.volumePageTurn)
+                }
+
+                // ── 文字颜色 ──────────────────────────────────
+                Section("文字颜色") {
+                    Toggle("自定义文字颜色", isOn: Binding(
+                        get:  { settings.textColorOverrideHex.isEmpty == false },
+                        set:  { on in
+                            if on { settings.textColorOverride = settings.currentTheme.textColor }
+                            else  { settings.textColorOverrideHex = "" }
+                        }
+                    ))
+                    if settings.textColorOverrideHex.isEmpty == false {
+                        ColorPicker("文字颜色", selection: Binding(
+                            get: { settings.textColorOverride ?? settings.currentTheme.textColor },
+                            set: { settings.textColorOverride = $0 }
+                        ), supportsOpacity: false)
+                        Button("恢复主题默认") {
+                            settings.textColorOverrideHex = ""
+                        }
+                        .foregroundColor(.red)
+                    }
                 }
 
                 // ── 缓存 ──────────────────────────────────────
@@ -1217,6 +1283,24 @@ struct ReadingPreferencesView: View {
     }
 }
 
+// MARK: - HiddenVolumeView — 抑制系统音量 HUD，暴露 UISlider 用于复位音量
+
+private struct HiddenVolumeView: UIViewRepresentable {
+    @Binding var sliderRef: UISlider?
+
+    func makeUIView(context: Context) -> MPVolumeView {
+        let v = MPVolumeView()
+        v.alpha = 0.001
+        v.isUserInteractionEnabled = false
+        DispatchQueue.main.async {
+            sliderRef = v.subviews.first(where: { $0 is UISlider }) as? UISlider
+        }
+        return v
+    }
+
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
+}
+
 // MARK: - TextKit2TextView — UITextView with TextKit 2 backend
 
 /// UIViewRepresentable wrapping UITextView(usingTextLayoutManager: true).
@@ -1235,13 +1319,14 @@ private struct TextKit2TextView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UITextView {
         let tv = UITextView(usingTextLayoutManager: true)
-        tv.isEditable             = false
-        tv.isSelectable           = true
+        tv.isEditable               = false
+        tv.isSelectable             = true
         tv.isUserInteractionEnabled = true
-        tv.backgroundColor        = .clear
-        tv.textContainerInset     = .zero
+        tv.backgroundColor          = .clear
+        tv.textContainerInset       = .zero
         tv.textContainer.lineFragmentPadding = 0
-        tv.delegate               = context.coordinator
+        tv.dataDetectorTypes        = .link   // 自动检测 URL，点击跳转
+        tv.delegate                 = context.coordinator
         return tv
     }
 
@@ -1272,6 +1357,22 @@ private struct TextKit2TextView: UIViewRepresentable {
     class Coordinator: NSObject, UITextViewDelegate {
         var onHighlight: ((Int, Int, String, Int) -> Void)?
         init(onHighlight: ((Int, Int, String, Int) -> Void)?) { self.onHighlight = onHighlight }
+
+        // 链接点击：在 SFSafariViewController 中打开
+        func textView(_ textView: UITextView,
+                      shouldInteractWith URL: URL,
+                      in characterRange: NSRange,
+                      interaction: UITextItemInteraction) -> Bool {
+            if interaction == .invokeDefaultAction {
+                let safari = SFSafariViewController(url: URL)
+                UIApplication.shared.connectedScenes
+                    .compactMap { ($0 as? UIWindowScene)?.windows.first?.rootViewController }
+                    .first?
+                    .present(safari, animated: true)
+                return false
+            }
+            return true
+        }
 
         func textView(_ textView: UITextView,
                       editMenuForTextIn range: UITextRange,
