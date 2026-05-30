@@ -2,8 +2,7 @@ import Foundation
 import AVFoundation
 import MediaPlayer
 
-/// 工业级 TTS 管理器
-/// 目标：支持后台播放、锁屏控制、自动连读、语速调节、自定义语音
+/// TTS 管理器
 class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     static let shared = TTSManager()
 
@@ -11,69 +10,103 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
 
     @Published var isSpeaking = false
     @Published var currentText: String = ""
-    @Published var rate: Float = 0.5 // 0.0 ~ 1.0
-    @Published var pitch: Float = 1.0 // 0.5 ~ 2.0
 
-    // P2-B: 自定义语音支持（统一使用 ReaderSettings.ttsVoiceIdentifier 持久化，废弃旧 savedVoiceId）
-    /// 用户选定的 AVSpeechSynthesisVoice（nil = 系统默认）
+    /// 当前朗读字符范围（在 currentText 中的偏移，用于正文高亮）
+    @Published private(set) var speakingRange: NSRange? = nil
+
+    /// 用户选定的声音（nil = 系统默认）
     var selectedVoice: AVSpeechSynthesisVoice? = nil {
-        didSet { ReaderSettings.shared.ttsVoiceIdentifier = selectedVoice?.identifier ?? "" }
+        didSet {
+            ReaderSettings.shared.ttsVoiceIdentifier = selectedVoice?.identifier ?? ""
+            restartForSettingChange()
+        }
     }
 
     /// 当前是否正在朗读（非暂停状态）
     @Published private(set) var isPlaying: Bool = false
 
-    /// 定时停止倒计时（秒），nil = 无定时
+    /// 定时倒计时（秒），nil = 无定时
     @Published private(set) var remainingSeconds: Int? = nil
 
     private var timerTask: Task<Void, Never>?
-
     private var onChapterFinish: (() -> Void)?
+
+    // 用于 restartForSettingChange 重启当前句
+    private var currentBookName: String = ""
+    private var currentChapterTitle: String = ""
 
     override init() {
         super.init()
         synthesizer.delegate = self
         setupAudioSession()
         setupRemoteCommandCenter()
-        // 从 ReaderSettings 恢复已选声音（单一来源）
         let savedId = ReaderSettings.shared.ttsVoiceIdentifier
         if !savedId.isEmpty {
             selectedVoice = AVSpeechSynthesisVoice(identifier: savedId)
         }
     }
 
-    // 过滤中文和英文语音
-    private func loadAvailableVoices() {}
-
-    /// 配置音频会话 (核心：支持后台)
     private func setupAudioSession() {
         do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback, mode: .spokenAudio,
+                options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers]
+            )
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("❌ [TTS Error]: Failed to set audio session category: \(error)")
+            print("❌ [TTS] audio session error: \(error)")
         }
     }
 
-    /// 朗读正文
-    func speak(_ text: String, bookName: String, chapterTitle: String, onFinish: @escaping () -> Void) {
-        stop()
+    // MARK: - 朗读
 
-        self.currentText = text
-        self.onChapterFinish = onFinish
+    func speak(_ text: String, bookName: String, chapterTitle: String,
+               onFinish: @escaping () -> Void) {
+        stopSynthesizer()   // 停止旧句子，但保留定时器
 
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.rate = rate
-        utterance.pitchMultiplier = pitch
+        currentText        = text
+        currentBookName    = bookName
+        currentChapterTitle = chapterTitle
+        onChapterFinish    = onFinish
 
-        // 统一使用 selectedVoice，无则降级 zh-CN
-        utterance.voice = selectedVoice ?? AVSpeechSynthesisVoice(language: "zh-CN")
-
+        let utterance = makeUtterance(text)
         synthesizer.speak(utterance)
         isSpeaking = true
         DispatchQueue.main.async { self.isPlaying = true }
 
         updateNowPlayingInfo(title: chapterTitle, artist: bookName)
+    }
+
+    /// 语速或发音变更后，用最新设置重新朗读当前文本
+    func restartForSettingChange() {
+        guard isSpeaking || isPlaying, !currentText.isEmpty else { return }
+        stopSynthesizer()
+        let utterance = makeUtterance(currentText)
+        synthesizer.speak(utterance)
+        isSpeaking = true
+        DispatchQueue.main.async { self.isPlaying = true }
+    }
+
+    private func makeUtterance(_ text: String) -> AVSpeechUtterance {
+        let utterance = AVSpeechUtterance(string: text)
+        // 直接使用 ReaderSettings 中存储的原始 rate（0.0-1.0 有效范围）
+        utterance.rate = min(
+            max(ReaderSettings.shared.ttsRate, AVSpeechUtteranceMinimumSpeechRate),
+            AVSpeechUtteranceMaximumSpeechRate
+        )
+        utterance.pitchMultiplier = ReaderSettings.shared.ttsPitch
+        utterance.voice = selectedVoice ?? AVSpeechSynthesisVoice(language: "zh-CN")
+        return utterance
+    }
+
+    private func stopSynthesizer() {
+        onChapterFinish = nil
+        synthesizer.stopSpeaking(at: .immediate)
+        isSpeaking = false
+        DispatchQueue.main.async {
+            self.isPlaying = false
+            self.speakingRange = nil
+        }
     }
 
     func pause() {
@@ -89,19 +122,12 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
     }
 
     func stop() {
-        onChapterFinish = nil  // 先清回调，防止 didFinish 触发连读链
-        synthesizer.stopSpeaking(at: .immediate)
-        isSpeaking = false
-        DispatchQueue.main.async {
-            self.isPlaying = false
-            self.remainingSeconds = nil
-        }
         cancelTimer()
+        stopSynthesizer()
     }
 
-    // MARK: - 定时停止
+    // MARK: - 定时
 
-    /// 开始定时倒计时，到 0 时自动停止朗读
     func startTimer(minutes: Int) {
         cancelTimer()
         let seconds = minutes * 60
@@ -110,7 +136,7 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
             var remaining = seconds
             while remaining > 0 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                if Task.isCancelled { return }   // sleep 后立即检查取消（CR-05）
+                if Task.isCancelled { return }
                 remaining -= 1
                 self.remainingSeconds = remaining
             }
@@ -124,42 +150,43 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject {
         DispatchQueue.main.async { self.remainingSeconds = nil }
     }
 
-    // MARK: - 锁屏控制 (MPNowPlayingInfoCenter)
+    // MARK: - 锁屏控制
 
     private func setupRemoteCommandCenter() {
-        let commandCenter = MPRemoteCommandCenter.shared()
-
-        commandCenter.playCommand.addTarget { [unowned self] _ in
-            self.resume()
-            return .success
-        }
-
-        commandCenter.pauseCommand.addTarget { [unowned self] _ in
-            self.pause()
-            return .success
-        }
-
-        commandCenter.togglePlayPauseCommand.addTarget { [unowned self] _ in
-            if self.isSpeaking { self.pause() } else { self.resume() }
-            return .success
+        let cc = MPRemoteCommandCenter.shared()
+        cc.playCommand.addTarget  { [unowned self] _ in resume(); return .success }
+        cc.pauseCommand.addTarget { [unowned self] _ in pause();  return .success }
+        cc.togglePlayPauseCommand.addTarget { [unowned self] _ in
+            isSpeaking ? pause() : resume(); return .success
         }
     }
 
     private func updateNowPlayingInfo(title: String, artist: String) {
-        var nowPlayingInfo = [String: Any]()
-        nowPlayingInfo[MPMediaItemPropertyTitle] = title
-        nowPlayingInfo[MPMediaItemPropertyArtist] = artist
-        nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
-
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+            MPMediaItemPropertyTitle:              title,
+            MPMediaItemPropertyArtist:             artist,
+            MPNowPlayingInfoPropertyPlaybackRate:  1.0,
+        ]
     }
 
     // MARK: - AVSpeechSynthesizerDelegate
 
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
+                           didFinish utterance: AVSpeechUtterance) {
         isSpeaking = false
-        DispatchQueue.main.async { self.isPlaying = false }
-        // 章节朗读结束，触发回调进行下一章连读
+        DispatchQueue.main.async {
+            self.isPlaying = false
+            self.speakingRange = nil
+        }
         onChapterFinish?()
+    }
+
+    /// 当前正在朗读的字符范围（用于正文高亮）
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
+                           willSpeakRangeOfSpeechString characterRange: NSRange,
+                           utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async {
+            self.speakingRange = characterRange
+        }
     }
 }

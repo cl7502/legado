@@ -435,6 +435,7 @@ struct ReaderPageView: View {
     var isFirstPage: Bool = false
 
     @StateObject private var settings = ReaderSettings.shared
+    @ObservedObject private var ttsManager = TTSManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -452,7 +453,8 @@ struct ReaderPageView: View {
                 sourceOrigin: sourceOrigin,
                 pageStartOffset: pageStartOffset,
                 highlights: highlights,
-                onHighlight: onHighlight
+                onHighlight: onHighlight,
+                ttsSpeakRange: ttsManager.speakingRange
             )
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -741,7 +743,8 @@ struct ReaderMenuView: View {
 
         VStack(spacing: 10) {
 
-            // 语速
+            // 语速（rate: 0.1-1.0 对应 iOS AVSpeechUtterance 有效范围；
+            //        显示为 rate/0.5 倍速，0.5=1.0x 正常语速，1.0=2.0x 最快）
             HStack(spacing: 8) {
                 Text("语速").font(.caption).foregroundColor(.secondary).frame(width: 36, alignment: .leading)
                 Text("慢").font(.caption2).foregroundColor(.secondary)
@@ -750,10 +753,13 @@ struct ReaderMenuView: View {
                         get: { Double(settings.ttsRate) },
                         set: { settings.ttsRate = Float($0) }
                     ),
-                    in: 0.25...2.0
+                    in: 0.1...1.0,
+                    onEditingChanged: { editing in
+                        if !editing { ttsManager.restartForSettingChange() }
+                    }
                 )
                 Text("快").font(.caption2).foregroundColor(.secondary)
-                Text(String(format: "%.1fx", settings.ttsRate))
+                Text(String(format: "%.1fx", settings.ttsRate / 0.5))
                     .font(.caption).frame(width: 36, alignment: .trailing)
                     .monospacedDigit()
             }
@@ -1089,41 +1095,55 @@ private struct MixedContentView: View {
     var pageStartOffset: Int = 0
     var highlights: [BookHighlight] = []
     var onHighlight: ((Int, Int, String, Int) -> Void)? = nil
+    /// 当前 TTS 朗读范围（章节绝对偏移），nil = 未朗读
+    var ttsSpeakRange: NSRange? = nil
 
     private static let imgMarker = "⟨IMG:"
     private static let imgEnd    = "⟩"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: settings.lineSpacing) {
-            ForEach(segments.indices, id: \.self) { i in
-                let seg = segments[i]
+        let segs = segments
+        return VStack(alignment: .leading, spacing: settings.lineSpacing) {
+            ForEach(Array(segs.enumerated()), id: \.offset) { i, seg in
                 if seg.isImage {
                     CoverImageView(url: seg.text, referer: sourceOrigin)
                         .frame(maxWidth: .infinity)
                         .frame(height: 220)
                         .cornerRadius(4)
                 } else if !seg.text.isEmpty {
-                    let segOffset = computeSegmentOffset(upTo: i)
-                    let pageHighlights = highlights.compactMap { h -> (range: NSRange, color: UIColor)? in
-                        // 将章节偏移转为页内偏移，再转为段内偏移
-                        let pageStart = pageStartOffset + segOffset
-                        let pageEnd   = pageStart + (seg.text as NSString).length
-                        let hStart    = max(h.startOffset, pageStart) - pageStart
-                        let hEnd      = min(h.endOffset,   pageEnd)   - pageStart
-                        guard hEnd > hStart else { return nil }
-                        return (NSRange(location: hStart, length: hEnd - hStart), h.uiColor)
-                    }
+                    let segOffset   = computeSegmentOffset(upTo: i)
+                    let absSegStart = pageStartOffset + segOffset
                     TextKit2TextView(
                         text: nsAttributedText(seg.text),
                         backgroundColor: UIColor(settings.currentTheme.backgroundColor),
-                        pageStartOffset: pageStartOffset + segOffset,
-                        highlights: pageHighlights,
+                        pageStartOffset: absSegStart,
+                        highlights: allHighlights(absStart: absSegStart,
+                                                   absEnd: absSegStart + (seg.text as NSString).length),
                         onHighlight: onHighlight
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
+    }
+
+    /// 合并手动高亮 + TTS 朗读高亮，统一转为段内偏移
+    private func allHighlights(absStart: Int, absEnd: Int) -> [(range: NSRange, color: UIColor)] {
+        var result: [(range: NSRange, color: UIColor)] = []
+        for h in highlights {
+            let hS = max(h.startOffset, absStart) - absStart
+            let hE = min(h.endOffset,   absEnd)   - absStart
+            if hE > hS { result.append((NSRange(location: hS, length: hE - hS), h.uiColor)) }
+        }
+        if let tts = ttsSpeakRange {
+            let tS = max(tts.location,              absStart) - absStart
+            let tE = min(tts.location + tts.length, absEnd)   - absStart
+            if tE > tS {
+                result.append((NSRange(location: tS, length: tE - tS),
+                               UIColor.systemOrange.withAlphaComponent(0.35)))
+            }
+        }
+        return result
     }
 
     private struct Segment { let isImage: Bool; let text: String }

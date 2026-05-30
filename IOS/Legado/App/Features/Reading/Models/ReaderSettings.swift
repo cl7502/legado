@@ -109,8 +109,9 @@ class ReaderSettings: ObservableObject {
 
     // MARK: - 缓存
     @AppStorage("reader.prefetchCount") var prefetchCount: Int = 10  // 后台预缓存章节数
-    @AppStorage("reader.ttsRate")  private var _ttsRate:  Double = 1.0
-    @AppStorage("reader.ttsPitch") private var _ttsPitch: Double = 1.0
+    // ttsRateV2: 存 AVSpeechUtterance.rate 原始值（0.0-1.0），默认 0.5 = 正常语速
+    @AppStorage("reader.ttsRateV2") private var _ttsRate: Double = 0.5
+    @AppStorage("reader.ttsPitch")  private var _ttsPitch: Double = 1.0
 
     var ttsRate:  Float { get { Float(_ttsRate) }  set { _ttsRate  = Double(newValue) } }
     var ttsPitch: Float { get { Float(_ttsPitch) } set { _ttsPitch = Double(newValue) } }
