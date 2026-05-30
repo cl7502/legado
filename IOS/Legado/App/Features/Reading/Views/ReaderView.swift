@@ -460,6 +460,7 @@ struct ReaderPageView: View {
         .padding(.horizontal, settings.sideMargin)
         .padding(.top, settings.topMargin)
         .padding(.bottom, settings.bottomMargin)
+        .clipped()  // 防止内容溢出 footer 区域（CoreText/TextKit2 极端误差兜底）
     }
 
     private func applyTraditional(_ text: String) -> String {
