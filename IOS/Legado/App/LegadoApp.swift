@@ -20,11 +20,6 @@ struct LegadoApp: App {
                 }.value
                 dbReady = true
             }
-            #if DEBUG
-            .task {
-                await SpeakerAuditionHelper.generateAll()
-            }
-            #endif
         }
     }
 }
