@@ -60,6 +60,7 @@
 		BDD1E8DFA9577A9A32B94487 /* CookieManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A2A311A73EF5520A2B486B7 /* CookieManager.swift */; };
 		C08E31A1B67D5322D1E527A8 /* ChapterPaginator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A014AEF10E5683C5A1C3FF07 /* ChapterPaginator.swift */; };
 		C7089A692FCBB53900E493E9 /* sherpa-onnx.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		FAEC7143029B4F8BA6DED09F /* sherpa-onnx.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */; };
 		C708A76D2FCBC0C400E493E9 /* onnxruntime.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */; };
 		C708A76E2FCBC0C400E493E9 /* onnxruntime.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CC000002CC000002CC000002 /* QueryTTF.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000001CC000001CC000001 /* QueryTTF.swift */; };
@@ -198,6 +199,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4842CACE34A69C810C820C33 /* Alamofire in Frameworks */,
+				FAEC7143029B4F8BA6DED09F /* sherpa-onnx.xcframework in Frameworks */,
 				C708A76D2FCBC0C400E493E9 /* onnxruntime.xcframework in Frameworks */,
 				712B3AE4134A4EB1A7476526 /* SwiftSoup in Frameworks */,
 				366201E0DB05DE4192BF82D1 /* GRDB in Frameworks */,
@@ -801,6 +803,7 @@
 				PRODUCT_NAME = Legado;
 				SDKROOT = iphoneos;
 				SWIFT_OBJC_BRIDGING_HEADER = "Legado/App/Core/HTML/Legado-Bridging-Header.h";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG SHERPA_ONNX_ENABLED";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -833,6 +836,7 @@
 				PRODUCT_NAME = Legado;
 				SDKROOT = iphoneos;
 				SWIFT_OBJC_BRIDGING_HEADER = "Legado/App/Core/HTML/Legado-Bridging-Header.h";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SHERPA_ONNX_ENABLED;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
