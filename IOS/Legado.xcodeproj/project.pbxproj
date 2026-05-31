@@ -54,13 +54,13 @@
 		AA11BB22CC33DD44EE55FF01 /* ExploreUrlParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF00 /* ExploreUrlParser.swift */; };
 		AEA89EB11549973A49306E86 /* BookSourceViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BD1B81E8F65A038E0BDEFBB /* BookSourceViewModel.swift */; };
 		AFA87E6FDD3A8DE0062CB32D /* BookSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2AD209F2D6170D8FAE2703 /* BookSource.swift */; };
+		AUDPPL0000000000000002B /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDPPL0000000000000001A /* AudioPipeline.swift */; };
 		BA116345529E4551A30ADF01 /* BookSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038B8975C4B84871A3D9A1D4 /* BookSearchView.swift */; };
 		BB000002BB000002BB000002 /* HeadlessWebViewLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000001BB000001BB000001 /* HeadlessWebViewLoader.swift */; };
 		BB1122334455667788AABB01 /* SourceSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1122334455667788AABB00 /* SourceSelectionView.swift */; };
 		BDD1E8DFA9577A9A32B94487 /* CookieManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A2A311A73EF5520A2B486B7 /* CookieManager.swift */; };
 		C08E31A1B67D5322D1E527A8 /* ChapterPaginator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A014AEF10E5683C5A1C3FF07 /* ChapterPaginator.swift */; };
 		C7089A692FCBB53900E493E9 /* sherpa-onnx.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		FAEC7143029B4F8BA6DED09F /* sherpa-onnx.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */; };
 		C708A76D2FCBC0C400E493E9 /* onnxruntime.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */; };
 		C708A76E2FCBC0C400E493E9 /* onnxruntime.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CC000002CC000002CC000002 /* QueryTTF.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000001CC000001CC000001 /* QueryTTF.swift */; };
@@ -79,19 +79,20 @@
 		F4EB348A4C689402A23FCE78 /* RuleParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6648BAB2AAF499DEE7B3B5A /* RuleParser.swift */; };
 		F85F08D766B1383486A6459D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778EDB16250026BD88C6BA28 /* SettingsView.swift */; };
 		FA76929646F50549F99CF839 /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84BC7BDFD6B447FCD7D9A2AB /* Chapter.swift */; };
+		FAEC7143029B4F8BA6DED09F /* sherpa-onnx.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */; };
 		FB0527ECB98BD4C4D99C93E2 /* DatabaseModels+GRDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A1D606AB2B011D4984E62D /* DatabaseModels+GRDB.swift */; };
 		FBE3FCB9E6C0B217DC707076 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3030BF4AC290D0B281153590 /* ContentView.swift */; };
 		MDLMG0000000000000002B /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLMG0000000000000001A /* ModelManager.swift */; };
+		NVLTS0000000000000002B /* NovellaTTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = NVLTS0000000000000001A /* NovellaTTSEngine.swift */; };
+		PSVCE0000000000000002B /* preset_voices.json in Resources */ = {isa = PBXBuildFile; fileRef = PSVCE0000000000000001A /* preset_voices.json */; };
+		SHRKE0000000000000002B /* SherpaKokoroEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRKE0000000000000001A /* SherpaKokoroEngine.swift */; };
 		SHRPA0000000000000002B /* SherpaOnnxSwift.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRPA0000000000000001A /* SherpaOnnxSwift.swift */; };
 		SNTSPL0000000000000002B /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SNTSPL0000000000000001A /* SentenceSplitter.swift */; };
 		TT5ENG0000000000000002B /* TTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ENG0000000000000001A /* TTSEngine.swift */; };
 		TT5PRO7000000000000002B /* TTSProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5PRO7000000000000001A /* TTSProtocol.swift */; };
-		AUDPPL0000000000000002B /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDPPL0000000000000001A /* AudioPipeline.swift */; };
 		TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */; };
 		TXNRM0000000000000002B /* TextNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXNRM0000000000000001A /* TextNormalizer.swift */; };
-		NVLTS0000000000000002B /* NovellaTTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = NVLTS0000000000000001A /* NovellaTTSEngine.swift */; };
-		SHRKE0000000000000002B /* SherpaKokoroEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRKE0000000000000001A /* SherpaKokoroEngine.swift */; };
-		PSVCE0000000000000002B /* preset_voices.json in Resources */ = {isa = PBXBuildFile; fileRef = PSVCE0000000000000001A /* preset_voices.json */; };
+		SPKAH0000000000000002B /* SpeakerAuditionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPKAH0000000000000001A /* SpeakerAuditionHelper.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -156,6 +157,7 @@
 		AA11BB22CC33DD44EE55FF00 /* ExploreUrlParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreUrlParser.swift; sourceTree = "<group>"; };
 		ABD04F3BC18D250DD4598F1D /* Book.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Book.swift; sourceTree = "<group>"; };
 		AC58F262CD6942018521B677 /* HighlightListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightListView.swift; sourceTree = "<group>"; };
+		AUDPPL0000000000000001A /* AudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPipeline.swift; sourceTree = "<group>"; };
 		BA99AFE954004117ABFE8DFC /* ReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderView.swift; sourceTree = "<group>"; };
 		BB000001BB000001BB000001 /* HeadlessWebViewLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadlessWebViewLoader.swift; sourceTree = "<group>"; };
 		BB1122334455667788AABB00 /* SourceSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSelectionView.swift; sourceTree = "<group>"; };
@@ -181,16 +183,16 @@
 		F61A803C2FB9419BBDB3101C /* BatteryIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryIconView.swift; sourceTree = "<group>"; };
 		F7B5B72D80BDA2FC9A483038 /* ReaderViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderViewModel.swift; sourceTree = "<group>"; };
 		MDLMG0000000000000001A /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
+		NVLTS0000000000000001A /* NovellaTTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovellaTTSEngine.swift; sourceTree = "<group>"; };
+		PSVCE0000000000000001A /* preset_voices.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = preset_voices.json; sourceTree = "<group>"; };
+		SHRKE0000000000000001A /* SherpaKokoroEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaKokoroEngine.swift; sourceTree = "<group>"; };
 		SHRPA0000000000000001A /* SherpaOnnxSwift.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaOnnxSwift.swift; sourceTree = "<group>"; };
 		SNTSPL0000000000000001A /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
 		TT5ENG0000000000000001A /* TTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngine.swift; sourceTree = "<group>"; };
 		TT5PRO7000000000000001A /* TTSProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSProtocol.swift; sourceTree = "<group>"; };
-		AUDPPL0000000000000001A /* AudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPipeline.swift; sourceTree = "<group>"; };
 		TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipVoiceEngine.swift; sourceTree = "<group>"; };
 		TXNRM0000000000000001A /* TextNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextNormalizer.swift; sourceTree = "<group>"; };
-		NVLTS0000000000000001A /* NovellaTTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovellaTTSEngine.swift; sourceTree = "<group>"; };
-		SHRKE0000000000000001A /* SherpaKokoroEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaKokoroEngine.swift; sourceTree = "<group>"; };
-		PSVCE0000000000000001A /* preset_voices.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = preset_voices.json; sourceTree = "<group>"; };
+		SPKAH0000000000000001A /* SpeakerAuditionHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakerAuditionHelper.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -226,6 +228,7 @@
 				TT5GRP0000000000000003E /* Engines */,
 				TXNRM0000000000000003G /* Pipeline */,
 				94D5BD031138372332E5877B /* ViewModels */,
+				SPKAH0000000000000003G /* Tools */,
 			);
 			path = TTS;
 			sourceTree = "<group>";
@@ -241,14 +244,6 @@
 				30BFD519B81F69EFDEBAF611 /* LegadoApp.swift */,
 			);
 			path = App;
-			sourceTree = "<group>";
-		};
-		RSRCE0000000000000003G /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				PSVCE0000000000000001A /* preset_voices.json */,
-			);
-			path = Resources;
 			sourceTree = "<group>";
 		};
 		25875E130F711891C0B16B5C /* Views */ = {
@@ -500,6 +495,14 @@
 			path = Engine;
 			sourceTree = "<group>";
 		};
+		RSRCE0000000000000003G /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				PSVCE0000000000000001A /* preset_voices.json */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		TT5GRP0000000000000003E /* Engines */ = {
 			isa = PBXGroup;
 			children = (
@@ -519,6 +522,14 @@
 				SNTSPL0000000000000001A /* SentenceSplitter.swift */,
 			);
 			path = Pipeline;
+			sourceTree = "<group>";
+		};
+		SPKAH0000000000000003G /* Tools */ = {
+			isa = PBXGroup;
+			children = (
+				SPKAH0000000000000001A /* SpeakerAuditionHelper.swift */,
+			);
+			path = Tools;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -587,6 +598,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		RSRCE0000000000000002B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				PSVCE0000000000000002B /* preset_voices.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		CCC49AA83A8F2A053690E358 /* Sources */ = {
@@ -670,21 +692,11 @@
 				MDLMG0000000000000002B /* ModelManager.swift in Sources */,
 				NVLTS0000000000000002B /* NovellaTTSEngine.swift in Sources */,
 				SHRKE0000000000000002B /* SherpaKokoroEngine.swift in Sources */,
+				SPKAH0000000000000002B /* SpeakerAuditionHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXResourcesBuildPhase section */
-		RSRCE0000000000000002B /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				PSVCE0000000000000002B /* preset_voices.json in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXResourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		1008F408AA1428A45896270A /* Release */ = {
@@ -837,8 +849,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.legado.app;
 				PRODUCT_NAME = Legado;
 				SDKROOT = iphoneos;
-				SWIFT_OBJC_BRIDGING_HEADER = "Legado/App/Core/HTML/Legado-Bridging-Header.h";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG SHERPA_ONNX_ENABLED";
+				SWIFT_OBJC_BRIDGING_HEADER = "Legado/App/Core/HTML/Legado-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -870,8 +882,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.legado.app;
 				PRODUCT_NAME = Legado;
 				SDKROOT = iphoneos;
-				SWIFT_OBJC_BRIDGING_HEADER = "Legado/App/Core/HTML/Legado-Bridging-Header.h";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = SHERPA_ONNX_ENABLED;
+				SWIFT_OBJC_BRIDGING_HEADER = "Legado/App/Core/HTML/Legado-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";

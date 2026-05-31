@@ -1,5 +1,6 @@
 import SwiftUI
 
+
 @main
 struct LegadoApp: App {
     @State private var dbReady = false
@@ -19,6 +20,11 @@ struct LegadoApp: App {
                 }.value
                 dbReady = true
             }
+            #if DEBUG
+            .task {
+                await SpeakerAuditionHelper.generateAll()
+            }
+            #endif
         }
     }
 }
