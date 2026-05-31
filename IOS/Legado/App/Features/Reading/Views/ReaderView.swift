@@ -476,7 +476,6 @@ struct ReaderPageView: View {
 struct ReaderMenuView: View {
     @ObservedObject var viewModel: ReaderViewModel
     @ObservedObject var settings: ReaderSettings
-    @ObservedObject private var ttsManager = TTSManager.shared  // 直接观察，isPlaying 变化触发重绘
     let onBack: () -> Void
 
     @State private var showingTOC      = false
@@ -756,7 +755,7 @@ struct ReaderMenuView: View {
                     ),
                     in: 0.1...1.0,
                     onEditingChanged: { editing in
-                        if !editing { ttsManager.restartForSettingChange() }
+                        if !editing { viewModel.ttsManager.restartForSettingChange() }
                     }
                 )
                 Text("快").font(.caption2).foregroundColor(.secondary)
@@ -770,9 +769,9 @@ struct ReaderMenuView: View {
             HStack {
                 Text("发音").font(.caption).foregroundColor(.secondary).frame(width: 36, alignment: .leading)
                 Picker("发音", selection: Binding(
-                    get: { ttsManager.selectedVoice?.identifier ?? "" },
+                    get: { viewModel.ttsManager.selectedVoice?.identifier ?? "" },
                     set: { id in
-                        ttsManager.selectedVoice = id.isEmpty
+                        viewModel.ttsManager.selectedVoice = id.isEmpty
                             ? nil
                             : AVSpeechSynthesisVoice(identifier: id)
                     }
@@ -798,7 +797,7 @@ struct ReaderMenuView: View {
             HStack(spacing: 6) {
                 Text("定时").font(.caption).foregroundColor(.secondary).frame(width: 36, alignment: .leading)
                 ForEach([5, 15, 30, 60], id: \.self) { min in
-                    timerButton(minutes: min, ttsManager: ttsManager)
+                    timerButton(minutes: min)
                 }
                 Button {
                     showCustomTimer = true
@@ -811,7 +810,7 @@ struct ReaderMenuView: View {
                         .foregroundColor(isCustomActive ? .white : .primary)
                         .cornerRadius(6)
                 }
-                if let remaining = ttsManager.remainingSeconds {
+                if let remaining = viewModel.ttsRemainingSeconds {
                     Text(formatRemaining(remaining))
                         .font(.caption2).foregroundColor(.secondary)
                         .monospacedDigit()
@@ -836,11 +835,11 @@ struct ReaderMenuView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    if ttsManager.isPlaying { ttsManager.pause() } else { ttsManager.resume() }
+                    if viewModel.ttsIsPlaying { viewModel.ttsManager.pause() } else { viewModel.ttsManager.resume() }
                 } label: {
                     HStack {
-                        Image(systemName: ttsManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        Text(ttsManager.isPlaying ? "暂停" : "继续")
+                        Image(systemName: viewModel.ttsIsPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        Text(viewModel.ttsIsPlaying ? "暂停" : "继续")
                     }
                     .font(.subheadline)
                     .frame(maxWidth: .infinity)
@@ -860,7 +859,7 @@ struct ReaderMenuView: View {
             Button("确定") {
                 if let min = Int(customTimerInput), min > 0, min <= 999 {
                     ttsTimerSelection = min
-                    ttsManager.startTimer(minutes: min)
+                    viewModel.ttsManager.startTimer(minutes: min)
                 }
                 customTimerInput = ""
             }
@@ -887,15 +886,15 @@ struct ReaderMenuView: View {
     }
 
     @ViewBuilder
-    private func timerButton(minutes: Int, ttsManager: TTSManager) -> some View {
+    private func timerButton(minutes: Int) -> some View {
         let isSelected = ttsTimerSelection == minutes
         Button {
             if isSelected {
                 ttsTimerSelection = nil
-                ttsManager.cancelTimer()
+                viewModel.ttsManager.cancelTimer()
             } else {
                 ttsTimerSelection = minutes
-                ttsManager.startTimer(minutes: minutes)
+                viewModel.ttsManager.startTimer(minutes: minutes)
             }
         } label: {
             Text("\(minutes)分")
@@ -1233,6 +1232,9 @@ struct ReadingPreferencesView: View {
                         }
                     Toggle("繁体中文", isOn: $settings.useTraditionalChinese)
                     Toggle("音量键翻页", isOn: $settings.volumePageTurn)
+                    if ModelManager.isAvailable(.kokoroInt8MultiLangV1_1) {
+                        Toggle("高质量TTS（Kokoro）", isOn: $settings.useNovellaTTS)
+                    }
                 }
 
                 // ── 文字颜色 ──────────────────────────────────

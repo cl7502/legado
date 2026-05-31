@@ -31,34 +31,70 @@ class ReaderViewModel: ObservableObject {
     private let network = NetworkManager.shared
     private let ruleExecutor = RuleExecutor.shared
     private let contentParser = BookContentParser.shared
-    let ttsManager = TTSManager.shared
+    var ttsManager: any TTSProtocol = TTSManager.shared
     private var cancellables = Set<AnyCancellable>()
+
+    // TTS 状态转发（供 ReaderMenuView 绑定，兼容两种引擎）
+    @Published var ttsIsPlaying: Bool       = false
+    @Published var ttsRemainingSeconds: Int? = nil
 
     init(book: Book) {
         self.book = book
         self.currentChapterIndex = book.durChapterIndex
+        if ReaderSettings.shared.useNovellaTTS && ModelManager.isAvailable(.kokoroInt8MultiLangV1_1) {
+            ttsManager = NovellaTTSEngine.shared
+        }
         subscribeToTTSSpeakingRange()
+        bindTTSStateForwarding()
     }
 
     // TTS 朗读推进时自动翻页
     private func subscribeToTTSSpeakingRange() {
-        ttsManager.$speakingRange
-            .compactMap { $0 }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] range in
-                guard let self, self.isTTSEnabled else { return }
-                let speakEnd = range.location + range.length
-                for (idx, pageStart) in self.currentPageOffsets.enumerated() {
-                    let pageEnd = idx + 1 < self.currentPageOffsets.count
-                        ? self.currentPageOffsets[idx + 1]
-                        : Int.max
-                    if pageStart <= speakEnd && speakEnd <= pageEnd {
-                        if self.currentPageIndex != idx { self.currentPageIndex = idx }
-                        break
-                    }
-                }
+        if let novella = ttsManager as? NovellaTTSEngine {
+            novella.$speakingRange
+                .compactMap { $0 }
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] range in self?.updatePageForTTSRange(range) }
+                .store(in: &cancellables)
+        } else if let system = ttsManager as? TTSManager {
+            system.$speakingRange
+                .compactMap { $0 }
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] range in self?.updatePageForTTSRange(range) }
+                .store(in: &cancellables)
+        }
+    }
+
+    private func updatePageForTTSRange(_ range: NSRange) {
+        guard self.isTTSEnabled else { return }
+        let speakEnd = range.location + range.length
+        for (idx, pageStart) in self.currentPageOffsets.enumerated() {
+            let pageEnd = idx + 1 < self.currentPageOffsets.count
+                ? self.currentPageOffsets[idx + 1]
+                : Int.max
+            if pageStart <= speakEnd && speakEnd <= pageEnd {
+                if self.currentPageIndex != idx { self.currentPageIndex = idx }
+                break
             }
-            .store(in: &cancellables)
+        }
+    }
+
+    private func bindTTSStateForwarding() {
+        if let novella = ttsManager as? NovellaTTSEngine {
+            novella.$isPlaying
+                .receive(on: DispatchQueue.main)
+                .assign(to: &$ttsIsPlaying)
+            novella.$remainingSeconds
+                .receive(on: DispatchQueue.main)
+                .assign(to: &$ttsRemainingSeconds)
+        } else if let system = ttsManager as? TTSManager {
+            system.$isPlaying
+                .receive(on: DispatchQueue.main)
+                .assign(to: &$ttsIsPlaying)
+            system.$remainingSeconds
+                .receive(on: DispatchQueue.main)
+                .assign(to: &$ttsRemainingSeconds)
+        }
     }
     
     // MARK: - TTS 控制
