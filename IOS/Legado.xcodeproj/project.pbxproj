@@ -89,6 +89,9 @@
 		AUDPPL0000000000000002B /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDPPL0000000000000001A /* AudioPipeline.swift */; };
 		TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */; };
 		TXNRM0000000000000002B /* TextNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXNRM0000000000000001A /* TextNormalizer.swift */; };
+		NVLTS0000000000000002B /* NovellaTTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = NVLTS0000000000000001A /* NovellaTTSEngine.swift */; };
+		SHRKE0000000000000002B /* SherpaKokoroEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRKE0000000000000001A /* SherpaKokoroEngine.swift */; };
+		PSVCE0000000000000002B /* preset_voices.json in Resources */ = {isa = PBXBuildFile; fileRef = PSVCE0000000000000001A /* preset_voices.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -185,6 +188,9 @@
 		AUDPPL0000000000000001A /* AudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPipeline.swift; sourceTree = "<group>"; };
 		TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipVoiceEngine.swift; sourceTree = "<group>"; };
 		TXNRM0000000000000001A /* TextNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextNormalizer.swift; sourceTree = "<group>"; };
+		NVLTS0000000000000001A /* NovellaTTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovellaTTSEngine.swift; sourceTree = "<group>"; };
+		SHRKE0000000000000001A /* SherpaKokoroEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaKokoroEngine.swift; sourceTree = "<group>"; };
+		PSVCE0000000000000001A /* preset_voices.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = preset_voices.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -216,6 +222,7 @@
 			children = (
 				TT5PRO7000000000000001A /* TTSProtocol.swift */,
 				AUDPPL0000000000000001A /* AudioPipeline.swift */,
+				NVLTS0000000000000001A /* NovellaTTSEngine.swift */,
 				TT5GRP0000000000000003E /* Engines */,
 				TXNRM0000000000000003G /* Pipeline */,
 				94D5BD031138372332E5877B /* ViewModels */,
@@ -229,10 +236,19 @@
 				71B7CD565422B3225B0C1255 /* Core */,
 				92A1D90112849CED427558D0 /* Features */,
 				BEC1107BD8000545B0DCC080 /* UI */,
+				RSRCE0000000000000003G /* Resources */,
 				3030BF4AC290D0B281153590 /* ContentView.swift */,
 				30BFD519B81F69EFDEBAF611 /* LegadoApp.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		RSRCE0000000000000003G /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				PSVCE0000000000000001A /* preset_voices.json */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		25875E130F711891C0B16B5C /* Views */ = {
@@ -491,6 +507,7 @@
 				TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */,
 				SHRPA0000000000000001A /* SherpaOnnxSwift.swift */,
 				MDLMG0000000000000001A /* ModelManager.swift */,
+				SHRKE0000000000000001A /* SherpaKokoroEngine.swift */,
 			);
 			path = Engines;
 			sourceTree = "<group>";
@@ -514,6 +531,7 @@
 				CCC49AA83A8F2A053690E358 /* Sources */,
 				BDE26A88C38E7B77E5A21773 /* Frameworks */,
 				C7089A6A2FCBB53900E493E9 /* Embed Frameworks */,
+				RSRCE0000000000000002B /* Resources */,
 			);
 			buildRules = (
 			);
@@ -650,10 +668,23 @@
 				SNTSPL0000000000000002B /* SentenceSplitter.swift in Sources */,
 				SHRPA0000000000000002B /* SherpaOnnxSwift.swift in Sources */,
 				MDLMG0000000000000002B /* ModelManager.swift in Sources */,
+				NVLTS0000000000000002B /* NovellaTTSEngine.swift in Sources */,
+				SHRKE0000000000000002B /* SherpaKokoroEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		RSRCE0000000000000002B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				PSVCE0000000000000002B /* preset_voices.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		1008F408AA1428A45896270A /* Release */ = {

@@ -1,0 +1,10 @@
+[
+  {"id":"narrator","displayName":"旁白","kokoroSpeakerId":0,"gender":"neutral","ageGroup":"adult","note":"Speaker ID 待集成后试听确认"},
+  {"id":"protagonist","displayName":"男主","kokoroSpeakerId":0,"gender":"male","ageGroup":"young","note":"待试听确认"},
+  {"id":"heroine","displayName":"女主","kokoroSpeakerId":0,"gender":"female","ageGroup":"young","note":"待试听确认"},
+  {"id":"elder_male","displayName":"老者","kokoroSpeakerId":0,"gender":"male","ageGroup":"elder","note":"待试听确认"},
+  {"id":"young_female","displayName":"少女","kokoroSpeakerId":0,"gender":"female","ageGroup":"young","note":"待试听确认"},
+  {"id":"villain","displayName":"反派","kokoroSpeakerId":0,"gender":"male","ageGroup":"adult","note":"待试听确认"},
+  {"id":"child","displayName":"孩童","kokoroSpeakerId":0,"gender":"neutral","ageGroup":"child","note":"待试听确认"},
+  {"id":"neutral","displayName":"通用","kokoroSpeakerId":0,"gender":"neutral","ageGroup":"adult","note":"兜底，待试听确认"}
+]

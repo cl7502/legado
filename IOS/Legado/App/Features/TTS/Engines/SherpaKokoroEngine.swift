@@ -6,7 +6,7 @@ import Foundation
 /// synthesize() 设计为在后台 Task.detached 中调用，不应在 MainActor 运行。
 final class SherpaKokoroEngine: TTSEngine {
 
-    private var tts: SherpaOnnxOfflineTts?
+    private var tts: SherpaOnnxOfflineTtsWrapper?
     private(set) var isReady = false
 
     func warmup() async {
@@ -45,7 +45,7 @@ final class SherpaKokoroEngine: TTSEngine {
             maxNumSentences: 1
         )
 
-        tts = SherpaOnnxOfflineTts(config: config)
+        tts = withUnsafePointer(to: config) { SherpaOnnxOfflineTtsWrapper(config: $0) }
         isReady = tts != nil
 
         if isReady {
