@@ -1232,8 +1232,8 @@ struct ReadingPreferencesView: View {
                         }
                     Toggle("繁体中文", isOn: $settings.useTraditionalChinese)
                     Toggle("音量键翻页", isOn: $settings.volumePageTurn)
-                    if ModelManager.isAvailable(.kokoroInt8MultiLangV1_1) {
-                        Toggle("高质量TTS（Kokoro）", isOn: $settings.useNovellaTTS)
+                    if ModelManager.isAvailable(.zipVoiceDistillInt8) {
+                        Toggle("高质量TTS（ZipVoice）", isOn: $settings.useNovellaTTS)
                     }
                 }
 

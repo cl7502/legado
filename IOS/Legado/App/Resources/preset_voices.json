@@ -1,10 +1,90 @@
 [
-  {"id":"narrator","displayName":"旁白","kokoroSpeakerId":0,"gender":"neutral","ageGroup":"adult","note":"Speaker ID 待集成后试听确认"},
-  {"id":"protagonist","displayName":"男主","kokoroSpeakerId":0,"gender":"male","ageGroup":"young","note":"待试听确认"},
-  {"id":"heroine","displayName":"女主","kokoroSpeakerId":0,"gender":"female","ageGroup":"young","note":"待试听确认"},
-  {"id":"elder_male","displayName":"老者","kokoroSpeakerId":0,"gender":"male","ageGroup":"elder","note":"待试听确认"},
-  {"id":"young_female","displayName":"少女","kokoroSpeakerId":0,"gender":"female","ageGroup":"young","note":"待试听确认"},
-  {"id":"villain","displayName":"反派","kokoroSpeakerId":0,"gender":"male","ageGroup":"adult","note":"待试听确认"},
-  {"id":"child","displayName":"孩童","kokoroSpeakerId":0,"gender":"neutral","ageGroup":"child","note":"待试听确认"},
-  {"id":"neutral","displayName":"通用","kokoroSpeakerId":0,"gender":"neutral","ageGroup":"adult","note":"兜底，待试听确认"}
+  {
+    "id": "narrator",
+    "displayName": "旁白",
+    "refAudioFile": "ref_narrator_f.wav",
+    "refText": "各位村民，大家新年好！近期，湖北省武汉市等多个地区",
+    "basePitch": 0.0,
+    "baseRate": 1.0
+  },
+  {
+    "id": "protagonist",
+    "displayName": "男主",
+    "refAudioFile": "ref_male_mature.wav",
+    "refText": "那还是36年前，1987年。我呢考上了武汉大学的计算机系。",
+    "basePitch": 0.0,
+    "baseRate": 1.0
+  },
+  {
+    "id": "heroine",
+    "displayName": "女主",
+    "refAudioFile": "ref_tingting.wav",
+    "refText": "林峰抬起头，看向远方的天际，心中涌起一阵难以言说的情绪。她轻声说道，我等你很久了。",
+    "basePitch": 0.0,
+    "baseRate": 1.0
+  },
+  {
+    "id": "elder_male",
+    "displayName": "老者",
+    "refAudioFile": "ref_male_low.wav",
+    "refText": "林峰抬起头，看向远方的天际，心中涌起一阵难以言说的情绪。",
+    "basePitch": -5.0,
+    "baseRate": 0.9
+  },
+  {
+    "id": "young_female",
+    "displayName": "少女",
+    "refAudioFile": "ref_narrator_f2.wav",
+    "refText": "本台消息，中共中央国务院，近日印发关于构建数据基础制度，更好发挥数据要素作用的意见。",
+    "basePitch": 3.0,
+    "baseRate": 1.05
+  },
+  {
+    "id": "villain",
+    "displayName": "反派",
+    "refAudioFile": "ref_male_low.wav",
+    "refText": "林峰抬起头，看向远方的天际，心中涌起一阵难以言说的情绪。",
+    "basePitch": -8.0,
+    "baseRate": 0.9
+  },
+  {
+    "id": "child",
+    "displayName": "孩童",
+    "refAudioFile": "ref_tingting.wav",
+    "refText": "林峰抬起头，看向远方的天际，心中涌起一阵难以言说的情绪。她轻声说道，我等你很久了。",
+    "basePitch": 8.0,
+    "baseRate": 1.1
+  },
+  {
+    "id": "neutral",
+    "displayName": "通用",
+    "refAudioFile": "ref_narrator_f.wav",
+    "refText": "各位村民，大家新年好！近期，湖北省武汉市等多个地区",
+    "basePitch": 0.0,
+    "baseRate": 1.0
+  },
+  {
+    "id": "taiwan_female",
+    "displayName": "台湾腔",
+    "refAudioFile": "ref_meijia.wav",
+    "refText": "林峰抬起头，看向远方的天际，心中涌起一阵难以言说的情绪。她轻声说道，我等你很久了。",
+    "basePitch": 0.0,
+    "baseRate": 1.0
+  },
+  {
+    "id": "mature_female",
+    "displayName": "成熟女声",
+    "refAudioFile": "ref_narrator_f2.wav",
+    "refText": "本台消息，中共中央国务院，近日印发关于构建数据基础制度，更好发挥数据要素作用的意见。",
+    "basePitch": -3.0,
+    "baseRate": 0.95
+  },
+  {
+    "id": "narrator_backup",
+    "displayName": "旁白备用",
+    "refAudioFile": "ref_narrator_f2.wav",
+    "refText": "本台消息，中共中央国务院，近日印发关于构建数据基础制度，更好发挥数据要素作用的意见。",
+    "basePitch": 0.0,
+    "baseRate": 1.0
+  }
 ]

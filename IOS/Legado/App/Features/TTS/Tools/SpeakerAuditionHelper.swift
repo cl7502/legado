@@ -2,13 +2,17 @@
 import Foundation
 import AVFoundation
 
-/// 批量生成所有 Kokoro Speaker 的试听样本，供人工试听后填写 preset_voices.json。
+/// 批量生成所有预设声音的试听样本，供人工试听后验证效果。
 /// 使用方式：在 LegadoApp.swift 的 #if DEBUG .task {} 中调用 generateAll()，
 /// 输出 WAV 文件到 Documents/audition/，取出后用 QuickTime 逐一试听。
 final class SpeakerAuditionHelper {
 
     static func generateAll() async {
-        let engine = SherpaKokoroEngine()
+        guard let refsDir = ModelManager.voiceRefsDir() else {
+            print("❌ [Audition] VoiceReferences 目录未找到")
+            return
+        }
+        let engine = SherpaZipVoiceEngine(voiceRefsDir: refsDir)
         await engine.warmup()
         guard engine.isReady else {
             print("❌ [Audition] 引擎未就绪，请确认模型文件已加入 Bundle")
@@ -21,21 +25,43 @@ final class SpeakerAuditionHelper {
 
         let sampleText = "林峰抬起头，看向远方的天际，心中涌起一阵难以言说的情绪。她轻声说道，我等你很久了。"
 
-        for speakerId in 0..<103 {
-            let voice = VoiceConfig(id: "\(speakerId)", speakerId: speakerId,
-                                    displayName: "Speaker \(speakerId)")
+        // 加载 preset_voices.json
+        guard let jsonURL = Bundle.main.url(forResource: "preset_voices", withExtension: "json"),
+              let jsonData = try? Data(contentsOf: jsonURL),
+              let voices = try? JSONDecoder().decode([PresetVoiceEntry].self, from: jsonData) else {
+            print("❌ [Audition] 无法加载 preset_voices.json")
+            return
+        }
+
+        for entry in voices {
+            let voice = VoiceConfig(
+                id: entry.id,
+                displayName: entry.displayName,
+                refAudioFile: entry.refAudioFile,
+                refText: entry.refText,
+                basePitch: entry.basePitch,
+                baseRate: entry.baseRate
+            )
             do {
                 let chunk = try await engine.synthesize(text: sampleText,
                                                         voice: voice, style: .normal)
-                let wavURL = outputDir.appendingPathComponent(
-                    "speaker_\(String(format: "%03d", speakerId)).wav")
+                let wavURL = outputDir.appendingPathComponent("\(entry.id).wav")
                 writeWAV(samples: chunk.samples, sampleRate: chunk.sampleRate, to: wavURL)
-                print("✅ Speaker \(speakerId) → \(wavURL.lastPathComponent)")
+                print("✅ \(entry.displayName)(\(entry.id)) → \(wavURL.lastPathComponent)")
             } catch {
-                print("⚠️ Speaker \(speakerId) 合成失败: \(error)")
+                print("⚠️ \(entry.id) 合成失败: \(error)")
             }
         }
-        print("🎵 试听文件已生成到 Documents/audition/，共 103 个")
+        print("🎵 试听文件已生成到 Documents/audition/，共 \(voices.count) 个")
+    }
+
+    private struct PresetVoiceEntry: Decodable {
+        let id: String
+        let displayName: String
+        let refAudioFile: String
+        let refText: String
+        let basePitch: Float
+        let baseRate: Float
     }
 
     private static func writeWAV(samples: [Float], sampleRate: Int, to url: URL) {
@@ -62,7 +88,7 @@ final class SpeakerAuditionHelper {
 
         var pcm = Data(capacity: dataSize)
         for s in samples {
-            // 防止 NaN/Inf 导致 Int 转换崩溃（某些 speakerId 可能返回无效样本）
+            // 防止 NaN/Inf 导致 Int 转换崩溃
             let safe = (s.isNaN || s.isInfinite) ? 0.0 : s
             var v = Int16(max(-32768, min(32767, Int(safe * 32767))))
             pcm.append(contentsOf: withUnsafeBytes(of: &v) { Array($0) })

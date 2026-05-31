@@ -18,7 +18,7 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
     var selectedVoice: AVSpeechSynthesisVoice? = nil   // Phase 1a 不使用
 
     // MARK: - 私有
-    private let engine     = SherpaKokoroEngine()
+    private let engine: SherpaZipVoiceEngine
     private let pipeline   = AudioPipeline()
     private let normalizer = TextNormalizer()
     private let splitter   = SentenceSplitter()
@@ -32,9 +32,17 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
     private var generationTask:   Task<Void, Never>?
     private var timerTask:        Task<Void, Never>?
 
-    private let narratorVoice = VoiceConfig(id: "narrator", speakerId: 0, displayName: "旁白")
+    // 先用旁白音色作为默认（在角色系统加入前的 Phase 1a 临时方案）
+    private var narratorVoice = VoiceConfig(
+        id: "narrator",
+        displayName: "旁白",
+        refAudioFile: "ref_narrator_f.wav",
+        refText: "各位村民，大家新年好！近期，湖北省武汉市等多个地区"
+    )
 
     private init() {
+        let refsDir = ModelManager.voiceRefsDir() ?? ""
+        engine = SherpaZipVoiceEngine(voiceRefsDir: refsDir)
         pipeline.onSentenceComplete = { [weak self] sentence in
             self?.onSentencePlayed(sentence)
         }

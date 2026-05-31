@@ -1,12 +1,4 @@
 import Foundation
 
-/// Phase 2 占位桩，待 ZipVoice ONNX 就绪后实现。
-final class ZipVoiceEngine: TTSEngine {
-    var isReady: Bool { false }
-    func warmup() async {}
-    func synthesize(text: String, voice: VoiceConfig,
-                    style: SpeakingStyle) async throws -> AudioChunk {
-        throw TTSError.engineNotReady
-    }
-}
-
+// ZipVoice 实现已移至 SherpaZipVoiceEngine.swift。
+// 保留此文件避免 Xcode 引用断开。

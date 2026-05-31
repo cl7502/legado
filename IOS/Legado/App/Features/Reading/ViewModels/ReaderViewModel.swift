@@ -41,7 +41,7 @@ class ReaderViewModel: ObservableObject {
     init(book: Book) {
         self.book = book
         self.currentChapterIndex = book.durChapterIndex
-        if ReaderSettings.shared.useNovellaTTS && ModelManager.isAvailable(.kokoroInt8MultiLangV1_1) {
+        if ReaderSettings.shared.useNovellaTTS && ModelManager.isAvailable(.zipVoiceDistillInt8) {
             ttsManager = NovellaTTSEngine.shared
         }
         subscribeToTTSSpeakingRange()
