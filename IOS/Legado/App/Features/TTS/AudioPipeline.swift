@@ -46,6 +46,7 @@ final class AudioPipeline {
     }
 
     private func makeBuffer(from chunk: AudioChunk) -> AVAudioPCMBuffer? {
+        guard !chunk.samples.isEmpty else { return nil }
         let frameCount = AVAudioFrameCount(chunk.samples.count)
         guard let format = AVAudioFormat(
             standardFormatWithSampleRate: Double(chunk.sampleRate), channels: 1),
@@ -53,7 +54,7 @@ final class AudioPipeline {
         else { return nil }
         buffer.frameLength = frameCount
         chunk.samples.withUnsafeBufferPointer { ptr in
-            buffer.floatChannelData?[0].initialize(
+            buffer.floatChannelData![0].assign(
                 from: ptr.baseAddress!, count: chunk.samples.count)
         }
         return buffer
