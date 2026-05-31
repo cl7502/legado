@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		ZIPVOICE00BUILD00001A /* sherpa-onnx-zipvoice-distill-int8-zh-en-emilia in Resources */ = {isa = PBXBuildFile; fileRef = C708ED652FCBF0E000E493E9 /* sherpa-onnx-zipvoice-distill-int8-zh-en-emilia */; };
-		VOICEREFS0BUILD00001A /* VoiceReferences in Resources */ = {isa = PBXBuildFile; fileRef = C708EED72FCBF11F00E493E9 /* VoiceReferences */; };
 		0C11DA470551673E80043DF1 /* JSONPathEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886B2604AAAF3D48A1EBEEAF /* JSONPathEngine.swift */; };
 		0E2583963C526A553517E813 /* RuleExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB76FF5ED2833C59D25F9956 /* RuleExecutor.swift */; };
 		1455715C1E7840E8A605D9BB /* ExploreDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */; };
@@ -85,18 +83,20 @@
 		FB0527ECB98BD4C4D99C93E2 /* DatabaseModels+GRDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A1D606AB2B011D4984E62D /* DatabaseModels+GRDB.swift */; };
 		FBE3FCB9E6C0B217DC707076 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3030BF4AC290D0B281153590 /* ContentView.swift */; };
 		MDLMG0000000000000002B /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLMG0000000000000001A /* ModelManager.swift */; };
-		WAVRD0000000000000002B /* WavReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = WAVRD0000000000000001A /* WavReader.swift */; };
-		SHRZV0000000000000002B /* SherpaZipVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRZV0000000000000001A /* SherpaZipVoiceEngine.swift */; };
 		NVLTS0000000000000002B /* NovellaTTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = NVLTS0000000000000001A /* NovellaTTSEngine.swift */; };
 		PSVCE0000000000000002B /* preset_voices.json in Resources */ = {isa = PBXBuildFile; fileRef = PSVCE0000000000000001A /* preset_voices.json */; };
 		SHRKE0000000000000002B /* SherpaKokoroEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRKE0000000000000001A /* SherpaKokoroEngine.swift */; };
 		SHRPA0000000000000002B /* SherpaOnnxSwift.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRPA0000000000000001A /* SherpaOnnxSwift.swift */; };
+		SHRZV0000000000000002B /* SherpaZipVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRZV0000000000000001A /* SherpaZipVoiceEngine.swift */; };
 		SNTSPL0000000000000002B /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SNTSPL0000000000000001A /* SentenceSplitter.swift */; };
 		SPKAH0000000000000002B /* SpeakerAuditionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPKAH0000000000000001A /* SpeakerAuditionHelper.swift */; };
 		TT5ENG0000000000000002B /* TTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ENG0000000000000001A /* TTSEngine.swift */; };
 		TT5PRO7000000000000002B /* TTSProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5PRO7000000000000001A /* TTSProtocol.swift */; };
 		TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */; };
 		TXNRM0000000000000002B /* TextNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXNRM0000000000000001A /* TextNormalizer.swift */; };
+		VOICEREFS0BUILD00001A /* VoiceReferences in Resources */ = {isa = PBXBuildFile; fileRef = C708EED72FCBF11F00E493E9 /* VoiceReferences */; };
+		WAVRD0000000000000002B /* WavReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = WAVRD0000000000000001A /* WavReader.swift */; };
+		ZIPVOICE00BUILD00001A /* sherpa-onnx-zipvoice-distill-int8-zh-en-emilia in Resources */ = {isa = PBXBuildFile; fileRef = C708ED652FCBF0E000E493E9 /* sherpa-onnx-zipvoice-distill-int8-zh-en-emilia */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -187,18 +187,18 @@
 		F61A803C2FB9419BBDB3101C /* BatteryIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryIconView.swift; sourceTree = "<group>"; };
 		F7B5B72D80BDA2FC9A483038 /* ReaderViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderViewModel.swift; sourceTree = "<group>"; };
 		MDLMG0000000000000001A /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
-		WAVRD0000000000000001A /* WavReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WavReader.swift; sourceTree = "<group>"; };
-		SHRZV0000000000000001A /* SherpaZipVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaZipVoiceEngine.swift; sourceTree = "<group>"; };
 		NVLTS0000000000000001A /* NovellaTTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovellaTTSEngine.swift; sourceTree = "<group>"; };
 		PSVCE0000000000000001A /* preset_voices.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = preset_voices.json; sourceTree = "<group>"; };
 		SHRKE0000000000000001A /* SherpaKokoroEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaKokoroEngine.swift; sourceTree = "<group>"; };
 		SHRPA0000000000000001A /* SherpaOnnxSwift.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaOnnxSwift.swift; sourceTree = "<group>"; };
+		SHRZV0000000000000001A /* SherpaZipVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaZipVoiceEngine.swift; sourceTree = "<group>"; };
 		SNTSPL0000000000000001A /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
 		SPKAH0000000000000001A /* SpeakerAuditionHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakerAuditionHelper.swift; sourceTree = "<group>"; };
 		TT5ENG0000000000000001A /* TTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngine.swift; sourceTree = "<group>"; };
 		TT5PRO7000000000000001A /* TTSProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSProtocol.swift; sourceTree = "<group>"; };
 		TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipVoiceEngine.swift; sourceTree = "<group>"; };
 		TXNRM0000000000000001A /* TextNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextNormalizer.swift; sourceTree = "<group>"; };
+		WAVRD0000000000000001A /* WavReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WavReader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
