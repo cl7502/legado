@@ -19,6 +19,11 @@ final class SherpaKokoroEngine: TTSEngine {
         let voicesPath  = "\(dir)/\(ModelManager.kokoroVoicesFile)"
         let tokensPath  = "\(dir)/tokens.txt"
         let dataDirPath = "\(dir)/espeak-ng-data"
+        let dictDirPath = "\(dir)/dict"
+        // 多语言模型必须传 lexicon，否则报 "please pass --kokoro-lexicon"
+        let lexiconPath = "\(dir)/lexicon-zh.txt,\(dir)/lexicon-us-en.txt"
+        // Chinese FST rules for number/date normalization (optional, improves quality)
+        let ruleFstsPaths = "\(dir)/number-zh.fst,\(dir)/date-zh.fst,\(dir)/phone-zh.fst"
 
         // 验证关键文件存在
         for path in [modelPath, voicesPath, tokensPath] {
@@ -34,13 +39,13 @@ final class SherpaKokoroEngine: TTSEngine {
             tokens:      tokensPath,
             dataDir:     dataDirPath,
             lengthScale: 1.0,
-            dictDir:     "",
-            lexicon:     ""
+            dictDir:     dictDirPath,
+            lexicon:     lexiconPath
         )
         let modelConfig = sherpaOnnxOfflineTtsModelConfig(kokoro: kokoroConfig)
         let config = sherpaOnnxOfflineTtsConfig(
             model:           modelConfig,
-            ruleFsts:        "",
+            ruleFsts:        ruleFstsPaths,
             ruleFars:        "",
             maxNumSentences: 1
         )
