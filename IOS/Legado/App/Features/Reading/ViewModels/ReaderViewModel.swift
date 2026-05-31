@@ -127,6 +127,7 @@ class ReaderViewModel: ObservableObject {
 
         chapterContents.removeAll()
         currentPages = []
+        isLoading = true   // 防止瞬间显示"加载失败"
         currentPageOffsets = []
         currentPageIndex = 0
         currentHighlights = []
@@ -169,6 +170,7 @@ class ReaderViewModel: ObservableObject {
         await loadChapters()
         if !chapters.isEmpty {
             await loadChapterContent(at: currentChapterIndex)
+            isLoading = false
             prefetch(around: currentChapterIndex)  // fire-and-forget，不阻塞
         }
     }
@@ -514,6 +516,7 @@ class ReaderViewModel: ObservableObject {
     func refreshCurrentChapter() async {
         chapterContents.removeValue(forKey: currentChapterIndex)
         currentPages = []
+        isLoading = true   // 防止瞬间显示"加载失败"
         await loadChapterContent(at: currentChapterIndex)
     }
 
@@ -691,10 +694,12 @@ class ReaderViewModel: ObservableObject {
         currentChapterIndex += 1
         currentPageIndex = 0
         currentPages = []
+        isLoading = true   // 防止瞬间显示"加载失败"
         // 切章时 durChapterPos 重置，避免新章节恢复到错误页
         var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
         Task {
             await loadChapterContent(at: currentChapterIndex)
+            isLoading = false
             prefetch(around: currentChapterIndex)
         }
     }
@@ -704,9 +709,11 @@ class ReaderViewModel: ObservableObject {
         currentChapterIndex -= 1
         currentPageIndex = 0
         currentPages = []
+        isLoading = true   // 防止瞬间显示"加载失败"
         var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
         Task {
             await loadChapterContent(at: currentChapterIndex)
+            isLoading = false
             prefetch(around: currentChapterIndex)
         }
     }
@@ -716,10 +723,12 @@ class ReaderViewModel: ObservableObject {
         currentChapterIndex = index
         currentPageIndex = 0
         currentPages = []
+        isLoading = true   // 防止瞬间显示"加载失败"
         if !keepMenuOpen { showingMenu = false }
         var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
         Task {
             await loadChapterContent(at: currentChapterIndex)
+            isLoading = false
             prefetch(around: currentChapterIndex)
         }
     }
