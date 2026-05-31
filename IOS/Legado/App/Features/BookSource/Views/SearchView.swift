@@ -4,7 +4,7 @@ import SwiftUI
 struct SearchView: View {
     @StateObject private var viewModel = SearchViewModel()
     @State private var searchText = ""
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -14,10 +14,13 @@ struct SearchView: View {
                         .progressViewStyle(LinearProgressViewStyle())
                         .frame(height: 2)
                 }
-                
+
                 List {
                     ForEach(viewModel.searchResults) { result in
-                        NavigationLink(destination: BookInfoView(viewModel: BookInfoViewModel(searchResult: result))) {
+                        // 使用惰性目标视图：BookInfoViewModel 仅在导航发生时才创建
+                        NavigationLink {
+                            BookInfoLazyView(result: result)
+                        } label: {
                             SearchResultRow(result: result)
                         }
                     }
@@ -27,9 +30,7 @@ struct SearchView: View {
             .navigationTitle("搜索书籍")
             .searchable(text: $searchText, prompt: "输入书名或作者...")
             .onSubmit(of: .search) {
-                Task {
-                    await viewModel.search(searchText)
-                }
+                viewModel.search(searchText)
             }
             .overlay {
                 if viewModel.searchResults.isEmpty && !viewModel.isSearching {
@@ -37,6 +38,14 @@ struct SearchView: View {
                 }
             }
         }
+    }
+}
+
+/// 惰性包装：body 在导航时才执行，避免 List 渲染期间大量创建 BookInfoViewModel
+private struct BookInfoLazyView: View {
+    let result: SearchResult
+    var body: some View {
+        BookInfoView(viewModel: BookInfoViewModel(searchResult: result))
     }
 }
 

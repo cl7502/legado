@@ -13,45 +13,70 @@ class SearchViewModel: ObservableObject {
     private let network = NetworkManager.shared
     private let ruleExecutor = RuleExecutor.shared
 
-    func search(_ query: String) async {
+    private var searchTask: Task<Void, Never>?
+
+    /// 启动搜索；自动取消上一次未完成的搜索
+    func search(_ query: String) {
         guard !query.isEmpty else { return }
-
-        isSearching = true
+        searchTask?.cancel()
         searchResults = []
+        isSearching = true
         searchProgress = 0
-
-        do {
-            let sources = try await db.getEnabledBookSources()
-            guard !sources.isEmpty else { isSearching = false; return }
-
-            let total = Float(sources.count)
-            var done: Float = 0
-
-            await withTaskGroup(of: [SearchResult].self) { group in
-                for source in sources {
-                    group.addTask { await self.searchInSource(query, source: source) }
-                }
-                for await results in group {
-                    self.searchResults.append(contentsOf: results)
-                    done += 1
-                    self.searchProgress = done / total
-                }
-            }
-
-            // P2-A: 按 name+author 组合去重，保留每组的第一条结果
-            var seen = Set<String>()
-            self.searchResults = self.searchResults.filter { result in
-                let key = "\(result.name)|\(result.author)"
-                return seen.insert(key).inserted
-            }
-        } catch {
-            print("❌ [Search Error]: \(error)")
+        searchTask = Task { [weak self] in
+            guard let self else { return }
+            await self.performSearch(query)
         }
+    }
 
+    func cancelSearch() {
+        searchTask?.cancel()
+        searchTask = nil
         isSearching = false
     }
 
     // MARK: - Private
+
+    private func performSearch(_ query: String) async {
+        defer {
+            if !Task.isCancelled {
+                var seen = Set<String>()
+                searchResults = searchResults.filter { seen.insert("\($0.name)|\($0.author)").inserted }
+            }
+            isSearching = false
+        }
+
+        do {
+            let sources = try await db.getEnabledBookSources()
+            guard !sources.isEmpty else { return }
+
+            let total = Float(sources.count)
+            var done: Float = 0
+            var nextIdx = 0
+            // 滑动窗口：最多同时执行 maxConcurrent 个书源请求，避免百书源同时并发
+            let maxConcurrent = 8
+
+            await withTaskGroup(of: [SearchResult].self) { group in
+                let initial = min(maxConcurrent, sources.count)
+                for i in 0..<initial {
+                    group.addTask { await self.searchInSource(query, source: sources[i]) }
+                }
+                nextIdx = initial
+
+                for await results in group {
+                    if Task.isCancelled { group.cancelAll(); break }
+                    searchResults.append(contentsOf: results)
+                    done += 1
+                    searchProgress = done / total
+                    if nextIdx < sources.count {
+                        let src = sources[nextIdx]; nextIdx += 1
+                        group.addTask { await self.searchInSource(query, source: src) }
+                    }
+                }
+            }
+        } catch {
+            if !Task.isCancelled { print("❌ [Search Error]: \(error)") }
+        }
+    }
 
     // nonisolated：脱离 @MainActor，使 TaskGroup 中的搜索任务真正并发执行
     nonisolated private func searchInSource(_ query: String, source: BookSource) async -> [SearchResult] {
