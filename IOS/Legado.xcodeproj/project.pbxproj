@@ -86,6 +86,7 @@
 		SNTSPL0000000000000002B /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SNTSPL0000000000000001A /* SentenceSplitter.swift */; };
 		TT5ENG0000000000000002B /* TTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ENG0000000000000001A /* TTSEngine.swift */; };
 		TT5PRO7000000000000002B /* TTSProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5PRO7000000000000001A /* TTSProtocol.swift */; };
+		AUDPPL0000000000000002B /* AudioPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDPPL0000000000000001A /* AudioPipeline.swift */; };
 		TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */; };
 		TXNRM0000000000000002B /* TextNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXNRM0000000000000001A /* TextNormalizer.swift */; };
 /* End PBXBuildFile section */
@@ -181,6 +182,7 @@
 		SNTSPL0000000000000001A /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
 		TT5ENG0000000000000001A /* TTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngine.swift; sourceTree = "<group>"; };
 		TT5PRO7000000000000001A /* TTSProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSProtocol.swift; sourceTree = "<group>"; };
+		AUDPPL0000000000000001A /* AudioPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPipeline.swift; sourceTree = "<group>"; };
 		TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipVoiceEngine.swift; sourceTree = "<group>"; };
 		TXNRM0000000000000001A /* TextNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextNormalizer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -213,6 +215,7 @@
 			isa = PBXGroup;
 			children = (
 				TT5PRO7000000000000001A /* TTSProtocol.swift */,
+				AUDPPL0000000000000001A /* AudioPipeline.swift */,
 				TT5GRP0000000000000003E /* Engines */,
 				TXNRM0000000000000003G /* Pipeline */,
 				94D5BD031138372332E5877B /* ViewModels */,
@@ -640,6 +643,7 @@
 				8C2BCFF9A54124D671E65CD0 /* TOCView.swift in Sources */,
 				A17E074A421ACD48433707BB /* TTSManager.swift in Sources */,
 				TT5PRO7000000000000002B /* TTSProtocol.swift in Sources */,
+				AUDPPL0000000000000002B /* AudioPipeline.swift in Sources */,
 				TT5ENG0000000000000002B /* TTSEngine.swift in Sources */,
 				TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */,
 				TXNRM0000000000000002B /* TextNormalizer.swift in Sources */,
