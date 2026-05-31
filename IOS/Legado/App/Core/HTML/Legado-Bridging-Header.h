@@ -6,4 +6,6 @@
 #include <libxml2/libxml/xpath.h>
 #include <libxml2/libxml/xpathInternals.h>
 
+#include "sherpa-onnx/c-api/c-api.h"
+
 #endif
