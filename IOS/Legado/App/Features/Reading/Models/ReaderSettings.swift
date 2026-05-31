@@ -130,6 +130,9 @@ class ReaderSettings: ObservableObject {
     /// 高质量 TTS（Kokoro）开关
     @AppStorage("reader.useNovellaTTS") var useNovellaTTS: Bool = false
 
+    /// ZipVoice 音色 ID（对应 preset_voices.json 中的 id 字段）
+    @AppStorage("reader.ttsZipVoiceId") var ttsZipVoiceId: String = "narrator"
+
     /// 自定义背景色（从 hex 读写）
     var customBgColor: Color {
         get { Color(hex: customBgColorHex) ?? Color(red: 0.96, green: 0.90, blue: 0.78) }

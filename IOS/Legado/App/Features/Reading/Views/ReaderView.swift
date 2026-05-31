@@ -478,6 +478,8 @@ struct ReaderMenuView: View {
     @ObservedObject var settings: ReaderSettings
     let onBack: () -> Void
 
+    @ObservedObject private var novellaTTSEngine = NovellaTTSEngine.shared
+
     @State private var showingTOC      = false
     @State private var showingSettings = false
     @State private var showingCacheAlert  = false
@@ -765,30 +767,44 @@ struct ReaderMenuView: View {
             }
             .padding(.horizontal)
 
-            // 发音选择
+            // 音色选择
             HStack {
-                Text("发音").font(.caption).foregroundColor(.secondary).frame(width: 36, alignment: .leading)
-                Picker("发音", selection: Binding(
-                    get: { viewModel.ttsManager.selectedVoice?.identifier ?? "" },
-                    set: { id in
-                        viewModel.ttsManager.selectedVoice = id.isEmpty
-                            ? nil
-                            : AVSpeechSynthesisVoice(identifier: id)
+                Text("音色").font(.caption).foregroundColor(.secondary).frame(width: 36, alignment: .leading)
+                if settings.useNovellaTTS {
+                    // ZipVoice 预设音色
+                    Picker("音色", selection: Binding(
+                        get: { novellaTTSEngine.selectedVoiceId },
+                        set: { novellaTTSEngine.selectVoice(id: $0) }
+                    )) {
+                        ForEach(novellaTTSEngine.availableVoices, id: \.id) { voice in
+                            Text(voice.displayName).tag(voice.id)
+                        }
                     }
-                )) {
-                    Text("系统默认").tag("")
-                    ForEach(chineseVoices, id: \.identifier) { voice in
-                        Text(voiceDisplayName(voice)).tag(voice.identifier)
+                    .pickerStyle(.menu)
+                } else {
+                    // 系统 AVSpeech 声音
+                    Picker("发音", selection: Binding(
+                        get: { viewModel.ttsManager.selectedVoice?.identifier ?? "" },
+                        set: { id in
+                            viewModel.ttsManager.selectedVoice = id.isEmpty
+                                ? nil
+                                : AVSpeechSynthesisVoice(identifier: id)
+                        }
+                    )) {
+                        Text("系统默认").tag("")
+                        ForEach(chineseVoices, id: \.identifier) { voice in
+                            Text(voiceDisplayName(voice)).tag(voice.identifier)
+                        }
                     }
-                }
-                .pickerStyle(.menu)
-                Spacer()
-                Button {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
+                    .pickerStyle(.menu)
+                    Spacer()
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Text("下载更多 →").font(.caption2).foregroundColor(.blue)
                     }
-                } label: {
-                    Text("下载更多 →").font(.caption2).foregroundColor(.blue)
                 }
             }
             .padding(.horizontal)

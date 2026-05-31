@@ -3,7 +3,7 @@ import AVFoundation
 import Combine
 import MediaPlayer
 
-/// 高质量 TTS 主控协调器（Phase 1a：单一旁白声音）。
+/// 高质量 TTS 主控协调器。
 /// ⚠️ 不能标注 @MainActor：ONNX 推理必须在后台线程。
 /// @Published 属性通过 DispatchQueue.main.async 更新。
 final class NovellaTTSEngine: ObservableObject, TTSProtocol {
@@ -15,7 +15,23 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
     @Published private(set) var isSpeaking: Bool = false
     @Published private(set) var speakingRange: NSRange? = nil
     @Published private(set) var remainingSeconds: Int? = nil
-    var selectedVoice: AVSpeechSynthesisVoice? = nil   // Phase 1a 不使用
+    var selectedVoice: AVSpeechSynthesisVoice? = nil   // AVSpeech 协议占位，ZipVoice 不使用
+
+    // MARK: - 音色选择
+    /// 从 preset_voices.json 加载的所有可用音色
+    let availableVoices: [VoiceConfig]
+
+    /// 当前选中的音色 ID（对应 VoiceConfig.id）
+    @Published private(set) var selectedVoiceId: String
+
+    /// 切换音色；若正在朗读则自动重启
+    func selectVoice(id: String) {
+        guard let voice = availableVoices.first(where: { $0.id == id }) else { return }
+        narratorVoice = voice
+        selectedVoiceId = id
+        ReaderSettings.shared.ttsZipVoiceId = id
+        restartForSettingChange()
+    }
 
     // MARK: - 私有
     private let engine: SherpaZipVoiceEngine
@@ -32,15 +48,33 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
     private var generationTask:   Task<Void, Never>?
     private var timerTask:        Task<Void, Never>?
 
-    // 先用旁白音色作为默认（在角色系统加入前的 Phase 1a 临时方案）
-    private var narratorVoice = VoiceConfig(
-        id: "narrator",
-        displayName: "旁白",
-        refAudioFile: "ref_narrator_f.wav",
-        refText: "各位村民，大家新年好！近期，湖北省武汉市等多个地区"
-    )
+    private var narratorVoice: VoiceConfig
+
+    private static func loadPresetVoices() -> [VoiceConfig] {
+        guard let url = Bundle.main.url(forResource: "preset_voices", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else { return [] }
+        struct Entry: Decodable {
+            let id, displayName, refAudioFile, refText: String
+            let basePitch, baseRate: Float
+        }
+        guard let entries = try? JSONDecoder().decode([Entry].self, from: data) else { return [] }
+        return entries.map { VoiceConfig(id: $0.id, displayName: $0.displayName,
+                                         refAudioFile: $0.refAudioFile, refText: $0.refText,
+                                         basePitch: $0.basePitch, baseRate: $0.baseRate) }
+    }
 
     private init() {
+        let voices = NovellaTTSEngine.loadPresetVoices()
+        let savedId = ReaderSettings.shared.ttsZipVoiceId
+        let initial = voices.first(where: { $0.id == savedId })
+            ?? voices.first
+            ?? VoiceConfig(id: "narrator", displayName: "旁白",
+                           refAudioFile: "ref_narrator_f.wav",
+                           refText: "各位村民，大家新年好！近期，湖北省武汉市等多个地区")
+        availableVoices = voices
+        narratorVoice = initial
+        selectedVoiceId = initial.id
+
         let refsDir = ModelManager.voiceRefsDir() ?? ""
         engine = SherpaZipVoiceEngine(voiceRefsDir: refsDir)
         pipeline.onSentenceComplete = { [weak self] sentence in
