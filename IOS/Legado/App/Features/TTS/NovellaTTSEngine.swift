@@ -128,20 +128,23 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
 
     private func startGenerationPipeline() {
         generationTask?.cancel()
+        // Capture on calling thread (main) — value types, no race
+        let startIdx      = currentIndex
+        let queueSnap     = sentenceQueue
+        let normalizer    = self.normalizer
+        let narratorVoice = self.narratorVoice
         // ⚡ Task.detached：ONNX 推理在后台线程，不阻塞 MainActor
         generationTask = Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            let startIdx  = self.currentIndex
-            let queueSnap = self.sentenceQueue
-            let endIdx    = min(startIdx + 2, queueSnap.count)
+            let endIdx = min(startIdx + 2, queueSnap.count)
             for idx in startIdx..<endIdx {
                 guard !Task.isCancelled else { return }
                 let sentence = queueSnap[idx]
                 // ⚡ TextNormalizer 只在此处对送入 TTS 的文本应用
-                let ttsText = self.normalizer.normalize(sentence.text)
+                let ttsText = normalizer.normalize(sentence.text)
                 do {
                     let chunk = try await self.engine.synthesize(
-                        text: ttsText, voice: self.narratorVoice, style: .normal)
+                        text: ttsText, voice: narratorVoice, style: .normal)
                     await MainActor.run {
                         self.pipeline.enqueue(chunk: chunk, sentence: sentence, style: .normal)
                     }
