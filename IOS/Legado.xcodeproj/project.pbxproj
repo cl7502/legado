@@ -84,6 +84,7 @@
 		FBE3FCB9E6C0B217DC707076 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3030BF4AC290D0B281153590 /* ContentView.swift */; };
 		MDLMG0000000000000002B /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLMG0000000000000001A /* ModelManager.swift */; };
 		NVLTS0000000000000002B /* NovellaTTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = NVLTS0000000000000001A /* NovellaTTSEngine.swift */; };
+		KOKORO001BUILDFILE00001A /* kokoro-int8-multi-lang-v1_1 in Resources */ = {isa = PBXBuildFile; fileRef = C7089C0B2FCBB91B00E493E9 /* kokoro-int8-multi-lang-v1_1 */; };
 		PSVCE0000000000000002B /* preset_voices.json in Resources */ = {isa = PBXBuildFile; fileRef = PSVCE0000000000000001A /* preset_voices.json */; };
 		SHRKE0000000000000002B /* SherpaKokoroEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRKE0000000000000001A /* SherpaKokoroEngine.swift */; };
 		SHRPA0000000000000002B /* SherpaOnnxSwift.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRPA0000000000000001A /* SherpaOnnxSwift.swift */; };
@@ -604,6 +605,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				KOKORO001BUILDFILE00001A /* kokoro-int8-multi-lang-v1_1 in Resources */,
 				PSVCE0000000000000002B /* preset_voices.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
