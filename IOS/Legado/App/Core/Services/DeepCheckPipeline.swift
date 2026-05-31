@@ -256,7 +256,7 @@ struct DeepCheckPipeline {
             steps[0].status = .failed; steps[0].errorMessage = "searchUrl 未配置"
             emit(steps[0]); skipFrom(1); return steps
         }
-        var baseCtx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
+        let baseCtx = AnalyzeContext(source: source, baseUrl: source.bookSourceUrl)
         let parsedSearch = AnalyzeUrl.parse(
             searchTmpl, variables: ["key": keyword, "page": "1"], context: baseCtx)
         let searchUrl = parsedSearch.url.hasPrefix("http") ? parsedSearch.url

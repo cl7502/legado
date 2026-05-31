@@ -145,13 +145,13 @@ extension DatabaseManager {
     // --- 书源操作 ---
     
     func deleteBookSource(_ source: BookSource) async throws {
-        try await dbPool.write { db in
+        _ = try await dbPool.write { db in
             try BookSource.filter(Column("bookSourceUrl") == source.bookSourceUrl).deleteAll(db)
         }
     }
 
     func deleteAllBookSources() async throws {
-        try await dbPool.write { db in
+        _ = try await dbPool.write { db in
             try BookSource.deleteAll(db)
         }
     }
@@ -289,7 +289,7 @@ extension DatabaseManager {
     }
 
     func deleteReplaceRule(_ rule: ReplaceRule) async throws {
-        try await dbPool.write { db in
+        _ = try await dbPool.write { db in
             if let id = rule.id {
                 try ReplaceRule.filter(Column("id") == id).deleteAll(db)
             } else {
@@ -319,13 +319,13 @@ extension DatabaseManager {
     }
 
     func saveBookmark(_ bookmark: Bookmark) async throws {
-        var bm = bookmark
-        try await dbPool.write { db in try bm.save(db) }
+        let bm = bookmark
+        _ = try await dbPool.write { db in try bm.save(db) }
     }
 
     func deleteBookmark(_ bookmark: Bookmark) async throws {
         guard let id = bookmark.id else { return }
-        try await dbPool.write { db in
+        _ = try await dbPool.write { db in
             try Bookmark.filter(Column("id") == id).deleteAll(db)
         }
     }
@@ -351,13 +351,13 @@ extension DatabaseManager {
     }
 
     func saveHighlight(_ highlight: BookHighlight) async throws {
-        var h = highlight
-        try await dbPool.write { db in try h.save(db) }
+        let h = highlight
+        _ = try await dbPool.write { db in try h.save(db) }
     }
 
     func deleteHighlight(_ highlight: BookHighlight) async throws {
         guard let id = highlight.id else { return }
-        try await dbPool.write { db in
+        _ = try await dbPool.write { db in
             try BookHighlight.filter(Column("id") == id).deleteAll(db)
         }
     }

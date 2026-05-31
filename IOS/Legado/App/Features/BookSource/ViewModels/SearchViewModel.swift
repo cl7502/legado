@@ -80,6 +80,8 @@ class SearchViewModel: ObservableObject {
 
     // nonisolated：脱离 @MainActor，使 TaskGroup 中的搜索任务真正并发执行
     nonisolated private func searchInSource(_ query: String, source: BookSource) async -> [SearchResult] {
+        // 通过局部常量访问全局单例，避免触发 @MainActor 隔离警告
+        let ruleExecutor = RuleExecutor.shared
         guard let template = source.searchUrl else { return [] }
 
         // 解析搜索 URL 模板 — 支持 GET/POST 及 {{key}}、{{page}} 变量、@js: 前置块
@@ -178,6 +180,7 @@ class SearchViewModel: ObservableObject {
     /// Mirrors Android BookList.analyzeBookList() → BookInfo path when bookUrlPattern matches.
     nonisolated private func parseAsBookInfo(html: String, bookUrl: String, parsedUrl: String,
                                               source: BookSource, context: AnalyzeContext) -> [SearchResult] {
+        let ruleExecutor = RuleExecutor.shared
         var ctx = context
         ctx.result = html
         ctx.baseUrl = bookUrl

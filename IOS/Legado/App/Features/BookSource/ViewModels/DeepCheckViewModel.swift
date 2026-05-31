@@ -40,7 +40,7 @@ class DeepCheckViewModel: ObservableObject {
             guard let self else { return }
             var iter = sources.makeIterator()
             await withTaskGroup(of: Void.self) { group in
-                for _ in 0..<min(concurrency, sources.count) {
+                for _ in 0..<min(self.concurrency, sources.count) {
                     if let src = iter.next() {
                         group.addTask { [weak self] in
                             await semaphore.wait()
@@ -66,7 +66,7 @@ class DeepCheckViewModel: ObservableObject {
 
     // MARK: - Single-source: user triggers search after explore
     func runSearchFor(sourceUrl: String) async {
-        guard let (idx, hasSearch) = await MainActor.run(body: { () -> (Int, Bool)? in
+        guard let (_, hasSearch) = await MainActor.run(body: { () -> (Int, Bool)? in
             guard let i = self.entries.firstIndex(where: { $0.id == sourceUrl }) else { return nil }
             return (i, self.entries[i].result.hasSearch)
         }), hasSearch else { return }

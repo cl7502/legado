@@ -24,7 +24,7 @@ class BookshelfViewModel: ObservableObject {
         case .nameAsc:
             return books.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
         case .author:
-            return books.sorted { ($0.author ?? "").localizedCompare($1.author ?? "") == .orderedAscending }
+            return books.sorted { $0.author.localizedCompare($1.author) == .orderedAscending }
         }
     }
 

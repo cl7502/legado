@@ -3,7 +3,7 @@ import Alamofire
 
 /// Legado 网络拦截器
 /// 目标：处理 Cookie 自动持久化与基础 Header 注入
-class LegadoInterceptor: RequestInterceptor {
+final class LegadoInterceptor: RequestInterceptor {
     
     /// 在请求发送前修改请求
     func adapt(_ urlRequest: URLRequest, for session: Session, completion: @escaping (Result<URLRequest, Error>) -> Void) {

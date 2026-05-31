@@ -3,7 +3,7 @@ import AVFoundation
 import MediaPlayer
 
 /// TTS 管理器
-class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject, TTSProtocol {
+class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject, TTSProtocol, @unchecked Sendable {
     static let shared = TTSManager()
 
     private let synthesizer = AVSpeechSynthesizer()

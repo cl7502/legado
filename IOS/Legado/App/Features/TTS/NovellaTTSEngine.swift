@@ -6,7 +6,7 @@ import MediaPlayer
 /// 高质量 TTS 主控协调器。
 /// ⚠️ 不能标注 @MainActor：ONNX 推理必须在后台线程。
 /// @Published 属性通过 DispatchQueue.main.async 更新。
-final class NovellaTTSEngine: ObservableObject, TTSProtocol {
+final class NovellaTTSEngine: ObservableObject, TTSProtocol, @unchecked Sendable {
 
     static let shared = NovellaTTSEngine()
 
@@ -150,12 +150,13 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
         let secs = minutes * 60
         DispatchQueue.main.async { self.remainingSeconds = secs }
         timerTask = Task { [weak self] in
-            var remaining = secs
+            var remaining = secs          // 局部变量，不跨线程共享
             while remaining > 0 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if Task.isCancelled { return }
                 remaining -= 1
-                DispatchQueue.main.async { self?.remainingSeconds = remaining }
+                let r = remaining
+                DispatchQueue.main.async { self?.remainingSeconds = r }
             }
             self?.stop()
         }

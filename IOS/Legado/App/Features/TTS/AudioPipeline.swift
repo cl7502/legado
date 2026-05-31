@@ -54,7 +54,7 @@ final class AudioPipeline {
         else { return nil }
         buffer.frameLength = frameCount
         chunk.samples.withUnsafeBufferPointer { ptr in
-            buffer.floatChannelData![0].assign(
+            buffer.floatChannelData![0].update(
                 from: ptr.baseAddress!, count: chunk.samples.count)
         }
         return buffer

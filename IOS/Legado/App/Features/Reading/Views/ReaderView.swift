@@ -1493,7 +1493,7 @@ private struct TextKit2TextView: UIViewRepresentable {
             return true
         }
 
-        func textView(_ textView: UITextView,
+        @objc func textView(_ textView: UITextView,
                       editMenuForTextIn range: UITextRange,
                       suggestedActions: [UIMenuElement]) -> UIMenu? {
             let colors: [(String, Int)] = [("黄色高亮", 0), ("绿色高亮", 1), ("蓝色高亮", 2), ("粉色高亮", 3)]

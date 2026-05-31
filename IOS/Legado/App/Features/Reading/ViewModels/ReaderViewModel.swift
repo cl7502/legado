@@ -495,7 +495,7 @@ class ReaderViewModel: ObservableObject {
             let task = Task(priority: .background) { [weak self] in
                 await self?.loadChapterContent(at: i)
                 await MainActor.run { [weak self] in
-                    self?.prefetchTasks.removeValue(forKey: i)
+                    _ = self?.prefetchTasks.removeValue(forKey: i)
                 }
             }
             prefetchTasks[i] = task
