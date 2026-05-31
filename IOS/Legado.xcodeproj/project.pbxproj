@@ -59,8 +59,9 @@
 		BB1122334455667788AABB01 /* SourceSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1122334455667788AABB00 /* SourceSelectionView.swift */; };
 		BDD1E8DFA9577A9A32B94487 /* CookieManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A2A311A73EF5520A2B486B7 /* CookieManager.swift */; };
 		C08E31A1B67D5322D1E527A8 /* ChapterPaginator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A014AEF10E5683C5A1C3FF07 /* ChapterPaginator.swift */; };
-		C7089A682FCBB53900E493E9 /* sherpa-onnx.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */; };
 		C7089A692FCBB53900E493E9 /* sherpa-onnx.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C708A76D2FCBC0C400E493E9 /* onnxruntime.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */; };
+		C708A76E2FCBC0C400E493E9 /* onnxruntime.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CC000002CC000002CC000002 /* QueryTTF.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000001CC000001CC000001 /* QueryTTF.swift */; };
 		CF5BE8A10F1924A4B4CED60C /* Book.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD04F3BC18D250DD4598F1D /* Book.swift */; };
 		DBB0AB382ECEE822F0D9F2AA /* JSJavaHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89268F6F757AD9196F8CB3DB /* JSJavaHelper.swift */; };
@@ -79,12 +80,12 @@
 		FA76929646F50549F99CF839 /* Chapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84BC7BDFD6B447FCD7D9A2AB /* Chapter.swift */; };
 		FB0527ECB98BD4C4D99C93E2 /* DatabaseModels+GRDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A1D606AB2B011D4984E62D /* DatabaseModels+GRDB.swift */; };
 		FBE3FCB9E6C0B217DC707076 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3030BF4AC290D0B281153590 /* ContentView.swift */; };
+		MDLMG0000000000000002B /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLMG0000000000000001A /* ModelManager.swift */; };
+		SHRPA0000000000000002B /* SherpaOnnxSwift.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRPA0000000000000001A /* SherpaOnnxSwift.swift */; };
 		SNTSPL0000000000000002B /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SNTSPL0000000000000001A /* SentenceSplitter.swift */; };
 		TT5ENG0000000000000002B /* TTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ENG0000000000000001A /* TTSEngine.swift */; };
 		TT5PRO7000000000000002B /* TTSProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5PRO7000000000000001A /* TTSProtocol.swift */; };
 		TT5ZIP0000000000000002B /* ZipVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */; };
-		SHRPA0000000000000002B /* SherpaOnnxSwift.swift in Sources */ = {isa = PBXBuildFile; fileRef = SHRPA0000000000000001A /* SherpaOnnxSwift.swift */; };
-		MDLMG0000000000000002B /* ModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLMG0000000000000001A /* ModelManager.swift */; };
 		TXNRM0000000000000002B /* TextNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = TXNRM0000000000000001A /* TextNormalizer.swift */; };
 /* End PBXBuildFile section */
 
@@ -96,6 +97,7 @@
 			dstSubfolderSpec = 10;
 			files = (
 				C7089A692FCBB53900E493E9 /* sherpa-onnx.xcframework in Embed Frameworks */,
+				C708A76E2FCBC0C400E493E9 /* onnxruntime.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -154,6 +156,7 @@
 		BB1122334455667788AABB00 /* SourceSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSelectionView.swift; sourceTree = "<group>"; };
 		C3FCE11C2055189639109B34 /* SearchResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResult.swift; sourceTree = "<group>"; };
 		C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = "sherpa-onnx.xcframework"; path = "Legado/Frameworks/sherpa-onnx.xcframework"; sourceTree = "<group>"; };
+		C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = onnxruntime.xcframework; path = Legado/Frameworks/onnxruntime.xcframework; sourceTree = "<group>"; };
 		CC000001CC000001CC000001 /* QueryTTF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueryTTF.swift; sourceTree = "<group>"; };
 		CE8EB23FB0C645A06EBA365A /* ContentProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentProcessor.swift; sourceTree = "<group>"; };
 		D6648BAB2AAF499DEE7B3B5A /* RuleParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleParser.swift; sourceTree = "<group>"; };
@@ -172,12 +175,12 @@
 		F47495D6DEE05C3DB85E4BD4 /* BookSourceEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookSourceEditView.swift; sourceTree = "<group>"; };
 		F61A803C2FB9419BBDB3101C /* BatteryIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryIconView.swift; sourceTree = "<group>"; };
 		F7B5B72D80BDA2FC9A483038 /* ReaderViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderViewModel.swift; sourceTree = "<group>"; };
+		MDLMG0000000000000001A /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
+		SHRPA0000000000000001A /* SherpaOnnxSwift.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaOnnxSwift.swift; sourceTree = "<group>"; };
 		SNTSPL0000000000000001A /* SentenceSplitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceSplitter.swift; sourceTree = "<group>"; };
 		TT5ENG0000000000000001A /* TTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSEngine.swift; sourceTree = "<group>"; };
 		TT5PRO7000000000000001A /* TTSProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSProtocol.swift; sourceTree = "<group>"; };
 		TT5ZIP0000000000000001A /* ZipVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipVoiceEngine.swift; sourceTree = "<group>"; };
-		SHRPA0000000000000001A /* SherpaOnnxSwift.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SherpaOnnxSwift.swift; sourceTree = "<group>"; };
-		MDLMG0000000000000001A /* ModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManager.swift; sourceTree = "<group>"; };
 		TXNRM0000000000000001A /* TextNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextNormalizer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -195,6 +198,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4842CACE34A69C810C820C33 /* Alamofire in Frameworks */,
+				C708A76D2FCBC0C400E493E9 /* onnxruntime.xcframework in Frameworks */,
 				712B3AE4134A4EB1A7476526 /* SwiftSoup in Frameworks */,
 				366201E0DB05DE4192BF82D1 /* GRDB in Frameworks */,
 			);
@@ -421,6 +425,7 @@
 		C7089A662FCBB53800E493E9 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */,
 				C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */,
 			);
 			name = Frameworks;
