@@ -32,6 +32,9 @@ struct ReaderView: View {
     @State private var volumeObservation: NSKeyValueObservation? = nil
     @State private var volumeSlider: UISlider? = nil
 
+    // 自动翻页
+    @State private var autoScrollTimer: Timer? = nil
+
     var body: some View {
         ZStack {
             settings.currentTheme.backgroundColor.ignoresSafeArea()
@@ -81,6 +84,7 @@ struct ReaderView: View {
             battery.enable()
             scheduleNextMinuteUpdate()
             setupVolumePageTurn()
+            if settings.autoScrollEnabled { startAutoScroll() }
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
@@ -88,6 +92,7 @@ struct ReaderView: View {
             minuteWorkItem?.cancel()
             minuteWorkItem = nil
             teardownVolumePageTurn()
+            stopAutoScroll()
         }
         // B3修复：排版设置变化 → 重新分页
         .onChange(of: settings.fontSize)          { _ in viewModel.paginateCurrentChapter() }
@@ -97,6 +102,14 @@ struct ReaderView: View {
         .onChange(of: settings.sideMargin)        { _ in viewModel.paginateCurrentChapter() }
         .onChange(of: settings.topMargin)         { _ in viewModel.paginateCurrentChapter() }
         .onChange(of: settings.bottomMargin)      { _ in viewModel.paginateCurrentChapter() }
+        .onChange(of: settings.fontName)          { _ in viewModel.paginateCurrentChapter() }
+        // 自动翻页开关/速度变化
+        .onChange(of: settings.autoScrollEnabled) { enabled in
+            if enabled { startAutoScroll() } else { stopAutoScroll() }
+        }
+        .onChange(of: settings.autoScrollInterval) { _ in
+            if settings.autoScrollEnabled { startAutoScroll() }
+        }
         .task { await viewModel.setup() }
     }
 
@@ -414,6 +427,24 @@ struct ReaderView: View {
     private func teardownVolumePageTurn() {
         volumeObservation?.invalidate()
         volumeObservation = nil
+    }
+
+    // MARK: - 自动翻页
+
+    private func startAutoScroll() {
+        autoScrollTimer?.invalidate()
+        autoScrollTimer = Timer.scheduledTimer(
+            withTimeInterval: settings.autoScrollInterval, repeats: true
+        ) { [weak viewModel] _ in
+            DispatchQueue.main.async {
+                withAnimation(.easeInOut(duration: 0.3)) { viewModel?.nextPage() }
+            }
+        }
+    }
+
+    private func stopAutoScroll() {
+        autoScrollTimer?.invalidate()
+        autoScrollTimer = nil
     }
 }
 
@@ -933,9 +964,11 @@ struct ReaderMenuView: View {
 
 struct ReaderSettingsSheet: View {
     @StateObject private var settings = ReaderSettings.shared
+    @StateObject private var fontManager = FontManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var showPreferences = false
     @State private var brightness: Double = Double(UIScreen.main.brightness)
+    @State private var showFontImporter = false
 
     var body: some View {
         NavigationView {
@@ -957,6 +990,31 @@ struct ReaderSettingsSheet: View {
                     stepperRow(title: "行高",   value: $settings.lineSpacing,      range: 0...30,  step: 1)
                     stepperRow(title: "字间距", value: $settings.letterSpacing,    range: -3...10, step: 0.5)
                     stepperRow(title: "段间距", value: $settings.paragraphSpacing, range: 0...50,  step: 2)
+
+                    Picker("字体", selection: $settings.fontName) {
+                        Text("系统默认").tag("")
+                        ForEach(fontManager.importedFonts) { entry in
+                            Text(entry.displayName).tag(entry.psName)
+                        }
+                    }
+
+                    Button {
+                        showFontImporter = true
+                    } label: {
+                        Label("导入字体文件（TTF/OTF）", systemImage: "plus.circle")
+                    }
+                    .fileImporter(
+                        isPresented: $showFontImporter,
+                        allowedContentTypes: [.font],
+                        allowsMultipleSelection: false
+                    ) { result in
+                        guard let url = try? result.get().first else { return }
+                        let accessing = url.startAccessingSecurityScopedResource()
+                        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                        if let entry = fontManager.importFont(from: url) {
+                            settings.fontName = entry.psName
+                        }
+                    }
                 }
 
                 // ── 主题 ─────────────────────────────────────
@@ -1188,12 +1246,13 @@ private struct MixedContentView: View {
 
     private func nsAttributedText(_ text: String) -> NSAttributedString {
         let para = NSMutableParagraphStyle()
-        let fixedH = UIFont.systemFont(ofSize: settings.fontSize).lineHeight + settings.lineSpacing
+        let bodyFont = settings.readerFont(size: settings.fontSize)
+        let fixedH = bodyFont.lineHeight + settings.lineSpacing
         para.minimumLineHeight  = fixedH
         para.maximumLineHeight  = fixedH
         para.paragraphSpacing   = settings.paragraphSpacing
         return NSAttributedString(string: text, attributes: [
-            .font:           UIFont.systemFont(ofSize: settings.fontSize),
+            .font:           bodyFont,
             .foregroundColor: UIColor(settings.currentTheme.textColor),
             .paragraphStyle: para,
             .kern:           settings.letterSpacing,
@@ -1252,6 +1311,20 @@ struct ReadingPreferencesView: View {
                     Toggle("音量键翻页", isOn: $settings.volumePageTurn)
                     if ModelManager.isAvailable(.zipVoiceDistillInt8) {
                         Toggle("高质量TTS（ZipVoice）", isOn: $settings.useNovellaTTS)
+                    }
+                }
+
+                // ── 自动翻页 ──────────────────────────────────
+                Section("自动翻页") {
+                    Toggle("启用自动翻页", isOn: $settings.autoScrollEnabled)
+                    if settings.autoScrollEnabled {
+                        HStack {
+                            Text("翻页间隔")
+                            Slider(value: $settings.autoScrollInterval, in: 3...120)
+                            Text("\(Int(settings.autoScrollInterval))秒")
+                                .monospacedDigit()
+                                .frame(width: 44, alignment: .trailing)
+                        }
                     }
                 }
 

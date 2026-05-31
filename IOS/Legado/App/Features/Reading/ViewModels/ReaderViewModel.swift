@@ -575,7 +575,7 @@ class ReaderViewModel: ObservableObject {
         let settings = ReaderSettings.shared
         let screenSize = UIScreen.main.bounds.size
 
-        let font = UIFont.systemFont(ofSize: settings.fontSize)
+        let font = settings.readerFont(size: settings.fontSize)
         let horizontalPadding = settings.sideMargin * 2
         // 减去 header/footer 高度、上下内边距；
         // 14pt 安全余量：CoreText（分页）与 TextKit 2（渲染）段尾 paragraphSpacing 计算不一致，

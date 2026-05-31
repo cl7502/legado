@@ -60,6 +60,7 @@
 		BB1122334455667788AABB01 /* SourceSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1122334455667788AABB00 /* SourceSelectionView.swift */; };
 		BDD1E8DFA9577A9A32B94487 /* CookieManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A2A311A73EF5520A2B486B7 /* CookieManager.swift */; };
 		C08E31A1B67D5322D1E527A8 /* ChapterPaginator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A014AEF10E5683C5A1C3FF07 /* ChapterPaginator.swift */; };
+		16B1A4566FAE44EC87E10D93 /* FontManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B43C15ACA3F84A348E9111C8 /* FontManager.swift */; };
 		C7089A692FCBB53900E493E9 /* sherpa-onnx.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7089A672FCBB53900E493E9 /* sherpa-onnx.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C708A76D2FCBC0C400E493E9 /* onnxruntime.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */; };
 		C708A76E2FCBC0C400E493E9 /* onnxruntime.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C708A76C2FCBC0C400E493E9 /* onnxruntime.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -153,6 +154,7 @@
 		9D0A44556F6A3736C966D0C5 /* SearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchViewModel.swift; sourceTree = "<group>"; };
 		9E292C1C8B8F4028E6FC6614 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		A014AEF10E5683C5A1C3FF07 /* ChapterPaginator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPaginator.swift; sourceTree = "<group>"; };
+		B43C15ACA3F84A348E9111C8 /* FontManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontManager.swift; sourceTree = "<group>"; };
 		A0E239C29D6CB61EC2C6EAD6 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60001A2B3C4D5 /* AsyncSemaphore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncSemaphore.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60003A2B3C4D5 /* DeepCheckModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepCheckModels.swift; sourceTree = "<group>"; };
@@ -375,6 +377,7 @@
 				364D1D8349FB4BF8A34F88AF /* BookHighlight.swift */,
 				84BC7BDFD6B447FCD7D9A2AB /* Chapter.swift */,
 				A014AEF10E5683C5A1C3FF07 /* ChapterPaginator.swift */,
+					B43C15ACA3F84A348E9111C8 /* FontManager.swift */,
 				7F2BD26157271C5E31127821 /* ReaderSettings.swift */,
 				2F82FC065A96B44D7C96D5D8 /* ReplaceRule.swift */,
 			);
@@ -658,6 +661,7 @@
 				358440B2FE6C3DDA95A7499C /* BookshelfViewModel.swift in Sources */,
 				FA76929646F50549F99CF839 /* Chapter.swift in Sources */,
 				C08E31A1B67D5322D1E527A8 /* ChapterPaginator.swift in Sources */,
+					16B1A4566FAE44EC87E10D93 /* FontManager.swift in Sources */,
 				A47297E5F213DFC62E771D8C /* ContentProcessor.swift in Sources */,
 				FBE3FCB9E6C0B217DC707076 /* ContentView.swift in Sources */,
 				BDD1E8DFA9577A9A32B94487 /* CookieManager.swift in Sources */,

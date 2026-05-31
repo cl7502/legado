@@ -133,6 +133,25 @@ class ReaderSettings: ObservableObject {
     /// ZipVoice 音色 ID（对应 preset_voices.json 中的 id 字段）
     @AppStorage("reader.ttsZipVoiceId") var ttsZipVoiceId: String = "narrator"
 
+    /// 自定义字体 PostScript 名称（空字符串 = 系统默认字体）
+    @AppStorage("reader.fontName") var fontName: String = ""
+
+    /// 根据 fontName 返回对应 UIFont；空 = 系统字体
+    func readerFont(size: CGFloat) -> UIFont {
+        guard !fontName.isEmpty else { return UIFont.systemFont(ofSize: size) }
+        return FontManager.shared.font(named: fontName, size: size)
+    }
+
+    /// 自动翻页开关
+    @AppStorage("reader.autoScrollEnabled") var autoScrollEnabled: Bool = false
+
+    /// 自动翻页间隔（秒，范围 3–120）
+    @AppStorage("reader.autoScrollInterval") private var _autoScrollInterval: Double = 10.0
+    var autoScrollInterval: Double {
+        get { _autoScrollInterval }
+        set { _autoScrollInterval = max(3, min(120, newValue)) }
+    }
+
     /// 自定义背景色（从 hex 读写）
     var customBgColor: Color {
         get { Color(hex: customBgColorHex) ?? Color(red: 0.96, green: 0.90, blue: 0.78) }
