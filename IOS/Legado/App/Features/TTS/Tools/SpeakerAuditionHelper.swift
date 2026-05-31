@@ -24,14 +24,15 @@ final class SpeakerAuditionHelper {
         for speakerId in 0..<103 {
             let voice = VoiceConfig(id: "\(speakerId)", speakerId: speakerId,
                                     displayName: "Speaker \(speakerId)")
-            if let chunk = try? await engine.synthesize(text: sampleText,
-                                                         voice: voice, style: .normal) {
+            do {
+                let chunk = try await engine.synthesize(text: sampleText,
+                                                        voice: voice, style: .normal)
                 let wavURL = outputDir.appendingPathComponent(
                     "speaker_\(String(format: "%03d", speakerId)).wav")
                 writeWAV(samples: chunk.samples, sampleRate: chunk.sampleRate, to: wavURL)
                 print("✅ Speaker \(speakerId) → \(wavURL.lastPathComponent)")
-            } else {
-                print("⚠️ Speaker \(speakerId) 合成失败")
+            } catch {
+                print("⚠️ Speaker \(speakerId) 合成失败: \(error)")
             }
         }
         print("🎵 试听文件已生成到 Documents/audition/，共 103 个")
@@ -61,7 +62,9 @@ final class SpeakerAuditionHelper {
 
         var pcm = Data(capacity: dataSize)
         for s in samples {
-            var v = Int16(max(-32768, min(32767, Int(s * 32767))))
+            // 防止 NaN/Inf 导致 Int 转换崩溃（某些 speakerId 可能返回无效样本）
+            let safe = (s.isNaN || s.isInfinite) ? 0.0 : s
+            var v = Int16(max(-32768, min(32767, Int(safe * 32767))))
             pcm.append(contentsOf: withUnsafeBytes(of: &v) { Array($0) })
         }
         try? (header + pcm).write(to: url)
