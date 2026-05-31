@@ -28,8 +28,8 @@
     "displayName": "老者",
     "refAudioFile": "ref_male_low.wav",
     "refText": "林峰抬起头，看向远方的天际，心中涌起一阵难以言说的情绪。",
-    "basePitch": -5.0,
-    "baseRate": 0.9
+    "basePitch": -3.0,
+    "baseRate": 0.72
   },
   {
     "id": "young_female",

@@ -153,8 +153,15 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
                 do {
                     let chunk = try await self.engine.synthesize(
                         text: ttsText, voice: narratorVoice, style: .normal)
+                    // ⚡ 把 voice.basePitch 合入播放 style，让 AudioPipeline 通过
+                    // AVAudioUnitTimePitch 应用音调偏移（child/elder/villain 等角色音调差异在此生效）
+                    let voiceStyle = SpeakingStyle(
+                        rateMultiplier:  1.0,
+                        pitchOffset:     narratorVoice.basePitch,
+                        volumeMultiplier: 1.0
+                    )
                     await MainActor.run {
-                        self.pipeline.enqueue(chunk: chunk, sentence: sentence, style: .normal)
+                        self.pipeline.enqueue(chunk: chunk, sentence: sentence, style: voiceStyle)
                     }
                 } catch {
                     print("❌ [NovellaTTS] 合成失败 idx=\(idx): \(error)")
