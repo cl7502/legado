@@ -1,0 +1,4 @@
+
+# Xcode 用户界面状态（不需要跟踪）
+*.xcuserstate
+xcuserdata/
