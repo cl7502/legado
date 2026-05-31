@@ -20,11 +20,12 @@ final class SherpaZipVoiceEngine: TTSEngine {
         }
         let encoder   = "\(dir)/\(ModelManager.zipVoiceEncoder)"
         let decoder   = "\(dir)/\(ModelManager.zipVoiceDecoder)"
+        let vocoder   = "\(dir)/vocos_24khz.onnx"
         let tokens    = "\(dir)/tokens.txt"
         let lexicon   = "\(dir)/lexicon.txt"
         let dataDir   = "\(dir)/espeak-ng-data"
 
-        for path in [encoder, decoder, tokens] {
+        for path in [encoder, decoder, vocoder, tokens] {
             guard FileManager.default.fileExists(atPath: path) else {
                 print("❌ [ZipVoice] 文件不存在: \(path)"); return
             }
@@ -34,7 +35,7 @@ final class SherpaZipVoiceEngine: TTSEngine {
             tokens:  tokens,
             encoder: encoder,
             decoder: decoder,
-            vocoder: "",       // distill 版 vocoder 已集成在 decoder 中
+            vocoder: vocoder,
             dataDir: dataDir,
             lexicon: lexicon
         )
