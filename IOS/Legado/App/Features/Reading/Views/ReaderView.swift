@@ -768,10 +768,10 @@ struct ReaderMenuView: View {
             .padding(.horizontal)
 
             // 音色选择
-            HStack {
+            HStack(alignment: .center) {
                 Text("音色").font(.caption).foregroundColor(.secondary).frame(width: 36, alignment: .leading)
                 if settings.useNovellaTTS {
-                    // ZipVoice 预设音色
+                    // ZipVoice 预设音色（逐句合成，下句自动生效）
                     Picker("音色", selection: Binding(
                         get: { novellaTTSEngine.selectedVoiceId },
                         set: { novellaTTSEngine.selectVoice(id: $0) }
@@ -781,8 +781,10 @@ struct ReaderMenuView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    Spacer()
+                    Text("下句生效").font(.caption2).foregroundColor(.secondary)
                 } else {
-                    // 系统 AVSpeech 声音
+                    // 系统 AVSpeech 声音（下次朗读生效）
                     Picker("发音", selection: Binding(
                         get: { viewModel.ttsManager.selectedVoice?.identifier ?? "" },
                         set: { id in

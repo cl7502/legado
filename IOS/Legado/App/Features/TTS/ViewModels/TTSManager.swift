@@ -14,11 +14,10 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject, TTSPr
     /// 当前朗读字符范围（在 currentText 中的偏移，用于正文高亮）
     @Published private(set) var speakingRange: NSRange? = nil
 
-    /// 用户选定的声音（nil = 系统默认）
+    /// 用户选定的声音（nil = 系统默认）；切换后下一次 speak 生效
     var selectedVoice: AVSpeechSynthesisVoice? = nil {
         didSet {
             ReaderSettings.shared.ttsVoiceIdentifier = selectedVoice?.identifier ?? ""
-            restartForSettingChange()
         }
     }
 
@@ -171,12 +170,12 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject, TTSPr
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
                            didFinish utterance: AVSpeechUtterance) {
-        isSpeaking = false
         DispatchQueue.main.async {
+            self.isSpeaking = false
             self.isPlaying = false
             self.speakingRange = nil
+            self.onChapterFinish?()
         }
-        onChapterFinish?()
     }
 
     /// 将当前朗读的小范围扩展到整句，再发布给 UI 高亮

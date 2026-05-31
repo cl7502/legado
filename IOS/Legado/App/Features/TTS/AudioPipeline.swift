@@ -40,8 +40,8 @@ final class AudioPipeline {
     }
 
     func stop() {
-        playerNode.stop()
-        engine.reset()
+        if playerNode.isPlaying { playerNode.stop() }
+        if engine.isRunning { engine.stop() }
         isSetup = false
     }
 

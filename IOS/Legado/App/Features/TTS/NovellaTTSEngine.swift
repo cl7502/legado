@@ -24,13 +24,12 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
     /// 当前选中的音色 ID（对应 VoiceConfig.id）
     @Published private(set) var selectedVoiceId: String
 
-    /// 切换音色；若正在朗读则自动重启
+    /// 切换音色；ZipVoice 逐句合成，下一句自动生效，无需重启流水线
     func selectVoice(id: String) {
         guard let voice = availableVoices.first(where: { $0.id == id }) else { return }
         narratorVoice = voice
         selectedVoiceId = id
         ReaderSettings.shared.ttsZipVoiceId = id
-        restartForSettingChange()
     }
 
     // MARK: - 私有
