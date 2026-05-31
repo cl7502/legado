@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		ZIPVOICE00BUILD00001A /* sherpa-onnx-zipvoice-distill-int8-zh-en-emilia in Resources */ = {isa = PBXBuildFile; fileRef = C708ED652FCBF0E000E493E9 /* sherpa-onnx-zipvoice-distill-int8-zh-en-emilia */; };
+		VOICEREFS0BUILD00001A /* VoiceReferences in Resources */ = {isa = PBXBuildFile; fileRef = C708EED72FCBF11F00E493E9 /* VoiceReferences */; };
 		0C11DA470551673E80043DF1 /* JSONPathEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886B2604AAAF3D48A1EBEEAF /* JSONPathEngine.swift */; };
 		0E2583963C526A553517E813 /* RuleExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB76FF5ED2833C59D25F9956 /* RuleExecutor.swift */; };
 		1455715C1E7840E8A605D9BB /* ExploreDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */; };
@@ -618,6 +620,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				PSVCE0000000000000002B /* preset_voices.json in Resources */,
+				ZIPVOICE00BUILD00001A /* sherpa-onnx-zipvoice-distill-int8-zh-en-emilia in Resources */,
+				VOICEREFS0BUILD00001A /* VoiceReferences in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
