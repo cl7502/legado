@@ -71,6 +71,7 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
         // ⚡ split 用原始文本，保持 charOffset 坐标系一致
         sentenceQueue = splitter.split(text, baseOffset: 0)
         currentIndex  = 0
+        isStopped     = false   // 允许 enqueue
 
         DispatchQueue.main.async {
             self.isPlaying  = true
@@ -153,14 +154,14 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
                 do {
                     let chunk = try await self.engine.synthesize(
                         text: ttsText, voice: narratorVoice, style: .normal)
-                    // ⚡ 把 voice.basePitch 合入播放 style，让 AudioPipeline 通过
-                    // AVAudioUnitTimePitch 应用音调偏移（child/elder/villain 等角色音调差异在此生效）
                     let voiceStyle = SpeakingStyle(
                         rateMultiplier:  1.0,
                         pitchOffset:     narratorVoice.basePitch,
                         volumeMultiplier: 1.0
                     )
                     await MainActor.run {
+                        // 飞行中的 synthesis 完成时若已调用 stop()，丢弃结果
+                        guard !self.isStopped else { return }
                         self.pipeline.enqueue(chunk: chunk, sentence: sentence, style: voiceStyle)
                     }
                 } catch {
@@ -187,7 +188,10 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol {
         }
     }
 
+    private var isStopped = true   // 飞行中的 synthesis 完成后检查此 flag，阻止 enqueue
+
     private func stopInternal() {
+        isStopped = true                           // 同步置位，Task 完成后 enqueue 会被拦截
         generationTask?.cancel(); generationTask = nil
         pipeline.stop()
         sentenceQueue = []; currentIndex = 0; onChapterFinish = nil
