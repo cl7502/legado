@@ -76,7 +76,7 @@ final class SherpaZipVoiceEngine: TTSEngine {
         genConfig.referenceSampleRate = refSampleRate
         genConfig.referenceText       = voice.refText
         genConfig.speed               = style.rateMultiplier * voice.baseRate
-        genConfig.numSteps            = 32   // ZipVoice Flow Matching 步数（高质量）
+        genConfig.numSteps            = 16   // 16步：约2-4秒/句（4步≈1秒，32步≈8-20秒）
 
         let audio = tts.generateWithConfig(text: text, config: genConfig,
                                            callback: nil, arg: nil)

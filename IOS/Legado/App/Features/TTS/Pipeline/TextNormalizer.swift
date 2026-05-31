@@ -20,8 +20,10 @@ final class TextNormalizer {
     // MARK: - Private rules
 
     private func removeHiddenChars(_ s: String) -> String {
+        // \u{3000} = 全角空格（中文段落缩进），ZipVoice lexicon 无法识别，替换为普通空格
         let hidden: [Character] = ["\u{200B}", "\u{FEFF}", "\u{00A0}"]
         return s.filter { !hidden.contains($0) }
+                .replacingOccurrences(of: "\u{3000}", with: " ")
     }
 
     private func normalizeEllipsis(_ s: String) -> String {
