@@ -320,6 +320,21 @@ struct ReaderView: View {
                     .frame(width: geo.size.width / 3)
             }
         }
+        // 左划 → 下一页，右划 → 上一页；simultaneousGesture 与点击手势不互斥
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                .onEnded { value in
+                    let h = value.translation.width
+                    let v = value.translation.height
+                    // 只响应水平方向为主的划动，避免上下滚动误触发翻页
+                    guard abs(h) > abs(v), abs(h) > 50 else { return }
+                    if h < 0 {
+                        withAnimation(.easeInOut(duration: 0.2)) { viewModel.nextPage() }
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.2)) { viewModel.prevPage() }
+                    }
+                }
+        )
         // 不能用 .ignoresSafeArea()：会扩展到全屏并拦截 header 区域的 "<" 按钮
     }
 
