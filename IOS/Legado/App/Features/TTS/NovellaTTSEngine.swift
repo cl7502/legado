@@ -158,7 +158,8 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol, @unchecked Sendable
                 let r = remaining
                 DispatchQueue.main.async { self?.remainingSeconds = r }
             }
-            self?.stop()
+            // stop() 修改 sentenceQueue/currentIndex，必须在主线程执行以避免竞态
+            DispatchQueue.main.async { self?.stop() }
         }
     }
 
@@ -245,9 +246,14 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol, @unchecked Sendable
 
     private func setupRemoteCommandCenter() {
         let cc = MPRemoteCommandCenter.shared()
-        cc.playCommand.addTarget  { [unowned self] _ in resume(); return .success }
-        cc.pauseCommand.addTarget { [unowned self] _ in pause();  return .success }
-        cc.togglePlayPauseCommand.addTarget { [unowned self] _ in
+        // removeTarget(nil) 先清除所有已注册 handler，防止多次调用累积注册
+        cc.playCommand.removeTarget(nil)
+        cc.pauseCommand.removeTarget(nil)
+        cc.togglePlayPauseCommand.removeTarget(nil)
+        cc.playCommand.addTarget  { [weak self] _ in self?.resume(); return .success }
+        cc.pauseCommand.addTarget { [weak self] _ in self?.pause();  return .success }
+        cc.togglePlayPauseCommand.addTarget { [weak self] _ in
+            guard let self else { return .commandFailed }
             isPlaying ? pause() : resume(); return .success
         }
     }

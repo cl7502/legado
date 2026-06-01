@@ -151,9 +151,13 @@ class TTSManager: NSObject, AVSpeechSynthesizerDelegate, ObservableObject, TTSPr
 
     private func setupRemoteCommandCenter() {
         let cc = MPRemoteCommandCenter.shared()
-        cc.playCommand.addTarget  { [unowned self] _ in resume(); return .success }
-        cc.pauseCommand.addTarget { [unowned self] _ in pause();  return .success }
-        cc.togglePlayPauseCommand.addTarget { [unowned self] _ in
+        cc.playCommand.removeTarget(nil)
+        cc.pauseCommand.removeTarget(nil)
+        cc.togglePlayPauseCommand.removeTarget(nil)
+        cc.playCommand.addTarget  { [weak self] _ in self?.resume(); return .success }
+        cc.pauseCommand.addTarget { [weak self] _ in self?.pause();  return .success }
+        cc.togglePlayPauseCommand.addTarget { [weak self] _ in
+            guard let self else { return .commandFailed }
             isSpeaking ? pause() : resume(); return .success
         }
     }

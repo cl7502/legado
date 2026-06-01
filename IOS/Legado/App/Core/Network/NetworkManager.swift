@@ -17,10 +17,13 @@ actor DomainRateLimiter {
     func acquire(domain: String, maxConcurrent: Int, intervalMs: Int) async {
         while (states[domain]?.inflight ?? 0) >= maxConcurrent {
             try? await Task.sleep(nanoseconds: 10_000_000)
+            if Task.isCancelled { return }
         }
         if intervalMs > 0, let last = states[domain]?.lastReleaseDate {
             let remainMs = Double(intervalMs) - Date().timeIntervalSince(last) * 1000
-            if remainMs > 0 { try? await Task.sleep(nanoseconds: UInt64(remainMs * 1_000_000)) }
+            if remainMs > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(remainMs * 1_000_000))
+            }
         }
         var state = states[domain] ?? DomainState()
         state.inflight += 1

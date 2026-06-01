@@ -707,6 +707,7 @@ struct ReaderMenuView: View {
                 )
 
                 Button {
+                    guard !viewModel.chapters.isEmpty else { return }
                     let last = viewModel.chapters.count - 1
                     viewModel.jumpToChapter(min(last, viewModel.currentChapterIndex + 1),
                                             keepMenuOpen: true)

@@ -20,8 +20,10 @@ final class AudioPipeline {
     }
 
     func enqueue(chunk: AudioChunk, sentence: SentenceUnit, style: SpeakingStyle) {
-        // setup 如果还没运行（例如 stop 后首次 enqueue）
-        if !isSetup { try? setup() }
+        if !isSetup {
+            do { try setup() } catch { return }  // setup 失败则丢弃，不让 play() 在死引擎上调用
+        }
+        guard engine.isRunning else { return }
         guard let buffer = makeBuffer(from: chunk) else { return }
         applyStyle(style)
         playerNode.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in

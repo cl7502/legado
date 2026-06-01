@@ -378,7 +378,7 @@ class ReaderViewModel: ObservableObject {
     }
     
     func loadChapterContent(at index: Int) async {
-        guard index < chapters.count else { return }
+        guard index >= 0, index < chapters.count else { return }
 
         // 内存命中 — 最快路径
         if chapterContents[index] != nil {
@@ -719,6 +719,7 @@ class ReaderViewModel: ObservableObject {
     }
 
     func jumpToChapter(_ index: Int, keepMenuOpen: Bool = false) {
+        guard index >= 0, index < chapters.count else { return }
         cancelPrefetchTasks()  // 取消旧预缓存，当前章节优先
         currentChapterIndex = index
         currentPageIndex = 0

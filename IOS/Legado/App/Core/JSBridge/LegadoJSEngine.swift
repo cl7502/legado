@@ -11,8 +11,14 @@ class LegadoJSEngine {
     // Serial queue: all JS evaluations happen sequentially on one thread.
     let queue = DispatchQueue(label: "com.legado.jsengine", qos: .userInteractive)
 
+    // 用于检测是否已在 jsengine 串行队列上执行，防止 queue.sync 重入死锁
+    // 场景：JS 脚本调用 java.ajax("@js:...") → AnalyzeUrl.parse → evaluateRule
+    // 若不检测，第二次 queue.sync 对同一串行队列重入 → 永久死锁，Watchdog SIGKILL
+    private let queueKey = DispatchSpecificKey<Bool>()
+
     init() {
         self.javaHelper = JSJavaHelper()
+        queue.setSpecific(key: queueKey, value: true)
     }
 
     // MARK: - Fresh-context factory
@@ -158,7 +164,9 @@ class LegadoJSEngine {
         var ctx = analyzeContext
         var resultString: String?
 
-        queue.sync { [weak self] in
+        let alreadyOnQueue = DispatchQueue.getSpecific(key: queueKey) == true
+
+        let block = { [weak self] in
             guard let self = self else { return }
 
             // Bind the helper to the current evaluation context
@@ -199,6 +207,13 @@ class LegadoJSEngine {
             } else {
                 resultString = jsValue?.toString()
             }
+        }
+
+        // 若已在 jsengine 队列上（即嵌套调用），直接执行避免 queue.sync 重入死锁
+        if alreadyOnQueue {
+            block()
+        } else {
+            queue.sync { block() }
         }
 
         analyzeContext.variables = ctx.variables
