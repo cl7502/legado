@@ -4,8 +4,8 @@ import SwiftUI
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @AppStorage("readerPreset") private var readerPreset: String = "normal"
-    @StateObject private var syncManager = WebDAVSyncManager.shared
-    @StateObject private var webdavSettings = WebDAVSettings.shared
+    @ObservedObject private var syncManager = WebDAVSyncManager.shared
+    @ObservedObject private var webdavSettings = WebDAVSettings.shared
     @State private var webdavPassword = ""
     @State private var showTestResult = false
     @State private var testResultMessage = ""
@@ -71,26 +71,11 @@ struct SettingsView: View {
                         .autocapitalization(.none)
                         .autocorrectionDisabled()
                     SecureField("密码", text: $webdavPassword)
-                        .onAppear { webdavPassword = webdavSettings.password }
+                        .onAppear { if webdavPassword.isEmpty { webdavPassword = webdavSettings.password } }
                         .onChange(of: webdavPassword) { webdavSettings.password = $0 }
 
                     Button {
                         isTesting = true
-                        Task {
-                            do {
-                                let client = try WebDAVClient(
-                                    serverURL: webdavSettings.normalizedServerURL,
-                                    username:  webdavSettings.username,
-                                    password:  webdavSettings.password
-                                )
-                                _ = try await client.exists(path: "legado/metadata.json")
-                                testResultMessage = "✅ 连接成功"
-                            } catch {
-                                testResultMessage = "❌ \(error.localizedDescription)"
-                            }
-                            isTesting = false
-                            showTestResult = true
-                        }
                     } label: {
                         HStack {
                             Text("测试连接")
@@ -98,6 +83,22 @@ struct SettingsView: View {
                         }
                     }
                     .disabled(isTesting || !webdavSettings.isConfigured)
+                    .task(id: isTesting) {
+                        guard isTesting else { return }
+                        do {
+                            let client = try WebDAVClient(
+                                serverURL: webdavSettings.normalizedServerURL,
+                                username:  webdavSettings.username,
+                                password:  webdavSettings.password
+                            )
+                            _ = try await client.exists(path: "legado/metadata.json")
+                            testResultMessage = "✅ 连接成功"
+                        } catch {
+                            testResultMessage = "❌ \(error.localizedDescription)"
+                        }
+                        isTesting = false
+                        showTestResult = true
+                    }
                     .alert("连接测试", isPresented: $showTestResult) {
                         Button("确定", role: .cancel) {}
                     } message: { Text(testResultMessage) }

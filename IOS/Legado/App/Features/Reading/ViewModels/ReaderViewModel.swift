@@ -785,7 +785,7 @@ class ReaderViewModel: ObservableObject {
             await loadChapterContent(at: currentChapterIndex)
             isLoading = false
             prefetch(around: currentChapterIndex)
+            WebDAVSyncManager.shared.onChapterSwitched()
         }
-        WebDAVSyncManager.shared.onChapterSwitched()
     }
 }

@@ -1,5 +1,6 @@
 // IOS/Legado/App/Core/Sync/WebDAVSyncManager.swift
 import Foundation
+import UIKit
 
 @MainActor
 final class WebDAVSyncManager: ObservableObject {
@@ -27,7 +28,6 @@ final class WebDAVSyncManager: ObservableObject {
     private let settings = WebDAVSettings.shared
     private let db       = DatabaseManager.shared
     private var syncTask: Task<Void, Never>? = nil
-    private var isSyncing = false
     private var chapterSwitchCount = 0
     private let autoSyncChapterInterval = 10
 
@@ -40,7 +40,8 @@ final class WebDAVSyncManager: ObservableObject {
     }
 
     func uploadIfNeeded() {
-        guard settings.isConfigured, settings.autoSync, !isSyncing else { return }
+        guard settings.isConfigured, settings.autoSync, state != .syncing else { return }
+        syncTask?.cancel()
         syncTask = Task { await performSync(force: false) }
     }
 
@@ -54,16 +55,27 @@ final class WebDAVSyncManager: ObservableObject {
 
     func checkOnLaunch() {
         guard settings.isConfigured, settings.autoSync else { return }
+        syncTask?.cancel()
         syncTask = Task { await performSync(force: false) }
     }
 
     // MARK: - Sync Logic
 
     private func performSync(force: Bool) async {
-        isSyncing = true
+        // 注册后台任务，防止 App 进入后台时上传被系统截断导致 metadata 与实体不一致
+        var bgTask = UIBackgroundTaskIdentifier.invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "WebDAV Sync") { [weak self] in
+            self?.syncTask?.cancel()
+            UIApplication.shared.endBackgroundTask(bgTask)
+            bgTask = .invalid
+        }
+        defer {
+            UIApplication.shared.endBackgroundTask(bgTask)
+            bgTask = .invalid
+        }
+
         state = .syncing
         defer {
-            isSyncing = false
             if state == .syncing { state = .idle }
         }
 
