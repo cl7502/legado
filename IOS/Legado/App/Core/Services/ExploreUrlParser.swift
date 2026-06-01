@@ -37,15 +37,31 @@ struct ExploreUrlParser {
         }
 
         // JSON array: [{"title":"...","url":"..."},...]
-        if raw.hasPrefix("["), let data = raw.data(using: .utf8),
-           let arr = try? JSONDecoder().decode([ExploreCategory].self, from: data) {
-            let cats = arr.compactMap { cat -> ExploreCategory? in
-                let u = cat.url.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !u.isEmpty else { return nil }
-                let t = cat.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                return ExploreCategory(title: t.isEmpty ? "全部" : t, url: u)
+        // 也处理 JS 对象字面量格式（单引号、无引号 key），通过 JS 引擎规范化为 JSON
+        if raw.hasPrefix("[") {
+            if let arr = decodeExploreArray(raw) {
+                let cats = arr.compactMap { cat -> ExploreCategory? in
+                    let u = cat.url.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !u.isEmpty else { return nil }
+                    let t = cat.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return ExploreCategory(title: t.isEmpty ? "全部" : t, url: u)
+                }
+                if !cats.isEmpty { return deduplicated(cats) }
             }
-            if !cats.isEmpty { return deduplicated(cats) }
+            // JSON 解析失败时通过 JS 引擎规范化（处理单引号、无引号 key 的 JS 对象字面量）
+            var ctx = context
+            let jsCode = "JSON.stringify(\(raw))"
+            if let jsonStr = LegadoJSEngine.shared.evaluateRule(jsCode, in: &ctx),
+               jsonStr.hasPrefix("["),
+               let arr = decodeExploreArray(jsonStr) {
+                let cats = arr.compactMap { cat -> ExploreCategory? in
+                    let u = cat.url.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !u.isEmpty else { return nil }
+                    let t = cat.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return ExploreCategory(title: t.isEmpty ? "全部" : t, url: u)
+                }
+                if !cats.isEmpty { return deduplicated(cats) }
+            }
         }
 
         // Newline-separated: "名称::URL" | "名称,http://..." | plain URL per line
@@ -81,5 +97,21 @@ struct ExploreUrlParser {
     private static func deduplicated(_ cats: [ExploreCategory]) -> [ExploreCategory] {
         var seen = Set<String>()
         return cats.filter { seen.insert($0.id).inserted }
+    }
+
+    /// 解码 explore JSON 数组，忽略书源中额外的 style 等字段
+    private static func decodeExploreArray(_ json: String) -> [ExploreCategory]? {
+        guard let data = json.data(using: .utf8) else { return nil }
+        // 先尝试直接解码（标准 JSON）
+        if let arr = try? JSONDecoder().decode([ExploreCategory].self, from: data) { return arr }
+        // 尝试宽松解码：只提取 title/url，忽略 style 等额外字段
+        if let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            return raw.compactMap { dict -> ExploreCategory? in
+                let title = dict["title"] as? String ?? ""
+                let url   = dict["url"]   as? String ?? ""
+                return ExploreCategory(title: title, url: url)
+            }
+        }
+        return nil
     }
 }
