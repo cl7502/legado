@@ -1,5 +1,21 @@
 import SwiftUI
 
+// MARK: - 翻页动画类型
+
+enum PageAnimation: String, CaseIterable {
+    case slide = "slide"   // 平推（TabView 默认）
+    case cover = "cover"   // 覆盖滑入（新页从侧面滑入盖住旧页）
+    case none  = "none"    // 无动画（瞬间切换）
+
+    var displayName: String {
+        switch self {
+        case .slide: return "平推"
+        case .cover: return "覆盖"
+        case .none:  return "无动画"
+        }
+    }
+}
+
 struct ReaderTheme: Identifiable, Equatable {
     let id: String
     let name: String
@@ -129,6 +145,13 @@ class ReaderSettings: ObservableObject {
 
     /// 高质量 TTS（Kokoro）开关
     @AppStorage("reader.useNovellaTTS") var useNovellaTTS: Bool = false
+
+    /// 翻页动画类型
+    @AppStorage("reader.pageAnimation") private var _pageAnimationRaw: String = PageAnimation.slide.rawValue
+    var pageAnimation: PageAnimation {
+        get { PageAnimation(rawValue: _pageAnimationRaw) ?? .slide }
+        set { _pageAnimationRaw = newValue.rawValue }
+    }
 
     /// ZipVoice 音色 ID（对应 preset_voices.json 中的 id 字段）
     @AppStorage("reader.ttsZipVoiceId") var ttsZipVoiceId: String = "narrator"

@@ -35,6 +35,12 @@ struct ReaderView: View {
     // 自动翻页
     @State private var autoScrollTimer: Timer? = nil
 
+    // 覆盖翻页动画
+    @State private var coverContent: String? = nil
+    @State private var coverOffset: CGFloat = 0
+    @State private var coverIsFirst: Bool = false
+    @State private var isCoverAnimating = false
+
     var body: some View {
         ZStack {
             settings.currentTheme.backgroundColor.ignoresSafeArea()
@@ -155,6 +161,21 @@ struct ReaderView: View {
                 // 三段式点击区（仅在菜单隐藏时，且只覆盖正文区域）
                 if !viewModel.showingMenu {
                     tapZones
+                }
+
+                // 覆盖翻页动画 overlay（位于 tapZones 下方，避免拦截手势）
+                if let content = coverContent {
+                    ReaderPageView(
+                        content: content,
+                        chapterTitle: currentChapterTitle,
+                        sourceOrigin: viewModel.book.origin,
+                        pageStartOffset: 0,
+                        highlights: viewModel.currentHighlights,
+                        onHighlight: { _, _, _, _ in },
+                        isFirstPage: coverIsFirst
+                    )
+                    .offset(x: coverOffset)
+                    .allowsHitTesting(false)   // 动画期间不拦截手势
                 }
             }
 
@@ -310,13 +331,13 @@ struct ReaderView: View {
         GeometryReader { geo in
             HStack(spacing: 0) {
                 Color.clear.contentShape(Rectangle())
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { viewModel.prevPage() } }
+                    .onTapGesture { turnPrev() }
                     .frame(width: geo.size.width / 3)
                 Color.clear.contentShape(Rectangle())
                     .onTapGesture { withAnimation { viewModel.showingMenu = true } }
                     .frame(width: geo.size.width / 3)
                 Color.clear.contentShape(Rectangle())
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { viewModel.nextPage() } }
+                    .onTapGesture { turnNext() }
                     .frame(width: geo.size.width / 3)
             }
         }
@@ -328,11 +349,7 @@ struct ReaderView: View {
                     let v = value.translation.height
                     // 只响应水平方向为主的划动，避免上下滚动误触发翻页
                     guard abs(h) > abs(v), abs(h) > 50 else { return }
-                    if h < 0 {
-                        withAnimation(.easeInOut(duration: 0.2)) { viewModel.nextPage() }
-                    } else {
-                        withAnimation(.easeInOut(duration: 0.2)) { viewModel.prevPage() }
-                    }
+                    if h < 0 { turnNext() } else { turnPrev() }
                 }
         )
         // 不能用 .ignoresSafeArea()：会扩展到全屏并拦截 header 区域的 "<" 按钮
@@ -423,9 +440,9 @@ struct ReaderView: View {
             DispatchQueue.main.async {
                 guard settings.volumePageTurn else { return }
                 if newVol > oldVol + 0.01 {
-                    withAnimation(.easeInOut(duration: 0.2)) { viewModel.nextPage() }
+                    turnNext()
                 } else if newVol < oldVol - 0.01 {
-                    withAnimation(.easeInOut(duration: 0.2)) { viewModel.prevPage() }
+                    turnPrev()
                 }
                 // 恢复音量到中间值，保证两个方向都能继续使用
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -460,6 +477,74 @@ struct ReaderView: View {
     private func stopAutoScroll() {
         autoScrollTimer?.invalidate()
         autoScrollTimer = nil
+    }
+
+    // MARK: - 翻页动画分发
+
+    private let coverDuration: Double = 0.28
+
+    /// 所有"下一页"操作的统一入口，根据设置走不同动画
+    func turnNext() {
+        guard !isCoverAnimating else { return }
+        switch settings.pageAnimation {
+        case .slide:
+            withAnimation(.easeInOut(duration: 0.2)) { viewModel.nextPage() }
+        case .none:
+            var t = Transaction(animation: nil); t.disablesAnimations = true
+            withTransaction(t) { viewModel.nextPage() }
+        case .cover:
+            let pages = viewModel.currentPages
+            let nextIdx = viewModel.currentPageIndex + 1
+            if nextIdx < pages.count {
+                performCover(content: pages[nextIdx], isFirst: nextIdx == 0, direction: 1) {
+                    var t = Transaction(animation: nil); t.disablesAnimations = true
+                    withTransaction(t) { viewModel.nextPage() }
+                }
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) { viewModel.nextPage() }
+            }
+        }
+    }
+
+    /// 所有"上一页"操作的统一入口
+    func turnPrev() {
+        guard !isCoverAnimating else { return }
+        switch settings.pageAnimation {
+        case .slide:
+            withAnimation(.easeInOut(duration: 0.2)) { viewModel.prevPage() }
+        case .none:
+            var t = Transaction(animation: nil); t.disablesAnimations = true
+            withTransaction(t) { viewModel.prevPage() }
+        case .cover:
+            let pages = viewModel.currentPages
+            let prevIdx = viewModel.currentPageIndex - 1
+            if prevIdx >= 0 {
+                performCover(content: pages[prevIdx], isFirst: prevIdx == 0, direction: -1) {
+                    var t = Transaction(animation: nil); t.disablesAnimations = true
+                    withTransaction(t) { viewModel.prevPage() }
+                }
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) { viewModel.prevPage() }
+            }
+        }
+    }
+
+    /// 执行覆盖动画：目标页从侧面滑入，动画结束后更新实际 index
+    private func performCover(content: String, isFirst: Bool, direction: CGFloat,
+                               completion: @escaping () -> Void) {
+        let screenW = UIScreen.main.bounds.width
+        isCoverAnimating = true
+        coverContent = content
+        coverIsFirst  = isFirst
+        coverOffset   = direction * screenW          // 从屏外开始
+        withAnimation(.easeInOut(duration: coverDuration)) {
+            coverOffset = 0                          // 滑入中心
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + coverDuration + 0.02) {
+            completion()                             // 无动画更新底层 TabView 索引
+            coverContent = nil
+            isCoverAnimating = false
+        }
     }
 }
 
@@ -1328,6 +1413,19 @@ struct ReadingPreferencesView: View {
                     if ModelManager.isAvailable(.zipVoiceDistillInt8) {
                         Toggle("高质量TTS（ZipVoice）", isOn: $settings.useNovellaTTS)
                     }
+                }
+
+                // ── 翻页动画 ──────────────────────────────────
+                Section("翻页动画") {
+                    Picker("动画效果", selection: Binding(
+                        get: { settings.pageAnimation },
+                        set: { settings.pageAnimation = $0 }
+                    )) {
+                        ForEach(PageAnimation.allCases, id: \.self) { anim in
+                            Text(anim.displayName).tag(anim)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                 }
 
                 // ── 自动翻页 ──────────────────────────────────
