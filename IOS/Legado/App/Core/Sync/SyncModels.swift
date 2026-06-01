@@ -54,6 +54,7 @@ struct SyncBookEntry: Codable {
         book.coverUrl   = coverUrl
         book.intro      = intro
         book.tocUrl     = tocUrl
+        book.durChapterTime = lastUpdatedAt
     }
 }
 

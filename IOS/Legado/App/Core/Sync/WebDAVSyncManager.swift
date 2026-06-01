@@ -27,6 +27,7 @@ final class WebDAVSyncManager: ObservableObject {
     private let settings = WebDAVSettings.shared
     private let db       = DatabaseManager.shared
     private var syncTask: Task<Void, Never>? = nil
+    private var isSyncing = false
     private var chapterSwitchCount = 0
     private let autoSyncChapterInterval = 10
 
@@ -39,8 +40,7 @@ final class WebDAVSyncManager: ObservableObject {
     }
 
     func uploadIfNeeded() {
-        guard settings.isConfigured, settings.autoSync else { return }
-        guard syncTask == nil || syncTask!.isCancelled else { return }
+        guard settings.isConfigured, settings.autoSync, !isSyncing else { return }
         syncTask = Task { await performSync(force: false) }
     }
 
@@ -60,8 +60,12 @@ final class WebDAVSyncManager: ObservableObject {
     // MARK: - Sync Logic
 
     private func performSync(force: Bool) async {
+        isSyncing = true
         state = .syncing
-        defer { if state == .syncing { state = .idle } }
+        defer {
+            isSyncing = false
+            if state == .syncing { state = .idle }
+        }
 
         do {
             let client = try WebDAVClient(
@@ -85,12 +89,14 @@ final class WebDAVSyncManager: ObservableObject {
             let localTs = settings.localTimestamps
             let now     = Date().milliseconds
             var uploadedFiles: [String] = []
+            var uploadTimestamps: [String: Int64] = [:]
 
             // 3. 处理每个实体
             for entity in ["books", "reading_progress", "bookmarks", "highlights"] {
                 let remoteTs = remoteMeta.files[entity] ?? 0
                 let localT   = localTs[entity] ?? 0
 
+                // 下载阶段：服务端有更新数据时先拉取合并
                 if force || remoteTs > localT {
                     if try await client.exists(path: "legado/\(entity).json") {
                         let data = try await client.get(path: "legado/\(entity).json")
@@ -99,10 +105,12 @@ final class WebDAVSyncManager: ObservableObject {
                     }
                 }
 
+                // 上传阶段：本地不落后于服务端时上传（包含 force、localT>=remoteTs、首次同步）
                 if force || localT >= remoteTs {
                     let data = try await exportEntity(entity)
                     try await client.put(path: "legado/\(entity).json", data: data)
                     settings.updateLocalTimestamp(for: entity, to: now)
+                    uploadTimestamps[entity] = now
                     uploadedFiles.append(entity)
                 }
             }
@@ -110,9 +118,7 @@ final class WebDAVSyncManager: ObservableObject {
             // 4. 更新 metadata
             var newMeta = remoteMeta
             newMeta.updatedAt = now
-            for f in uploadedFiles {
-                newMeta.files[f] = settings.localTimestamps[f] ?? now
-            }
+            for f in uploadedFiles { newMeta.files[f] = uploadTimestamps[f] ?? now }
             let metaData = try JSONEncoder().encode(newMeta)
             try await client.put(path: "legado/metadata.json", data: metaData)
 

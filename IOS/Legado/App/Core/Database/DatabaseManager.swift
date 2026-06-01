@@ -402,6 +402,7 @@ extension DatabaseManager {
                 newBook.coverUrl    = entry.coverUrl
                 newBook.intro       = entry.intro
                 newBook.tocUrl      = entry.tocUrl
+                newBook.durChapterTime = entry.lastUpdatedAt
                 try await saveBook(newBook)
             }
         }
@@ -424,10 +425,10 @@ extension DatabaseManager {
     func importBookmarks(_ entries: [SyncBookmarkEntry]) async throws {
         let existing = try await exportAllBookmarks()
         let localKeys = Set(existing.map {
-            "\($0.bookUrl)_\($0.chapterIndex)_\(Int64($0.createdAt.timeIntervalSince1970 * 1000))"
+            "\($0.bookUrl)_\($0.chapterIndex)_\(Int64($0.createdAt.timeIntervalSince1970))"
         })
         for entry in entries {
-            let key = "\(entry.bookUrl)_\(entry.chapterIndex)_\(entry.createdAt)"
+            let key = "\(entry.bookUrl)_\(entry.chapterIndex)_\(entry.createdAt / 1000)"
             if !localKeys.contains(key) {
                 try await saveBookmark(entry.toBookmark())
             }
@@ -436,9 +437,9 @@ extension DatabaseManager {
 
     func importHighlights(_ entries: [SyncHighlightEntry]) async throws {
         let existing = try await exportAllHighlights()
-        let localKeys = Set(existing.map { "\($0.bookUrl)_\($0.chapterIndex)_\($0.startOffset)" })
+        let localKeys = Set(existing.map { "\($0.bookUrl)_\($0.chapterIndex)_\($0.startOffset)_\($0.endOffset)" })
         for entry in entries {
-            let key = "\(entry.bookUrl)_\(entry.chapterIndex)_\(entry.startOffset)"
+            let key = "\(entry.bookUrl)_\(entry.chapterIndex)_\(entry.startOffset)_\(entry.endOffset)"
             if !localKeys.contains(key) {
                 try await saveHighlight(entry.toHighlight())
             }

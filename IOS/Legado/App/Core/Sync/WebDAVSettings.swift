@@ -6,7 +6,7 @@ import Security
 
 enum KeychainHelper {
     static func set(_ value: String, service: String, account: String) {
-        let data = value.data(using: .utf8)!
+        guard let data = value.data(using: .utf8) else { return }
         let query: [CFString: Any] = [
             kSecClass:       kSecClassGenericPassword,
             kSecAttrService: service,

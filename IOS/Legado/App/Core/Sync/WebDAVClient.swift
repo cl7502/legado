@@ -69,9 +69,9 @@ actor WebDAVClient {
         req.httpMethod = "MKCOL"
         req.setValue(authHeader, forHTTPHeaderField: "Authorization")
         let (_, resp) = try await session.data(for: req)
-        // 201 Created 或 405 Method Not Allowed（目录已存在）均视为成功
-        if let http = resp as? HTTPURLResponse,
-           http.statusCode != 201, http.statusCode != 405 {
+        // 200/201 Created、301 Moved、405 Method Not Allowed（目录已存在）、409 Conflict 均视为成功
+        let successCodes: Set<Int> = [200, 201, 301, 405, 409]
+        if let http = resp as? HTTPURLResponse, !successCodes.contains(http.statusCode) {
             try check(resp)
         }
     }
@@ -85,7 +85,12 @@ actor WebDAVClient {
         req.setValue(authHeader, forHTTPHeaderField: "Authorization")
         let (_, resp) = try await session.data(for: req)
         guard let http = resp as? HTTPURLResponse else { return false }
-        return http.statusCode == 200
+        switch http.statusCode {
+        case 200, 204:  return true
+        case 404:       return false
+        case 401:       throw WebDAVError.authFailed
+        default:        throw WebDAVError.serverError(http.statusCode)
+        }
     }
 
     // MARK: - Private
