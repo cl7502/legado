@@ -38,6 +38,10 @@ class ReaderViewModel: ObservableObject {
     @Published var ttsIsPlaying: Bool       = false
     @Published var ttsRemainingSeconds: Int? = nil
 
+    /// TTS 起始偏移：从当前页开始朗读时，speakingRange 需要加上此偏移
+    /// 对标 Android ReadBook 的 startPos 概念
+    private var ttsStartOffset: Int = 0
+
     init(book: Book) {
         self.book = book
         self.currentChapterIndex = book.durChapterIndex
@@ -48,18 +52,26 @@ class ReaderViewModel: ObservableObject {
         bindTTSStateForwarding()
     }
 
-    // TTS 朗读推进时自动翻页
+    // TTS 朗读推进时自动翻页（speakingRange 已包含 ttsStartOffset）
     private func subscribeToTTSSpeakingRange() {
         if let novella = ttsManager as? NovellaTTSEngine {
             novella.$speakingRange
                 .compactMap { $0 }
                 .receive(on: DispatchQueue.main)
+                .map { [weak self] range -> NSRange in
+                    let base = self?.ttsStartOffset ?? 0
+                    return NSRange(location: range.location + base, length: range.length)
+                }
                 .sink { [weak self] range in self?.updatePageForTTSRange(range) }
                 .store(in: &cancellables)
         } else if let system = ttsManager as? TTSManager {
             system.$speakingRange
                 .compactMap { $0 }
                 .receive(on: DispatchQueue.main)
+                .map { [weak self] range -> NSRange in
+                    let base = self?.ttsStartOffset ?? 0
+                    return NSRange(location: range.location + base, length: range.length)
+                }
                 .sink { [weak self] range in self?.updatePageForTTSRange(range) }
                 .store(in: &cancellables)
         }
@@ -147,15 +159,32 @@ class ReaderViewModel: ObservableObject {
     
     func startTTS() {
         guard let rawContent = chapterContents[currentChapterIndex],
-              currentChapterIndex < chapters.count else { return }
+              currentChapterIndex < chapters.count else {
+            // 章节内容未加载，静默失败但打印诊断日志
+            print("⚠️ [TTS] 无法启动朗读：章节内容未加载（index=\(currentChapterIndex)，总章节=\(chapters.count)）")
+            isTTSEnabled = false
+            return
+        }
         isTTSEnabled = true
 
         // 与分页器保持相同的文本规范化，确保 speakingRange 偏移和 pageStartOffset 对齐
         let normalizedContent = rawContent.replacingOccurrences(of: "\n\n", with: "\n")
         let title = chapters[currentChapterIndex].title
 
-        ttsManager.speak(normalizedContent, bookName: book.name, chapterTitle: title) { [weak self] in
+        // 从当前阅读页开始朗读（对标 Android ReadBook 从当前位置开始）
+        // currentPageOffsets 保存每页在 normalizedContent 中的起始字符偏移
+        let pageOffset = currentPageIndex < currentPageOffsets.count
+            ? currentPageOffsets[currentPageIndex] : 0
+        ttsStartOffset = pageOffset
+
+        // 传入从当前页起始的文本；speakingRange 会在订阅回调里加回 pageOffset
+        let ttsText = pageOffset > 0 && pageOffset < normalizedContent.count
+            ? String(normalizedContent[normalizedContent.index(normalizedContent.startIndex, offsetBy: pageOffset)...])
+            : normalizedContent
+
+        ttsManager.speak(ttsText, bookName: book.name, chapterTitle: title) { [weak self] in
             guard let self, self.isTTSEnabled else { return }  // 已停止则不连读
+            self.ttsStartOffset = 0   // 下一章从头开始
             self.nextChapterOnly()
             self.startTTS()
         }
