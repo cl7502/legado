@@ -52,8 +52,8 @@ class NetworkManager {
 
     private init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+        config.timeoutIntervalForRequest  = 15   // 搜索书源超时缩短：避免慢服务器长时间占用并发槽
+        config.timeoutIntervalForResource = 30
         // 书源请求不应使用缓存（防止同 URL 返回旧响应）
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.urlCache = nil
@@ -178,7 +178,7 @@ class NetworkManager {
                 }
         }
 
-        _ = semaphore.wait(timeout: .now() + 30)
+        _ = semaphore.wait(timeout: .now() + 15)
         return result
     }
 
@@ -190,7 +190,7 @@ class NetworkManager {
             result = resp.data
             semaphore.signal()
         }
-        _ = semaphore.wait(timeout: .now() + 30)
+        _ = semaphore.wait(timeout: .now() + 15)
         return result
     }
 

@@ -35,6 +35,7 @@ import CommonCrypto
     func base64Decode(_ text: String) -> String
     func urlEncode(_ text: String) -> String
     func urlDecode(_ text: String) -> String
+    func encodeURI(_ text: String, _ charset: String) -> String
     func htmlEncode(_ text: String) -> String
     func htmlDecode(_ text: String) -> String
     func hexDecodeToString(_ hex: String) -> String
@@ -230,6 +231,19 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
 
     func urlEncode(_ text: String) -> String {
         text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? text
+    }
+
+    /// java.encodeURI(str, charset) — Android 书源常用，用指定编码对搜索关键词做 URL 编码
+    /// iOS 只支持 UTF-8，GBK/GB2312 等字节流编码回退到 UTF-8 的 percent encoding
+    func encodeURI(_ text: String, _ charset: String) -> String {
+        let enc = charset.lowercased().replacingOccurrences(of: "-", with: "")
+        if enc == "gbk" || enc == "gb2312" || enc == "gb18030" {
+            // 尝试 GBK 编码后 percent-encode 每个字节
+            if let data = text.data(using: .init(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)))) {
+                return data.map { String(format: "%%%02X", $0) }.joined()
+            }
+        }
+        return text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? text
     }
 
     func urlDecode(_ text: String) -> String {

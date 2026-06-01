@@ -85,15 +85,21 @@ class LegadoJSEngine {
                               forKeyedSubscript: "title" as (NSCopying & NSObjectProtocol))
         }
 
-        // source
-        let srcDict: [String: Any] = [
-            "bookSourceName":  ctx.source.bookSourceName,
-            "bookSourceUrl":   ctx.source.bookSourceUrl,
-            "bookSourceGroup": ctx.source.bookSourceGroup ?? "",
-            "bookSourceType":  ctx.source.bookSourceType,
-        ]
-        context.setObject(srcDict as AnyObject,
-                          forKeyedSubscript: "source" as (NSCopying & NSObjectProtocol))
+        // source — 暴露为带方法的 JS 对象，兼容 Android 书源常用的 source.getKey() / source.getVariable()
+        let sourceUrl   = ctx.source.bookSourceUrl
+        let sourceShim  = """
+        var source = {
+            bookSourceName:  \(jsStringLiteral(ctx.source.bookSourceName)),
+            bookSourceUrl:   \(jsStringLiteral(sourceUrl)),
+            bookSourceGroup: \(jsStringLiteral(ctx.source.bookSourceGroup ?? "")),
+            bookSourceType:  \(ctx.source.bookSourceType),
+            key:             \(jsStringLiteral(sourceUrl)),
+            variable:        "",
+            getKey:      function() { return this.key; },
+            getVariable: function() { return this.variable; }
+        };
+        """
+        context.evaluateScript(sourceShim)
 
         // page / key
         context.setObject(ctx.page as AnyObject,
@@ -222,6 +228,16 @@ class LegadoJSEngine {
         analyzeContext.variables = ctx.variables
         return resultString
     }
+
+    // 把 Swift String 转为 JS 字符串字面量（处理换行、引号等特殊字符）
+    private func jsStringLiteral(_ s: String) -> String {
+        let escaped = s
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+        return "\"\(escaped)\""
+    }
 }
 
 // MARK: - Cookie proxy exposed to JS as `cookie`
@@ -232,5 +248,8 @@ class LegadoJSEngine {
     }
     @objc func setCookie(_ tag: String, _ value: String) {
         CookieManager.shared.saveCookie(for: tag, cookieString: value)
+    }
+    @objc func removeCookie(_ tag: String) {
+        CookieManager.shared.removeCookie(forTag: tag)
     }
 }

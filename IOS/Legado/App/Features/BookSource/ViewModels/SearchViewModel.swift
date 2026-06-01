@@ -39,8 +39,17 @@ class SearchViewModel: ObservableObject {
     private func performSearch(_ query: String) async {
         defer {
             if !Task.isCancelled {
-                var seen = Set<String>()
-                searchResults = searchResults.filter { seen.insert("\($0.name)|\($0.author)").inserted }
+                // 双维度去重：同名同作者 + 同 URL 均视为重复
+                var seenNames = Set<String>()
+                var seenUrls  = Set<String>()
+                searchResults = searchResults.filter { r in
+                    let nameKey = "\(r.name)|\(r.author)"
+                    if seenNames.contains(nameKey) { return false }
+                    if !r.bookUrl.isEmpty && seenUrls.contains(r.bookUrl) { return false }
+                    seenNames.insert(nameKey)
+                    if !r.bookUrl.isEmpty { seenUrls.insert(r.bookUrl) }
+                    return true
+                }
             }
             isSearching = false
         }
