@@ -371,18 +371,45 @@ struct BookSourceRow: View {
     let source: BookSource
     let onToggle: () -> Void
 
+    /// 是否需要登录（配置了 loginUrl 或 loginCheckJs）
+    private var requiresLogin: Bool {
+        !(source.loginUrl ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !(source.loginCheckJs ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 是否已登录（CookieManager 里有该书源的 Cookie）
+    private var isLoggedIn: Bool {
+        guard requiresLogin else { return false }
+        let url = source.bookSourceUrl
+        return CookieManager.shared.getCookie(for: url) != nil
+            || CookieManager.shared.getCookie(forTag: url) != nil
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(source.bookSourceName)
-                    .font(.headline)
-                    .foregroundColor(source.enabled ? .primary : .secondary)
+                HStack(spacing: 4) {
+                    Text(source.bookSourceName)
+                        .font(.headline)
+                        .foregroundColor(source.enabled ? .primary : .secondary)
+                    // 需要登录的书源显示钥匙标识 + 登录状态
+                    if requiresLogin {
+                        Image(systemName: isLoggedIn ? "key.fill" : "key")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(isLoggedIn ? .green : .orange)
+                    }
+                }
 
                 HStack(spacing: 4) {
                     Text(source.bookSourceGroup ?? "未分组")
                     Text("|")
                     Text(source.bookSourceUrl)
                         .lineLimit(1)
+                    if requiresLogin {
+                        Text("|")
+                        Text(isLoggedIn ? "已登录" : "未登录")
+                            .foregroundColor(isLoggedIn ? .green : .orange)
+                    }
                 }
                 .font(.caption2)
                 .foregroundColor(.secondary)
