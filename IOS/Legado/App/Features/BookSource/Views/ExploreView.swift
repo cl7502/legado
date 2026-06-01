@@ -209,6 +209,7 @@ class ExploreBookListViewModel: ObservableObject {
             let items = ruleExecutor.executeList(listRule, in: &htmlCtx)
 
             var results: [SearchResult] = []
+            var seenBookUrls = Set<String>()   // 去重：防止 $.. 递归命中同名字段多次
             for item in items {
                 var itemCtx = AnalyzeContext(source: source, baseUrl: requestUrl)
                 itemCtx.result = item
@@ -222,11 +223,13 @@ class ExploreBookListViewModel: ObservableObject {
                 let kind    = ruleExecutor.execute(source.ruleExploreKind    ?? "", in: &itemCtx)
 
                 guard !name.isEmpty, !bookUrl.isEmpty else { continue }
+                let resolvedUrl = resolveUrl(bookUrl, base: requestUrl)
+                guard seenBookUrls.insert(resolvedUrl).inserted else { continue }  // 跳过重复 URL
 
                 var result = SearchResult()
                 result.name = name
                 result.author = author
-                result.bookUrl = resolveUrl(bookUrl, base: requestUrl)
+                result.bookUrl = resolvedUrl
                 result.kind = kind
                 result.coverUrl = coverUrl.map { resolveUrl($0, base: requestUrl) }
                 result.origin = source.bookSourceUrl
