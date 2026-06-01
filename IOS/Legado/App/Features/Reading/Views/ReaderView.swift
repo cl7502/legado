@@ -1492,24 +1492,27 @@ private struct TextKit2TextView: UIViewRepresentable {
             }
             return true
         }
+    }
+}
 
-        @objc func textView(_ textView: UITextView,
-                      editMenuForTextIn range: UITextRange,
-                      suggestedActions: [UIMenuElement]) -> UIMenu? {
-            let colors: [(String, Int)] = [("黄色高亮", 0), ("绿色高亮", 1), ("蓝色高亮", 2), ("粉色高亮", 3)]
-            let hlItems = colors.map { (title, colorIdx) -> UIAction in
-                UIAction(title: title) { [weak textView, weak self] _ in
-                    guard let tv = textView,
-                          let sel = tv.selectedTextRange, !sel.isEmpty else { return }
-                    let s = tv.offset(from: tv.beginningOfDocument, to: sel.start)
-                    let e = tv.offset(from: tv.beginningOfDocument, to: sel.end)
-                    let text = tv.text(in: sel) ?? ""
-                    self?.onHighlight?(s, e, text, colorIdx)
-                }
+@available(iOS 16.0, *)
+extension TextKit2TextView.Coordinator {
+    func textView(_ textView: UITextView,
+                  editMenuForTextIn range: UITextRange,
+                  suggestedActions: [UIMenuElement]) -> UIMenu? {
+        let colors: [(String, Int)] = [("黄色高亮", 0), ("绿色高亮", 1), ("蓝色高亮", 2), ("粉色高亮", 3)]
+        let hlItems = colors.map { (title, colorIdx) -> UIAction in
+            UIAction(title: title) { [weak textView, weak self] _ in
+                guard let tv = textView,
+                      let sel = tv.selectedTextRange, !sel.isEmpty else { return }
+                let s = tv.offset(from: tv.beginningOfDocument, to: sel.start)
+                let e = tv.offset(from: tv.beginningOfDocument, to: sel.end)
+                let text = tv.text(in: sel) ?? ""
+                self?.onHighlight?(s, e, text, colorIdx)
             }
-            let highlightMenu = UIMenu(title: "高亮", image: UIImage(systemName: "highlighter"),
-                                       children: hlItems)
-            return UIMenu(children: [highlightMenu] + suggestedActions)
         }
+        let highlightMenu = UIMenu(title: "高亮", image: UIImage(systemName: "highlighter"),
+                                   children: hlItems)
+        return UIMenu(children: [highlightMenu] + suggestedActions)
     }
 }
