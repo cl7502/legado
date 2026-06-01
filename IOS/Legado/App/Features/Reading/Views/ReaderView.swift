@@ -99,6 +99,7 @@ struct ReaderView: View {
             minuteWorkItem = nil
             teardownVolumePageTurn()
             stopAutoScroll()
+            WebDAVSyncManager.shared.uploadIfNeeded()
         }
         // B3修复：排版设置变化 → 重新分页
         .onChange(of: settings.fontSize)          { _ in viewModel.paginateCurrentChapter() }

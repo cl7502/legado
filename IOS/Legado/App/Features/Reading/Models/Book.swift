@@ -42,4 +42,28 @@ struct Book: Codable, Identifiable, Equatable {
         case durChapterTitle, durChapterIndex, durChapterTime, durChapterPos
         case lastCheckTime, canUpdate, useReplaceRule
     }
+
+    /// 无参便利构造器（所有字段均有默认值）
+    init() {}
+
+    init(bookUrl: String, name: String, author: String, origin: String, originName: String) {
+        self.bookUrl    = bookUrl
+        self.name       = name
+        self.author     = author
+        self.origin     = origin
+        self.originName = originName
+    }
+
+    init(bookUrl: String, name: String, author: String,
+         kind: String? = nil, intro: String? = nil, coverUrl: String? = nil,
+         origin: String, originName: String) {
+        self.bookUrl    = bookUrl
+        self.name       = name
+        self.author     = author
+        self.kind       = kind
+        self.intro      = intro
+        self.coverUrl   = coverUrl
+        self.origin     = origin
+        self.originName = originName
+    }
 }

@@ -19,6 +19,8 @@ struct LegadoApp: App {
                     _ = DatabaseManager.shared
                 }.value
                 dbReady = true
+                // WebDAV：启动后检查服务端是否有更新
+                await MainActor.run { WebDAVSyncManager.shared.checkOnLaunch() }
             }
         }
     }

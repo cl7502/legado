@@ -4,6 +4,12 @@ import SwiftUI
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
     @AppStorage("readerPreset") private var readerPreset: String = "normal"
+    @StateObject private var syncManager = WebDAVSyncManager.shared
+    @StateObject private var webdavSettings = WebDAVSettings.shared
+    @State private var webdavPassword = ""
+    @State private var showTestResult = false
+    @State private var testResultMessage = ""
+    @State private var isTesting = false
 
     var body: some View {
         NavigationView {
@@ -53,6 +59,85 @@ struct SettingsView: View {
                     Button(role: .destructive, action: { viewModel.clearDatabase() }) {
                         Text("重置数据库（清空所有书源与书籍）")
                     }
+                }
+
+                // MARK: WebDAV 同步
+                Section(header: Text("WebDAV 云同步")) {
+                    TextField("服务器地址（https://...）", text: $webdavSettings.serverURL)
+                        .keyboardType(.URL)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                    TextField("用户名", text: $webdavSettings.username)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                    SecureField("密码", text: $webdavPassword)
+                        .onAppear { webdavPassword = webdavSettings.password }
+                        .onChange(of: webdavPassword) { webdavSettings.password = $0 }
+
+                    Button {
+                        isTesting = true
+                        Task {
+                            do {
+                                let client = try WebDAVClient(
+                                    serverURL: webdavSettings.normalizedServerURL,
+                                    username:  webdavSettings.username,
+                                    password:  webdavSettings.password
+                                )
+                                _ = try await client.exists(path: "legado/metadata.json")
+                                testResultMessage = "✅ 连接成功"
+                            } catch {
+                                testResultMessage = "❌ \(error.localizedDescription)"
+                            }
+                            isTesting = false
+                            showTestResult = true
+                        }
+                    } label: {
+                        HStack {
+                            Text("测试连接")
+                            if isTesting { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(isTesting || !webdavSettings.isConfigured)
+                    .alert("连接测试", isPresented: $showTestResult) {
+                        Button("确定", role: .cancel) {}
+                    } message: { Text(testResultMessage) }
+
+                    Toggle("自动同步", isOn: $webdavSettings.autoSync)
+
+                    if let d = webdavSettings.lastSyncDate {
+                        HStack {
+                            Text("上次同步")
+                            Spacer()
+                            Text(d, style: .relative)
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                        }
+                    }
+
+                    HStack {
+                        Text("状态")
+                        Spacer()
+                        Group {
+                            switch syncManager.state {
+                            case .idle:
+                                Text(webdavSettings.lastSyncDate != nil ? "已同步" : "未同步")
+                                    .foregroundColor(.secondary)
+                            case .syncing:
+                                HStack(spacing: 6) {
+                                    ProgressView().scaleEffect(0.8)
+                                    Text("同步中…").foregroundColor(.secondary)
+                                }
+                            case .error(let msg):
+                                Text(msg).foregroundColor(.red).lineLimit(2)
+                            }
+                        }
+                        .font(.caption)
+                    }
+
+                    Button("立即同步") {
+                        syncManager.syncNow()
+                    }
+                    .disabled(!webdavSettings.isConfigured || syncManager.state == .syncing)
                 }
 
                 // MARK: 关于

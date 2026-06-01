@@ -17,6 +17,10 @@
 		1FE555CCB62E2E222C04B331 /* ExploreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4219C4F1F814AB2E7305C338 /* ExploreView.swift */; };
 		2AAD0EF819101DDD1F0AFAE0 /* EncodingHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D94DE81601D33C9A1B35B2 /* EncodingHelper.swift */; };
 		2F4D04E3284620D2F140EA0E /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E239C29D6CB61EC2C6EAD6 /* DatabaseManager.swift */; };
+		2049A08D3E454B4CBE688295 /* WebDAVSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9327A4248C234D44A0692E6B /* WebDAVSyncManager.swift */; };
+		2AE53BCA7C6346A2AEF5E58B /* WebDAVClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B09ED1F0DFCA4F3989FD2E1F /* WebDAVClient.swift */; };
+		A2AA1F1B9AE6481BB0B1826F /* WebDAVSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC502A8EA2AC4BA581A5F033 /* WebDAVSettings.swift */; };
+		71523753A12C4307882BD9D0 /* SyncModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DC08A2E32B844BC97171305 /* SyncModels.swift */; };
 		30FD9C3F43C9037DF2186E8A /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 351E5540D51D9E37E9308ABF /* SettingsViewModel.swift */; };
 		312AA636B769BEB7506E6C62 /* SearchResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FCE11C2055189639109B34 /* SearchResult.swift */; };
 		358440B2FE6C3DDA95A7499C /* BookshelfViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1FFB315789FE55F0695D5CD /* BookshelfViewModel.swift */; };
@@ -157,6 +161,10 @@
 		A014AEF10E5683C5A1C3FF07 /* ChapterPaginator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterPaginator.swift; sourceTree = "<group>"; };
 		B43C15ACA3F84A348E9111C8 /* FontManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontManager.swift; sourceTree = "<group>"; };
 		A0E239C29D6CB61EC2C6EAD6 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
+		9327A4248C234D44A0692E6B /* WebDAVSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDAVSyncManager.swift; sourceTree = "<group>"; };
+		B09ED1F0DFCA4F3989FD2E1F /* WebDAVClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDAVClient.swift; sourceTree = "<group>"; };
+		FC502A8EA2AC4BA581A5F033 /* WebDAVSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDAVSettings.swift; sourceTree = "<group>"; };
+		7DC08A2E32B844BC97171305 /* SyncModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncModels.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60001A2B3C4D5 /* AsyncSemaphore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncSemaphore.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60003A2B3C4D5 /* DeepCheckModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepCheckModels.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60010A2B3C4D5 /* DeepCheckConfigSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepCheckConfigSheet.swift; sourceTree = "<group>"; };
@@ -344,6 +352,7 @@
 			isa = PBXGroup;
 			children = (
 				EFC41687DE7B18D7F5A1F530 /* Database */,
+				SYNC0000000000000000001G /* Sync */,
 				F59B14ED301EFD128AD80AF0 /* Engine */,
 				474051CD172B8E294B40D176 /* HTML */,
 				73A50470F25033A8D7478887 /* JSBridge */,
@@ -489,6 +498,18 @@
 				DC001122334455667788AA00 /* DeepCheckViewModel.swift */,
 			);
 			path = ViewModels;
+			sourceTree = "<group>";
+		};
+
+		SYNC0000000000000000001G /* Sync */ = {
+			isa = PBXGroup;
+			children = (
+				7DC08A2E32B844BC97171305 /* SyncModels.swift */,
+				FC502A8EA2AC4BA581A5F033 /* WebDAVSettings.swift */,
+				B09ED1F0DFCA4F3989FD2E1F /* WebDAVClient.swift */,
+				9327A4248C234D44A0692E6B /* WebDAVSyncManager.swift */,
+			);
+			path = Sync;
 			sourceTree = "<group>";
 		};
 		EFC41687DE7B18D7F5A1F530 /* Database */ = {
@@ -670,6 +691,10 @@
 				FBE3FCB9E6C0B217DC707076 /* ContentView.swift in Sources */,
 				BDD1E8DFA9577A9A32B94487 /* CookieManager.swift in Sources */,
 				2F4D04E3284620D2F140EA0E /* DatabaseManager.swift in Sources */,
+					2049A08D3E454B4CBE688295 /* WebDAVSyncManager.swift in Sources */,
+					2AE53BCA7C6346A2AEF5E58B /* WebDAVClient.swift in Sources */,
+					A2AA1F1B9AE6481BB0B1826F /* WebDAVSettings.swift in Sources */,
+					71523753A12C4307882BD9D0 /* SyncModels.swift in Sources */,
 				FB0527ECB98BD4C4D99C93E2 /* DatabaseModels+GRDB.swift in Sources */,
 				2AAD0EF819101DDD1F0AFAE0 /* EncodingHelper.swift in Sources */,
 				1FE555CCB62E2E222C04B331 /* ExploreView.swift in Sources */,

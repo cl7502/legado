@@ -362,3 +362,86 @@ extension DatabaseManager {
         }
     }
 }
+
+// MARK: - WebDAV Sync Export / Import
+
+extension DatabaseManager {
+
+    // ── Export ──────────────────────────────────────────────────────────────
+
+    func exportAllBooks() async throws -> [Book] {
+        try await dbPool.read { db in try Book.fetchAll(db) }
+    }
+
+    func exportAllBookmarks() async throws -> [Bookmark] {
+        try await dbPool.read { db in try Bookmark.order(Column("createdAt").asc).fetchAll(db) }
+    }
+
+    func exportAllHighlights() async throws -> [BookHighlight] {
+        try await dbPool.read { db in try BookHighlight.order(Column("createdAt").asc).fetchAll(db) }
+    }
+
+    // ── Import（timestamp wins）──────────────────────────────────────────────
+
+    func importBooks(_ entries: [SyncBookEntry]) async throws {
+        let existing = try await exportAllBooks()
+        let localMap = Dictionary(uniqueKeysWithValues: existing.map { ($0.bookUrl, $0) })
+        for entry in entries {
+            if var local = localMap[entry.bookUrl] {
+                if entry.lastUpdatedAt > local.durChapterTime {
+                    entry.applyTo(&local)
+                    try await saveBook(local)
+                }
+            } else {
+                var newBook = Book()
+                newBook.bookUrl     = entry.bookUrl
+                newBook.name        = entry.name
+                newBook.author      = entry.author
+                newBook.origin      = entry.origin
+                newBook.originName  = entry.originName
+                newBook.coverUrl    = entry.coverUrl
+                newBook.intro       = entry.intro
+                newBook.tocUrl      = entry.tocUrl
+                try await saveBook(newBook)
+            }
+        }
+    }
+
+    func importProgress(_ entries: [SyncProgressEntry]) async throws {
+        let existing = try await exportAllBooks()
+        let localMap = Dictionary(uniqueKeysWithValues: existing.map { ($0.bookUrl, $0) })
+        for entry in entries {
+            guard var book = localMap[entry.bookUrl] else { continue }
+            if entry.durChapterTime > book.durChapterTime {
+                book.durChapterIndex = entry.durChapterIndex
+                book.durChapterPos   = entry.durChapterPos
+                book.durChapterTime  = entry.durChapterTime
+                try await saveBook(book)
+            }
+        }
+    }
+
+    func importBookmarks(_ entries: [SyncBookmarkEntry]) async throws {
+        let existing = try await exportAllBookmarks()
+        let localKeys = Set(existing.map {
+            "\($0.bookUrl)_\($0.chapterIndex)_\(Int64($0.createdAt.timeIntervalSince1970 * 1000))"
+        })
+        for entry in entries {
+            let key = "\(entry.bookUrl)_\(entry.chapterIndex)_\(entry.createdAt)"
+            if !localKeys.contains(key) {
+                try await saveBookmark(entry.toBookmark())
+            }
+        }
+    }
+
+    func importHighlights(_ entries: [SyncHighlightEntry]) async throws {
+        let existing = try await exportAllHighlights()
+        let localKeys = Set(existing.map { "\($0.bookUrl)_\($0.chapterIndex)_\($0.startOffset)" })
+        for entry in entries {
+            let key = "\(entry.bookUrl)_\(entry.chapterIndex)_\(entry.startOffset)"
+            if !localKeys.contains(key) {
+                try await saveHighlight(entry.toHighlight())
+            }
+        }
+    }
+}

@@ -786,5 +786,6 @@ class ReaderViewModel: ObservableObject {
             isLoading = false
             prefetch(around: currentChapterIndex)
         }
+        WebDAVSyncManager.shared.onChapterSwitched()
     }
 }
