@@ -242,14 +242,21 @@ class LegadoJSEngine {
 
 // MARK: - Cookie proxy exposed to JS as `cookie`
 
-@objc private class JSCookieProxy: NSObject {
-    @objc func getCookie(_ tag: String) -> String {
+/// JSExport 协议确保 JavaScript 能可靠调用这三个方法
+@objc private protocol JSCookieProxyExport: JSExport {
+    func getCookie(_ tag: String) -> String
+    func setCookie(_ tag: String, _ value: String)
+    func removeCookie(_ tag: String)
+}
+
+@objc private class JSCookieProxy: NSObject, JSCookieProxyExport {
+    func getCookie(_ tag: String) -> String {
         CookieManager.shared.getCookie(for: tag) ?? ""
     }
-    @objc func setCookie(_ tag: String, _ value: String) {
+    func setCookie(_ tag: String, _ value: String) {
         CookieManager.shared.saveCookie(for: tag, cookieString: value)
     }
-    @objc func removeCookie(_ tag: String) {
+    func removeCookie(_ tag: String) {
         CookieManager.shared.removeCookie(forTag: tag)
     }
 }

@@ -247,7 +247,25 @@ struct AnalyzeUrl {
                       context: AnalyzeContext? = nil) -> AnalyzeUrl {
         var tmpl = template.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // 0. @js: prefix — execute JS to get the dynamic URL (Android AnalyzeUrl L140-155)
+        // 0a. <js>sideEffect();</js>URL 格式：先执行 JS 副作用代码，再用剩余部分作 URL
+        // Android AnalyzeUrl 支持此格式，常用于登录态 Cookie 注入
+        let jsTagLower = tmpl.lowercased()
+        if jsTagLower.hasPrefix("<js>") {
+            if let closeRange = tmpl.range(of: "</js>", options: .caseInsensitive) {
+                let jsCode = String(tmpl[tmpl.index(tmpl.startIndex, offsetBy: 4)..<closeRange.lowerBound])
+                let remaining = String(tmpl[closeRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if var ctx = context {
+                    for (k, v) in variables { ctx.variables[k] = v }
+                    _ = LegadoJSEngine.shared.evaluateRule(jsCode, in: &ctx)
+                }
+                tmpl = remaining.isEmpty ? "" : remaining
+                if tmpl.isEmpty { return AnalyzeUrl(url: "") }
+            } else {
+                return AnalyzeUrl(url: "")
+            }
+        }
+
+        // 0b. @js: prefix — execute JS to get the dynamic URL (Android AnalyzeUrl L140-155)
         if tmpl.hasPrefix("@js:") || tmpl.lowercased().hasPrefix("javascript:") {
             let jsCode: String
             if tmpl.hasPrefix("@js:") { jsCode = String(tmpl.dropFirst(4)) }

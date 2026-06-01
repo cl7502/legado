@@ -18,6 +18,7 @@ import CommonCrypto
     //   java.ajax(url + ',' + java.put("headers", JSON.stringify({...})))
     func put(_ key: String, _ value: Any) -> Any
     func get(_ key: String) -> Any?
+    func get(_ key: String, _ defaultValue: JSValue) -> Any?
 
     // Cross-evaluation object cache (mirrors Android JsExtensions.getFromCacheObject)
     func getFromCacheObject(_ key: String) -> Any?
@@ -162,6 +163,13 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         if key == "bookName" { return currentContext?.variables["bookName"] }
         if key == "title"    { return currentContext?.variables["title"] }
         return currentContext?.variables[key]
+    }
+
+    /// 两参数版 get(key, defaultValue)——Android 书源常用，第二个参数为默认值
+    func get(_ key: String, _ defaultValue: JSValue) -> Any? {
+        if key == "bookName" { return currentContext?.variables["bookName"] }
+        if key == "title"    { return currentContext?.variables["title"] }
+        return currentContext?.variables[key] ?? (defaultValue.isUndefined || defaultValue.isNull ? nil : defaultValue)
     }
 
     // MARK: - Cross-evaluation object cache (mirrors Android JsExtensions cacheMap)
