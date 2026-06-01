@@ -327,21 +327,38 @@ class HTMLParser {
     /// Select elements using Legado's extended selector syntax.
     /// Handles tag.xxx prefix (via legadoCSS) and element.N index suffix ("a.0" = first a).
     private func legadoSelect(_ rule: String, from element: Element) -> [Element] {
-        let css = rule.legadoCSS
+        let (css, slice) = rule.legadoCSSAndSlice
+        let all: [Element]
         if let (base, idx) = css.legadoSelectorAndIndex {
-            let all = (try? element.select(base).array()) ?? []
-            return idx < all.count ? [all[idx]] : []
+            let a = (try? element.select(base).array()) ?? []
+            all = idx < a.count ? [a[idx]] : []
+        } else {
+            all = (try? element.select(css).array()) ?? []
         }
-        return (try? element.select(css).array()) ?? []
+        return applySlice(slice, to: all)
     }
 
     private func legadoSelect(_ rule: String, from doc: Document) -> [Element] {
-        let css = rule.legadoCSS
+        let (css, slice) = rule.legadoCSSAndSlice
+        let all: [Element]
         if let (base, idx) = css.legadoSelectorAndIndex {
-            let all = (try? doc.select(base).array()) ?? []
-            return idx < all.count ? [all[idx]] : []
+            let a = (try? doc.select(base).array()) ?? []
+            all = idx < a.count ? [a[idx]] : []
+        } else {
+            all = (try? doc.select(css).array()) ?? []
         }
-        return (try? doc.select(css).array()) ?? []
+        return applySlice(slice, to: all)
+    }
+
+    /// Apply a Legado `!start:end` array slice to an element list.
+    /// Supports negative indices (Python-style): -1 = last, -2 = second-last, etc.
+    private func applySlice(_ slice: (Int, Int)?, to arr: [Element]) -> [Element] {
+        guard let (rawStart, rawEnd) = slice, !arr.isEmpty else { return arr }
+        let n = arr.count
+        let start = rawStart < 0 ? max(0, n + rawStart) : min(rawStart, n)
+        let end   = rawEnd   < 0 ? max(0, n + rawEnd)   : min(rawEnd,   n)
+        guard start < end else { return [] }
+        return Array(arr[start..<end])
     }
 
     /// Returns true if the string contains a `|` that is NOT inside `[]` (XPath union operator).
@@ -536,15 +553,37 @@ private extension String {
     /// Android Legado CSS shorthand conversions applied before SwiftSoup selection:
     ///   • "class.xxx"  → ".xxx"      (class shorthand, e.g. class.title → .title)
     ///   • "tag.xxx"    → "xxx"       (tag shorthand, e.g. tag.img → img)
-    var legadoCSS: String {
+    var legadoCSS: String { legadoCSSAndSlice.0 }
+
+    /// Splits a Legado selector rule into (cssSelector, optional slice).
+    /// e.g. "p!0:-1"  → ("#p", (0, -1))   — take indices 0..<(-1)
+    ///      "p!2"     → ("p",  (2,  maxInt)) — single start index
+    ///      "id.foo"  → ("#foo", nil)
+    var legadoCSSAndSlice: (String, (Int, Int)?) {
         var s = self
-        // tag.xxx → xxx  (must come before class. check to avoid false match on "tag.class.xxx")
+        var slice: (Int, Int)? = nil
+
+        // Extract !start:end or !start slice suffix before CSS transformations
+        if let bangRange = s.range(of: "!") {
+            let rest = String(s[bangRange.upperBound...])
+            s = String(s[..<bangRange.lowerBound])
+            if rest.contains(":") {
+                let nums = rest.components(separatedBy: ":").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                if nums.count == 2 { slice = (nums[0], nums[1]) }
+            } else if let n = Int(rest.trimmingCharacters(in: .whitespaces)) {
+                slice = (n, Int.max)
+            }
+        }
+
+        // tag.xxx → xxx
         if s.hasPrefix("tag.") { s = String(s.dropFirst(4)) }
+        // id.xxx → #xxx
+        if s.hasPrefix("id.") { s = "#" + String(s.dropFirst(3)) }
         // class.xxx → .xxx
         if s.contains("class.") {
             s = s.replacingOccurrences(of: #"\bclass\."#, with: ".", options: .regularExpression)
         }
-        return s
+        return (s, slice)
     }
 
     /// Legado element-index suffix: "a.0" → (selector:"a", index:0).
