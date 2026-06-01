@@ -559,9 +559,13 @@ private extension String {
     /// e.g. "p!0:-1"  → ("#p", (0, -1))   — take indices 0..<(-1)
     ///      "p!2"     → ("p",  (2,  maxInt)) — single start index
     ///      "id.foo"  → ("#foo", nil)
+    ///      "@css:#content td" → ("#content td", nil)
     var legadoCSSAndSlice: (String, (Int, Int)?) {
         var s = self
         var slice: (Int, Int)? = nil
+
+        // @css: / @CSS: prefix — force CSS mode, strip prefix
+        if s.lowercased().hasPrefix("@css:") { s = String(s.dropFirst(5)) }
 
         // Extract !start:end or !start slice suffix before CSS transformations
         if let bangRange = s.range(of: "!") {

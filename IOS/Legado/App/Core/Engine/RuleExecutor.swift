@@ -360,11 +360,15 @@ class RuleExecutor {
 
     // MARK: - Helpers
 
-    /// 判断规则是否为裸字段名（仅字母/数字/下划线，无特殊字符）
-    /// 用于 JSON 上下文中把 "name" 当作 $.name JSONPath 的 fallback
+    /// 判断规则是否为裸字段名或带点号路径（无特殊字符）
+    /// 用于 JSON 上下文中把 "name"、"data.content" 当作 $.name / $.data.content 的 fallback
     private func isBareIdentifier(_ rule: String) -> Bool {
         guard !rule.isEmpty else { return false }
-        return rule.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+        // 允许字母/数字/下划线/点号，不允许空格/斜杠/@/$/#等特殊字符
+        // 点号允许支持 "data.content" → "$.data.content" 这类嵌套路径
+        let allowed = rule.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." }
+        // 不能以点号开头或结尾，也不能有连续点号（避免误匹配 CSS 类选择器）
+        return allowed && !rule.hasPrefix(".") && !rule.hasSuffix(".") && !rule.contains("..")
     }
 
     /// 解析 {$.field} 单花括号模板，替换为 JSON 对象中的字段值
