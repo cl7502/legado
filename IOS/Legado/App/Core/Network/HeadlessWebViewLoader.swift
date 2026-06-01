@@ -32,7 +32,10 @@ enum HeadlessWebViewLoader {
         // 检查 Task 是否在等待槽期间已被取消
         try Task.checkCancellation()
 
-        let request = WebViewRequest(url: url, headers: headers, injectJs: injectJs)
+        // WKWebView.init 是 @MainActor，必须在主线程创建
+        let request = await MainActor.run {
+            WebViewRequest(url: url, headers: headers, injectJs: injectJs)
+        }
 
         // withTaskCancellationHandler：Task 被取消时主动停止 WKWebView 加载，
         // 立即释放内存，而不是等到 30s 超时或页面自然完成
