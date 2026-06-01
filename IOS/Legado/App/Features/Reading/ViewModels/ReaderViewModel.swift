@@ -260,14 +260,17 @@ class ReaderViewModel: ObservableObject {
             context.book = book
             var html = try await network.request(effectiveTocUrl, source: source)
 
-            // loginCheckJs — 对标 Android WebBook.getChapterListAwait() 执行登录检测/修改响应
-            // 返回非 nil 则用修改后的 HTML；抛出异常则忽略（书源写法容错）
+            // loginCheckJs — 对标 Android WebBook.getChapterListAwait()
+            // Task.detached 脱离 @MainActor：LegadoJSEngine.queue.sync 不能在 MainActor 上调用，
+            // 否则 queue.sync 阻塞主线程 → unsafeForcedSync → UI 卡死
             if let checkJs = source.loginCheckJs, !checkJs.isEmpty {
-                var checkCtx = AnalyzeContext(source: source, baseUrl: effectiveTocUrl)
-                checkCtx.result = html
-                if let modified = LegadoJSEngine.shared.evaluateRule(checkJs, in: &checkCtx), !modified.isEmpty {
-                    html = modified
-                }
+                let capturedHtml = html; let capturedUrl = effectiveTocUrl; let capturedSrc = source
+                let modified = await Task.detached(priority: .userInitiated) {
+                    var ctx = AnalyzeContext(source: capturedSrc, baseUrl: capturedUrl)
+                    ctx.result = capturedHtml
+                    return LegadoJSEngine.shared.evaluateRule(checkJs, in: &ctx)
+                }.value
+                if let m = modified, !m.isEmpty { html = m }
             }
             context.result = html
 
@@ -456,12 +459,15 @@ class ReaderViewModel: ObservableObject {
             var html = try await network.request(chapter.url, source: source)
 
             // loginCheckJs — 对标 Android WebBook.getContentAwait()
+            // Task.detached 脱离 @MainActor，防止 queue.sync 阻塞主线程
             if let checkJs = source.loginCheckJs, !checkJs.isEmpty {
-                var checkCtx = AnalyzeContext(source: source, baseUrl: chapter.url)
-                checkCtx.result = html
-                if let modified = LegadoJSEngine.shared.evaluateRule(checkJs, in: &checkCtx), !modified.isEmpty {
-                    html = modified
-                }
+                let capturedHtml = html; let capturedUrl = chapter.url; let capturedSrc = source
+                let modified = await Task.detached(priority: .userInitiated) {
+                    var ctx = AnalyzeContext(source: capturedSrc, baseUrl: capturedUrl)
+                    ctx.result = capturedHtml
+                    return LegadoJSEngine.shared.evaluateRule(checkJs, in: &ctx)
+                }.value
+                if let m = modified, !m.isEmpty { html = m }
             }
 
             let replaceRules = try await db.getReplaceRules()

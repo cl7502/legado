@@ -96,6 +96,10 @@ final class NovellaTTSEngine: ObservableObject, TTSProtocol, @unchecked Sendable
                onFinish: @escaping () -> Void) {
         stopInternal()
 
+        // 每次朗读前重激活 AVAudioSession，防止被其他音频/中断后 session 变为不活跃
+        // 这是 AudioPipeline.engine.start() 失败（TTS 无声）的主要原因之一
+        try? AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
+
         originalText          = text
         currentBookName       = bookName
         currentChapterTitle   = chapterTitle

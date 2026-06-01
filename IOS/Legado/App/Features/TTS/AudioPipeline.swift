@@ -15,7 +15,12 @@ final class AudioPipeline {
         engine.attach(pitchEffect)
         engine.connect(playerNode, to: pitchEffect,            format: nil)
         engine.connect(pitchEffect, to: engine.mainMixerNode,  format: nil)
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            print("❌ [AudioPipeline] engine.start() 失败：\(error) — TTS 无声根因")
+            throw error
+        }
         isSetup = true
     }
 
