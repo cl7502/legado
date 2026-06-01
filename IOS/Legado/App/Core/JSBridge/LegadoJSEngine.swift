@@ -40,10 +40,13 @@ class LegadoJSEngine {
 
         // result / src — Android always binds these even when nil (avoids ReferenceError).
         // We convert non-String values (JSON objects) to their JSON string representation.
+        // 注意：NSJSONSerialization 对非 Array/Dictionary 顶层类型抛 ObjC NSException（不是 Swift Error），
+        // try? 无法捕获。必须先用 isValidJSONObject 检查，再调用 data(withJSONObject:)。
         let resultStr: String
         if let s = ctx.result as? String {
             resultStr = s
         } else if let obj = ctx.result,
+                  JSONSerialization.isValidJSONObject(obj),
                   let data = try? JSONSerialization.data(withJSONObject: obj),
                   let json = String(data: data, encoding: .utf8) {
             resultStr = json
