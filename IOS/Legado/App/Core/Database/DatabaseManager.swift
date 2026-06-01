@@ -386,24 +386,26 @@ extension DatabaseManager {
     func importBooks(_ entries: [SyncBookEntry]) async throws {
         let existing = try await exportAllBooks()
         let localMap = Dictionary(uniqueKeysWithValues: existing.map { ($0.bookUrl, $0) })
-        for entry in entries {
-            if var local = localMap[entry.bookUrl] {
-                if entry.lastUpdatedAt > local.durChapterTime {
-                    entry.applyTo(&local)
-                    try await saveBook(local)
+        _ = try await dbPool.write { db in
+            for entry in entries {
+                if var local = localMap[entry.bookUrl] {
+                    if entry.lastUpdatedAt > local.durChapterTime {
+                        entry.applyTo(&local)
+                        try local.save(db)
+                    }
+                } else {
+                    var newBook = Book()
+                    newBook.bookUrl        = entry.bookUrl
+                    newBook.name           = entry.name
+                    newBook.author         = entry.author
+                    newBook.origin         = entry.origin
+                    newBook.originName     = entry.originName
+                    newBook.coverUrl       = entry.coverUrl
+                    newBook.intro          = entry.intro
+                    newBook.tocUrl         = entry.tocUrl
+                    newBook.durChapterTime = 0  // CR-01: 0 使 importProgress 的 T>0 一定为 true
+                    try newBook.save(db)
                 }
-            } else {
-                var newBook = Book()
-                newBook.bookUrl     = entry.bookUrl
-                newBook.name        = entry.name
-                newBook.author      = entry.author
-                newBook.origin      = entry.origin
-                newBook.originName  = entry.originName
-                newBook.coverUrl    = entry.coverUrl
-                newBook.intro       = entry.intro
-                newBook.tocUrl      = entry.tocUrl
-                newBook.durChapterTime = entry.lastUpdatedAt
-                try await saveBook(newBook)
             }
         }
     }
@@ -411,13 +413,15 @@ extension DatabaseManager {
     func importProgress(_ entries: [SyncProgressEntry]) async throws {
         let existing = try await exportAllBooks()
         let localMap = Dictionary(uniqueKeysWithValues: existing.map { ($0.bookUrl, $0) })
-        for entry in entries {
-            guard var book = localMap[entry.bookUrl] else { continue }
-            if entry.durChapterTime > book.durChapterTime {
-                book.durChapterIndex = entry.durChapterIndex
-                book.durChapterPos   = entry.durChapterPos
-                book.durChapterTime  = entry.durChapterTime
-                try await saveBook(book)
+        _ = try await dbPool.write { db in
+            for entry in entries {
+                guard var book = localMap[entry.bookUrl] else { continue }
+                if entry.durChapterTime >= book.durChapterTime {  // CR-01: >= 防止首次同步 T==T 时进度丢失
+                    book.durChapterIndex = entry.durChapterIndex
+                    book.durChapterPos   = entry.durChapterPos
+                    book.durChapterTime  = entry.durChapterTime
+                    try book.save(db)
+                }
             }
         }
     }

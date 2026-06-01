@@ -37,6 +37,10 @@ actor WebDAVClient {
         session = URLSession(configuration: config)
     }
 
+    deinit {
+        session.invalidateAndCancel()
+    }
+
     // MARK: - PUT
 
     func put(path: String, data: Data) async throws {
@@ -69,8 +73,9 @@ actor WebDAVClient {
         req.httpMethod = "MKCOL"
         req.setValue(authHeader, forHTTPHeaderField: "Authorization")
         let (_, resp) = try await session.data(for: req)
-        // 200/201 Created、301 Moved、405 Method Not Allowed（目录已存在）、409 Conflict 均视为成功
-        let successCodes: Set<Int> = [200, 201, 301, 405, 409]
+        // 200/201 Created、301 Moved、405 Method Not Allowed（目录已存在）均视为成功；
+        // 409 Conflict 表示父目录不存在（非"已存在"），不应忽略
+        let successCodes: Set<Int> = [200, 201, 301, 405]
         if let http = resp as? HTTPURLResponse, !successCodes.contains(http.statusCode) {
             try check(resp)
         }

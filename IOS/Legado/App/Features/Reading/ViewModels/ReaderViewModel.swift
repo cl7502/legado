@@ -604,7 +604,7 @@ class ReaderViewModel: ObservableObject {
         updatedBook.durChapterIndex = currentChapterIndex
         updatedBook.durChapterPos   = currentPageIndex      // 保存当前页码
         updatedBook.durChapterTitle = chapter.title
-        updatedBook.durChapterTime  = Int64(Date().timeIntervalSince1970)
+        updatedBook.durChapterTime  = Date().milliseconds  // CR-02: 统一毫秒单位
         self.book = updatedBook
         try? await db.saveBook(updatedBook)
     }

@@ -45,7 +45,7 @@ class BookshelfViewModel: ObservableObject {
     /// 更新书籍最后阅读时间并保存
     func updateBookProgress(_ book: Book) async {
         var updatedBook = book
-        updatedBook.durChapterTime = Int64(Date().timeIntervalSince1970)
+        updatedBook.durChapterTime = Date().milliseconds  // CR-02: 统一毫秒单位
         try? await db.saveBook(updatedBook)
         await loadBooks()
     }

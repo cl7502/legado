@@ -34,7 +34,7 @@ final class WebDAVSyncManager: ObservableObject {
     // MARK: - Public API
 
     func syncNow() {
-        guard settings.isConfigured else { return }
+        guard settings.isConfigured, state != .syncing else { return }
         syncTask?.cancel()
         syncTask = Task { await performSync(force: true) }
     }

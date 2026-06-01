@@ -48,13 +48,21 @@ private let kWebDAVService = "com.legado.webdav"
 
 final class WebDAVSettings: ObservableObject {
     static let shared = WebDAVSettings()
-    private init() {}
+    private init() {
+        refreshIsConfigured()
+    }
 
     @Published var serverURL: String = UserDefaults.standard.string(forKey: "webdav.serverURL") ?? "" {
-        didSet { UserDefaults.standard.set(serverURL, forKey: "webdav.serverURL") }
+        didSet {
+            UserDefaults.standard.set(serverURL, forKey: "webdav.serverURL")
+            refreshIsConfigured()
+        }
     }
     @Published var username: String = UserDefaults.standard.string(forKey: "webdav.username") ?? "" {
-        didSet { UserDefaults.standard.set(username, forKey: "webdav.username") }
+        didSet {
+            UserDefaults.standard.set(username, forKey: "webdav.username")
+            refreshIsConfigured()
+        }
     }
     @Published var autoSync: Bool = UserDefaults.standard.bool(forKey: "webdav.autoSync") {
         didSet { UserDefaults.standard.set(autoSync, forKey: "webdav.autoSync") }
@@ -62,7 +70,17 @@ final class WebDAVSettings: ObservableObject {
 
     var password: String {
         get { KeychainHelper.get(service: kWebDAVService, account: "password") ?? "" }
-        set { KeychainHelper.set(newValue, service: kWebDAVService, account: "password") }
+        set {
+            KeychainHelper.set(newValue, service: kWebDAVService, account: "password")
+            refreshIsConfigured()
+        }
+    }
+
+    @Published private(set) var isConfigured: Bool = false
+
+    private func refreshIsConfigured() {
+        let pwd = KeychainHelper.get(service: kWebDAVService, account: "password") ?? ""
+        isConfigured = !serverURL.isEmpty && !username.isEmpty && !pwd.isEmpty
     }
 
     var lastSyncDate: Date? {
@@ -86,8 +104,6 @@ final class WebDAVSettings: ObservableObject {
     func updateLocalTimestamp(for key: String, to ms: Int64) {
         UserDefaults.standard.set(Double(ms), forKey: "webdav.ts.\(key)")
     }
-
-    var isConfigured: Bool { !serverURL.isEmpty && !username.isEmpty && !password.isEmpty }
 
     var normalizedServerURL: String { serverURL.trimmingCharacters(in: .init(charactersIn: "/")) }
 }
