@@ -163,6 +163,38 @@ class LegadoJSEngine {
         """
         context.evaluateScript(dollarShim)
 
+        // Packages 兼容层：对标 Android 书源中常见的 Packages.java.* / Packages.android.* 调用
+        // 轻文库说等书源的 jsLib 使用 Packages.java.lang.System.currentTimeMillis()
+        // 和 Packages.android.util.Base64.encodeToString() 等 Android 专用 API
+        let packagesShim = """
+        var Packages = {
+            java: {
+                lang: {
+                    String: function(s) {
+                        var _s = String(s);
+                        return { getBytes: function(charset) { return _s; },
+                                 toString:  function() { return _s; } };
+                    },
+                    System: { currentTimeMillis: function() { return Date.now(); } }
+                }
+            },
+            android: {
+                util: {
+                    Base64: {
+                        NO_WRAP: 2, DEFAULT: 0,
+                        encodeToString: function(bytesOrStr, flags) {
+                            var s = (typeof bytesOrStr === 'object' && bytesOrStr !== null)
+                                ? (bytesOrStr.toString ? bytesOrStr.toString() : String(bytesOrStr))
+                                : String(bytesOrStr);
+                            return java.base64Encode(s);
+                        }
+                    }
+                }
+            }
+        };
+        """
+        context.evaluateScript(packagesShim)
+
         return context
     }
 

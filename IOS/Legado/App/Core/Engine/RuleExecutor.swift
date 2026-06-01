@@ -38,7 +38,16 @@ class RuleExecutor {
             context.variables = tmp.variables
         }
 
-        return stringify(current)
+        var result = stringify(current)
+
+        // Fix: 解析 {$.field} 单花括号模板（轻之文库 noteUrl 格式）
+        // 如 "https://www.linovel.net/book/{$.id}.html" 中的 {$.id} 替换为实际 id 值
+        if let s = result, s.contains("{$."),
+           let jsonStr = context.result as? String,
+           jsonStr.trimmingCharacters(in: .whitespaces).hasPrefix("{") {
+            result = resolveSingleBraceTemplate(s, jsonStr: jsonStr)
+        }
+        return result
     }
 
     /// Execute rule, return list of strings (used for book/chapter lists).
@@ -110,6 +119,16 @@ class RuleExecutor {
             } else {
                 let html = asString(current)
                 result = htmlParser.text(html, query: coreRule)
+                // Fallback：裸字段名作为 JSONPath（轻之文库等 JSON API 书源）
+                // 如 ruleExploreName = "name" 在 JSON 上下文中应等同于 $.name
+                if (result == nil || (result as? String)?.isEmpty == true),
+                   isBareIdentifier(coreRule),
+                   let jsonStr = current as? String,
+                   jsonStr.trimmingCharacters(in: .whitespaces).hasPrefix("{") {
+                    if let val = JSONPathEngine.shared.extract(json: jsonStr, path: "$.\(coreRule)") {
+                        result = "\(val)"
+                    }
+                }
             }
 
         case .regex:
@@ -340,6 +359,30 @@ class RuleExecutor {
     }
 
     // MARK: - Helpers
+
+    /// 判断规则是否为裸字段名（仅字母/数字/下划线，无特殊字符）
+    /// 用于 JSON 上下文中把 "name" 当作 $.name JSONPath 的 fallback
+    private func isBareIdentifier(_ rule: String) -> Bool {
+        guard !rule.isEmpty else { return false }
+        return rule.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+    }
+
+    /// 解析 {$.field} 单花括号模板，替换为 JSON 对象中的字段值
+    /// 轻之文库 noteUrl 格式：https://www.linovel.net/book/{$.id}.html
+    private func resolveSingleBraceTemplate(_ template: String, jsonStr: String) -> String {
+        guard let re = try? NSRegularExpression(pattern: #"\{\$\.([^}]+)\}"#) else { return template }
+        var result = template
+        let matches = re.matches(in: template, range: NSRange(template.startIndex..., in: template))
+        for match in matches.reversed() {
+            guard let fullRange = Range(match.range, in: template),
+                  let keyRange = Range(match.range(at: 1), in: template) else { continue }
+            let key = String(template[keyRange])
+            if let val = JSONPathEngine.shared.extract(json: jsonStr, path: "$.\(key)") {
+                result.replaceSubrange(fullRange, with: "\(val)")
+            }
+        }
+        return result
+    }
 
     private func asString(_ value: Any?) -> String {
         switch value {
