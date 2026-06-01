@@ -79,6 +79,7 @@ import CommonCrypto
 
     // Text / array helpers
     func toast(_ message: Any)
+    func longToast(_ message: Any)
     func getString(_ strArray: JSValue) -> String
     func getStringArray(_ str: String) -> JSValue?
 
@@ -505,6 +506,10 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     }
 
     func toast(_ message: Any) {
+        print("📖 [JS Toast]: \(message)")
+    }
+
+    func longToast(_ message: Any) {
         print("📖 [JS Toast]: \(message)")
     }
 

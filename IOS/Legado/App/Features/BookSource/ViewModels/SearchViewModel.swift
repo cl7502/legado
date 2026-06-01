@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import Alamofire
+import JavaScriptCore
 
 /// 搜索业务逻辑
 @MainActor
@@ -288,6 +289,9 @@ struct AnalyzeUrl {
         tmpl = resolveTemplateVars(tmpl, variables: variables, context: context)
 
         // 2. {1,2,3} page-switching pattern: p1→choice1, p2→choice2, ...
+        // Guard: skip matches that look like JSON objects (contain ":" or quoted strings),
+        // since the regex `{...}` is too broad and would wrongly match option JSON like
+        // `{"method":"POST","body":"null"}`.
         let page = Int(variables["page"] ?? "1") ?? 1
         if let pagePattern = try? NSRegularExpression(pattern: #"\{([^{}]+(?:,[^{}]+)+)\}"#) {
             let ns = tmpl as NSString
@@ -295,7 +299,10 @@ struct AnalyzeUrl {
             for match in matches.reversed() {
                 guard let r = Range(match.range, in: tmpl),
                       let inner = Range(match.range(at: 1), in: tmpl) else { continue }
-                let choices = tmpl[inner].components(separatedBy: ",")
+                let innerStr = String(tmpl[inner])
+                // Skip JSON-like content (contains colon or starts with a quote)
+                guard !innerStr.contains(":"), !innerStr.hasPrefix("\""), !innerStr.hasPrefix("'") else { continue }
+                let choices = innerStr.components(separatedBy: ",")
                 let idx = max(0, min(page - 1, choices.count - 1))
                 tmpl.replaceSubrange(r, with: choices[idx].trimmingCharacters(in: .whitespaces))
             }
@@ -420,6 +427,18 @@ struct AnalyzeUrl {
     }
 
     private static func parseOptionJSON(_ json: String) -> UrlOption? {
+        // 1. 先尝试标准 JSON 解析
+        if let opt = parseOptionJSONStrict(json) { return opt }
+        // 2. 回退：通过 JSContext 规范化单引号/无引号 key 格式（如 {'method':'POST'}）
+        if let normalized = JSContext().evaluateScript("JSON.stringify(\(json))")?.toString(),
+           normalized.hasPrefix("{"),
+           let opt = parseOptionJSONStrict(normalized) {
+            return opt
+        }
+        return nil
+    }
+
+    private static func parseOptionJSONStrict(_ json: String) -> UrlOption? {
         guard let data = json.data(using: .utf8),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }

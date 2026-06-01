@@ -27,6 +27,12 @@ class ReaderViewModel: ObservableObject {
     // 预缓存 Task 追踪：切章时取消旧 Task，当前章节优先
     private var prefetchTasks: [Int: Task<Void, Never>] = [:]
 
+    // 切换到上一章时，分页完成后跳到最后一页
+    private var goToLastPageOnLoad: Bool = false
+
+    // 预分页缓存：prefetch 完成后立即分页，切章时直接使用，消除加载闪烁
+    private var prepagedChapters: [Int: [String]] = [:]
+
     private let db = DatabaseManager.shared
     private let network = NetworkManager.shared
     private let ruleExecutor = RuleExecutor.shared
@@ -548,6 +554,13 @@ class ReaderViewModel: ObservableObject {
             guard prefetchTasks[i] == nil else { continue }  // 已有 Task 则不重复
             let task = Task(priority: .background) { [weak self] in
                 await self?.loadChapterContent(at: i)
+                // 内容加载完成后立即预分页，消除切章时的加载闪烁
+                await MainActor.run { [weak self] in
+                    guard let self,
+                          let content = self.chapterContents[i],
+                          self.prepagedChapters[i] == nil else { return }
+                    self.prepagedChapters[i] = self.paginateChapter(index: i, content: content)
+                }
                 await MainActor.run { [weak self] in
                     _ = self?.prefetchTasks.removeValue(forKey: i)
                 }
@@ -560,6 +573,7 @@ class ReaderViewModel: ObservableObject {
     private func cancelPrefetchTasks() {
         prefetchTasks.values.forEach { $0.cancel() }
         prefetchTasks.removeAll()
+        prepagedChapters.removeAll()
     }
 
     func prefetchNextChapter() {
@@ -627,52 +641,57 @@ class ReaderViewModel: ObservableObject {
         guard let content = chapterContents[currentChapterIndex],
               currentChapterIndex < chapters.count else { return }
 
-        let settings = ReaderSettings.shared
-        let screenSize = UIScreen.main.bounds.size
-
-        let font = settings.readerFont(size: settings.fontSize)
-        let horizontalPadding = settings.sideMargin * 2
-        // 减去 header/footer 高度、上下内边距；
-        // 14pt 安全余量：CoreText（分页）与 TextKit 2（渲染）段尾 paragraphSpacing 计算不一致，
-        // 差值 ≈ paragraphSpacing(12) + 行高细微误差(~2) = 14pt
-        let verticalPadding   = settings.topMargin + settings.bottomMargin
-                              + ReaderLayout.headerH + ReaderLayout.footerH + 14
-        let usableSize = CGSize(
-            width:  max(screenSize.width  - horizontalPadding, 100),
-            height: max(screenSize.height - verticalPadding,   100)
-        )
-
-        let paginator = ChapterPaginator(
-            pageSize: usableSize,
-            font: font,
-            lineSpacing: settings.lineSpacing,
-            letterSpacing: settings.letterSpacing,
-            paragraphSpacing: settings.paragraphSpacing  // 同步传入，与渲染保持一致
-        )
-        let title = chapters[currentChapterIndex].title
-        // \n\n 产生的空行高度 = lineHeight + lineSpacing，随字号同比放大，
-        // 大字号下每页被空行占用大量空间。统一替换为 \n，
-        // 段间距由 paragraphSpacing 独立控制，与字号无关
-        let processedContent = content.replacingOccurrences(of: "\n\n", with: "\n")
-        let pages = paginator.paginate(text: processedContent, chapterTitle: title)
-
+        let pages = paginateChapter(index: currentChapterIndex, content: content)
         currentPages = pages
         // 计算每页在 processedContent 中的起始字符偏移
+        let processedContent = content.replacingOccurrences(of: "\n\n", with: "\n")
         var offset = 0
         currentPageOffsets = pages.map { page in
             let start = offset
             offset += (page as NSString).length
             return start
         }
-        // 恢复上次阅读位置：初次打开时 durChapterPos 存储上次页码
-        let savedPage = book.durChapterPos
-        if savedPage > 0 && savedPage < pages.count {
-            currentPageIndex = savedPage
+        // 恢复上次阅读位置
+        // 从上一章翻回时，跳到最后一页
+        if goToLastPageOnLoad {
+            goToLastPageOnLoad = false
+            currentPageIndex = max(0, pages.count - 1)
         } else {
-            currentPageIndex = 0
+            let savedPage = book.durChapterPos
+            if savedPage > 0 && savedPage < pages.count {
+                currentPageIndex = savedPage
+            } else {
+                currentPageIndex = 0
+            }
         }
+        _ = processedContent  // suppress unused warning
         // 异步加载当前章节高亮
         Task { await loadHighlights() }
+    }
+
+    /// 通用分页函数：对任意章节做分页，返回页列表（不修改 currentPages/currentPageIndex）
+    private func paginateChapter(index: Int, content: String) -> [String] {
+        guard index < chapters.count else { return [] }
+        let settings  = ReaderSettings.shared
+        let screenSize = UIScreen.main.bounds.size
+        let font = settings.readerFont(size: settings.fontSize)
+        let horizontalPadding = settings.sideMargin * 2
+        let verticalPadding   = settings.topMargin + settings.bottomMargin
+                              + ReaderLayout.headerH + ReaderLayout.footerH + 14
+        let usableSize = CGSize(
+            width:  max(screenSize.width  - horizontalPadding, 100),
+            height: max(screenSize.height - verticalPadding,   100)
+        )
+        let paginator = ChapterPaginator(
+            pageSize: usableSize,
+            font: font,
+            lineSpacing: settings.lineSpacing,
+            letterSpacing: settings.letterSpacing,
+            paragraphSpacing: settings.paragraphSpacing
+        )
+        let title = chapters[index].title
+        let processed = content.replacingOccurrences(of: "\n\n", with: "\n")
+        return paginator.paginate(text: processed, chapterTitle: title)
     }
 
     // MARK: - 高亮操作
@@ -746,11 +765,22 @@ class ReaderViewModel: ObservableObject {
 
     func nextChapterOnly() {
         guard currentChapterIndex < chapters.count - 1 else { return }
-        currentChapterIndex += 1
+        let nextIdx = currentChapterIndex + 1
+        currentChapterIndex = nextIdx
+        // 如果相邻章节已预分页，直接使用，无需加载动画
+        if let prepaged = prepagedChapters[nextIdx], !prepaged.isEmpty {
+            prepagedChapters.removeValue(forKey: nextIdx)
+            currentPages = prepaged
+            currentPageIndex = 0
+            var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
+            savePageProgress()
+            prefetch(around: nextIdx)
+            Task { await loadHighlights() }
+            return
+        }
         currentPageIndex = 0
         currentPages = []
-        isLoading = true   // 防止瞬间显示"加载失败"
-        // 切章时 durChapterPos 重置，避免新章节恢复到错误页
+        isLoading = true
         var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
         Task {
             await loadChapterContent(at: currentChapterIndex)
@@ -761,10 +791,23 @@ class ReaderViewModel: ObservableObject {
 
     private func prevChapterOnly() {
         guard currentChapterIndex > 0 else { return }
-        currentChapterIndex -= 1
+        let prevIdx = currentChapterIndex - 1
+        currentChapterIndex = prevIdx
+        // 如果相邻章节已预分页，直接使用并跳到最后一页
+        if let prepaged = prepagedChapters[prevIdx], !prepaged.isEmpty {
+            prepagedChapters.removeValue(forKey: prevIdx)
+            currentPages = prepaged
+            currentPageIndex = max(0, prepaged.count - 1)
+            var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
+            savePageProgress()
+            prefetch(around: prevIdx)
+            Task { await loadHighlights() }
+            return
+        }
         currentPageIndex = 0
         currentPages = []
-        isLoading = true   // 防止瞬间显示"加载失败"
+        goToLastPageOnLoad = true   // 加载完后跳到上一章最后一页
+        isLoading = true
         var updatedBook = book; updatedBook.durChapterPos = 0; self.book = updatedBook
         Task {
             await loadChapterContent(at: currentChapterIndex)

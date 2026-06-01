@@ -189,14 +189,22 @@ class ExploreBookListViewModel: ObservableObject {
                 return
             }
 
-            // JS-driven list rules (starting with <js> or @js:) perform their own
-            // network requests via java.ajax(). Pre-fetching the category URL is not
-            // only unnecessary — it can cause early-return on failure and blocks the
-            // JS from running at all. Pass the URL as baseUrl and let JS handle it.
-            let isJSRule = listRule.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<js>") ||
-                           listRule.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("@js:")
+            // Only skip pre-fetch if the JS rule is a STANDALONE fetcher that calls
+            // java.ajax / java.get / java.post internally. Pure transformation rules like
+            // `<js>result.replace(/null/g,'')</js>` still need the URL fetched first —
+            // they only transform `result`, they don't supply data themselves.
+            let ruleBody = listRule.trimmingCharacters(in: .whitespacesAndNewlines)
+            let isJSStandaloneFetcher: Bool
+            if ruleBody.hasPrefix("<js>") || ruleBody.lowercased().hasPrefix("@js:") {
+                isJSStandaloneFetcher = ruleBody.contains("java.ajax") ||
+                                        ruleBody.contains("java.get(") ||
+                                        ruleBody.contains("java.post(") ||
+                                        ruleBody.contains("requestSync")
+            } else {
+                isJSStandaloneFetcher = false
+            }
             let html: String
-            if isJSRule {
+            if isJSStandaloneFetcher {
                 html = ""
             } else if parsed.method == "POST", let body = parsed.body {
                 html = try await network.requestPost(requestUrl, body: body, source: source)
