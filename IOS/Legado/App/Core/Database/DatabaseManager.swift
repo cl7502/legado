@@ -431,22 +431,28 @@ extension DatabaseManager {
         let localKeys = Set(existing.map {
             "\($0.bookUrl)_\($0.chapterIndex)_\(Int64($0.createdAt.timeIntervalSince1970))"
         })
-        for entry in entries {
+        let toInsert = entries.compactMap { entry -> Bookmark? in
             let key = "\(entry.bookUrl)_\(entry.chapterIndex)_\(entry.createdAt / 1000)"
-            if !localKeys.contains(key) {
-                try await saveBookmark(entry.toBookmark())
-            }
+            return localKeys.contains(key) ? nil : entry.toBookmark()
+        }
+        guard !toInsert.isEmpty else { return }
+        _ = try await dbPool.write { db in
+            for bm in toInsert { try bm.save(db) }
         }
     }
 
     func importHighlights(_ entries: [SyncHighlightEntry]) async throws {
         let existing = try await exportAllHighlights()
-        let localKeys = Set(existing.map { "\($0.bookUrl)_\($0.chapterIndex)_\($0.startOffset)_\($0.endOffset)" })
-        for entry in entries {
+        let localKeys = Set(existing.map {
+            "\($0.bookUrl)_\($0.chapterIndex)_\($0.startOffset)_\($0.endOffset)"
+        })
+        let toInsert = entries.compactMap { entry -> BookHighlight? in
             let key = "\(entry.bookUrl)_\(entry.chapterIndex)_\(entry.startOffset)_\(entry.endOffset)"
-            if !localKeys.contains(key) {
-                try await saveHighlight(entry.toHighlight())
-            }
+            return localKeys.contains(key) ? nil : entry.toHighlight()
+        }
+        guard !toInsert.isEmpty else { return }
+        _ = try await dbPool.write { db in
+            for h in toInsert { try h.save(db) }
         }
     }
 }

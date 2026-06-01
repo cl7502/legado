@@ -70,8 +70,10 @@ final class WebDAVSyncManager: ObservableObject {
             bgTask = .invalid
         }
         defer {
-            UIApplication.shared.endBackgroundTask(bgTask)
-            bgTask = .invalid
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
         }
 
         state = .syncing

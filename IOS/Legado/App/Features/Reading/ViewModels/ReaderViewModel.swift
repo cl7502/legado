@@ -614,6 +614,7 @@ class ReaderViewModel: ObservableObject {
         var updatedBook = book
         updatedBook.durChapterIndex = currentChapterIndex
         updatedBook.durChapterPos   = currentPageIndex
+        updatedBook.durChapterTime  = Int64(Date().timeIntervalSince1970 * 1000)
         self.book = updatedBook
         Task { try? await db.saveBook(updatedBook) }
     }

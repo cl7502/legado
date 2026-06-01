@@ -73,6 +73,7 @@ final class WebDAVSettings: ObservableObject {
         set {
             KeychainHelper.set(newValue, service: kWebDAVService, account: "password")
             refreshIsConfigured()
+            objectWillChange.send()
         }
     }
 
