@@ -10,6 +10,7 @@
 		0C11DA470551673E80043DF1 /* JSONPathEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 886B2604AAAF3D48A1EBEEAF /* JSONPathEngine.swift */; };
 		0E2583963C526A553517E813 /* RuleExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB76FF5ED2833C59D25F9956 /* RuleExecutor.swift */; };
 		1455715C1E7840E8A605D9BB /* ExploreDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */; };
+		B420EB21ABA340C3AE7D2ABA /* SourceLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C9194A0A963496F867D651B /* SourceLoginView.swift */; };
 		17EABFDE74A91843DA479BBE /* BookSourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58A64AE613625A1A6F5060F0 /* BookSourceListView.swift */; };
 		1F86F5E465F648BB83AB0EC0 /* BookHighlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 364D1D8349FB4BF8A34F88AF /* BookHighlight.swift */; };
 		1FBB4996EDF285553CA8187D /* ReaderSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC05B10A239C4AA6842C5BD /* ReaderSettingsSheet.swift */; };
@@ -180,6 +181,7 @@
 		E02F101AE40D62F7261A7698 /* AnalyzeContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyzeContext.swift; sourceTree = "<group>"; };
 		E53CBC7D7F8135315BC60D57 /* LegadoJSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegadoJSEngine.swift; sourceTree = "<group>"; };
 		E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreDebugView.swift; sourceTree = "<group>"; };
+		6C9194A0A963496F867D651B /* SourceLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceLoginView.swift; sourceTree = "<group>"; };
 		E75ACA0647EC67C7BCED7E3E /* SimulationPagingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulationPagingView.swift; sourceTree = "<group>"; };
 		E76185F0885749A3AA4881C7 /* BatteryMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatteryMonitor.swift; sourceTree = "<group>"; };
 		F0091378AF4BF45D59B0F484 /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkManager.swift; sourceTree = "<group>"; };
@@ -472,6 +474,8 @@
 				58A64AE613625A1A6F5060F0 /* BookSourceListView.swift */,
 				4219C4F1F814AB2E7305C338 /* ExploreView.swift */,
 				E6F0F68FA09847BEA817FD6C /* ExploreDebugView.swift */,
+		6C9194A0A963496F867D651B /* SourceLoginView.swift */,
+		6C9194A0A963496F867D651B /* SourceLoginView.swift */,
 				885E8B7FEE8690B2AA0D5CFA /* SearchView.swift */,
 			);
 			path = Views;
@@ -670,6 +674,7 @@
 				2AAD0EF819101DDD1F0AFAE0 /* EncodingHelper.swift in Sources */,
 				1FE555CCB62E2E222C04B331 /* ExploreView.swift in Sources */,
 				1455715C1E7840E8A605D9BB /* ExploreDebugView.swift in Sources */,
+				B420EB21ABA340C3AE7D2ABA /* SourceLoginView.swift in Sources */,
 				E65F4DD892DB561CAFBECDA4 /* HTMLParser.swift in Sources */,
 				AA000002AA000002AA000002 /* LibXMLXPath.swift in Sources */,
 				DBB0AB382ECEE822F0D9F2AA /* JSJavaHelper.swift in Sources */,

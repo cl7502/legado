@@ -45,6 +45,8 @@ struct BookSourceListView: View {
     @State private var editSource: BookSource? = nil
     // 浏览书源 sheet
     @State private var browseURL: URL? = nil
+    // 书源登录 sheet
+    @State private var loginSource: BookSource? = nil
 
     var body: some View {
         NavigationView {
@@ -52,32 +54,7 @@ struct BookSourceListView: View {
                 ForEach(viewModel.sources) { source in
                     HStack(spacing: 0) {
                         // 三点菜单（完整版）
-                        Menu {
-                            Button { editSource = source } label: {
-                                Label("编辑书源", systemImage: "pencil")
-                            }
-                            Button {
-                                if let url = URL(string: source.bookSourceUrl) { browseURL = url }
-                            } label: {
-                                Label("浏览书源", systemImage: "safari")
-                            }
-                            Button { Task { await viewModel.moveToTop(source) } } label: {
-                                Label("置顶", systemImage: "arrow.up.to.line")
-                            }
-                            Button { Task { await viewModel.toggleEnabledExplore(source) } } label: {
-                                Label(
-                                    source.enabledExplore ? "禁用发现" : "启用发现",
-                                    systemImage: source.enabledExplore ? "eye.slash" : "eye"
-                                )
-                            }
-                            Divider()
-                            Button { debugSource = source } label: {
-                                Label("调试发现规则", systemImage: "ladybug")
-                            }
-                            Button { deepCheckSingleSource = source } label: {
-                                Label("深度检查", systemImage: "stethoscope")
-                            }
-                        } label: {
+                        Menu { sourceMenu(for: source) } label: {
                             Image(systemName: "ellipsis.circle")
                                 .font(.system(size: 16))
                                 .foregroundColor(.secondary)
@@ -275,6 +252,10 @@ struct BookSourceListView: View {
                     BookSourceEditView(source: source, viewModel: viewModel)
                 }
             }
+            // 书源登录 sheet（对标 Android SourceLoginActivity）
+            .sheet(item: $loginSource) { source in
+                SourceLoginView(source: source)
+            }
             // 浏览书源 sheet
             .sheet(isPresented: Binding(
                 get: { browseURL != nil },
@@ -444,6 +425,42 @@ struct BookSourceRow: View {
                 .cornerRadius(4)
         default:
             EmptyView()  // 未检测：不显示
+        }
+    }
+}
+
+// MARK: - BookSourceListView 三点菜单（独立 extension 解决 type-check timeout）
+extension BookSourceListView {
+    @ViewBuilder
+    func sourceMenu(for source: BookSource) -> some View {
+        Button { editSource = source } label: {
+            Label("编辑书源", systemImage: "pencil")
+        }
+        if !(source.loginUrl ?? "").isEmpty {
+            Button { loginSource = source } label: {
+                Label("登录", systemImage: "person.badge.key")
+            }
+        }
+        Button {
+            if let url = URL(string: source.bookSourceUrl) { browseURL = url }
+        } label: {
+            Label("浏览书源", systemImage: "safari")
+        }
+        Button { Task { await viewModel.moveToTop(source) } } label: {
+            Label("置顶", systemImage: "arrow.up.to.line")
+        }
+        Button { Task { await viewModel.toggleEnabledExplore(source) } } label: {
+            Label(
+                source.enabledExplore ? "禁用发现" : "启用发现",
+                systemImage: source.enabledExplore ? "eye.slash" : "eye"
+            )
+        }
+        Divider()
+        Button { debugSource = source } label: {
+            Label("调试发现规则", systemImage: "ladybug")
+        }
+        Button { deepCheckSingleSource = source } label: {
+            Label("深度检查", systemImage: "stethoscope")
         }
     }
 }

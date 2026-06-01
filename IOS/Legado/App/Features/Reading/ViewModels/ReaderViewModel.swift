@@ -229,7 +229,17 @@ class ReaderViewModel: ObservableObject {
 
             var context = AnalyzeContext(source: source, baseUrl: effectiveTocUrl)
             context.book = book
-            let html = try await network.request(effectiveTocUrl, source: source)
+            var html = try await network.request(effectiveTocUrl, source: source)
+
+            // loginCheckJs — 对标 Android WebBook.getChapterListAwait() 执行登录检测/修改响应
+            // 返回非 nil 则用修改后的 HTML；抛出异常则忽略（书源写法容错）
+            if let checkJs = source.loginCheckJs, !checkJs.isEmpty {
+                var checkCtx = AnalyzeContext(source: source, baseUrl: effectiveTocUrl)
+                checkCtx.result = html
+                if let modified = LegadoJSEngine.shared.evaluateRule(checkJs, in: &checkCtx), !modified.isEmpty {
+                    html = modified
+                }
+            }
             context.result = html
 
             // 将 tocUrl 和 bookUrl 的 URL 参数注入 context.variables（大小写均存），
@@ -414,7 +424,16 @@ class ReaderViewModel: ObservableObject {
                 guard let source = sources.first(where: { $0.bookSourceUrl == book.origin }) else { return }
             
             var context = AnalyzeContext(source: source, baseUrl: chapter.url)
-            let html = try await network.request(chapter.url, source: source)
+            var html = try await network.request(chapter.url, source: source)
+
+            // loginCheckJs — 对标 Android WebBook.getContentAwait()
+            if let checkJs = source.loginCheckJs, !checkJs.isEmpty {
+                var checkCtx = AnalyzeContext(source: source, baseUrl: chapter.url)
+                checkCtx.result = html
+                if let modified = LegadoJSEngine.shared.evaluateRule(checkJs, in: &checkCtx), !modified.isEmpty {
+                    html = modified
+                }
+            }
 
             let replaceRules = try await db.getReplaceRules()
             var content = contentParser.parseContent(
