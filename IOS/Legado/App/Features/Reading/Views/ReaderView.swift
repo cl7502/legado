@@ -356,11 +356,22 @@ struct ReaderView: View {
     }
 
     private var loadingPlaceholder: some View {
-        VStack(spacing: 12) {
-            ProgressView().tint(settings.currentTheme.textColor)
-            Text("加载中...")
-                .foregroundColor(settings.currentTheme.textColor)
-                .font(.system(size: settings.fontSize))
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 12) {
+                ProgressView().tint(settings.currentTheme.textColor)
+                Text("加载中...")
+                    .foregroundColor(settings.currentTheme.textColor)
+                    .font(.system(size: settings.fontSize))
+            }
+            // 加载中也保留退出路径，避免网络超长时用户被困
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(settings.currentTheme.textColor.opacity(0.6))
+                    .padding(12)
+            }
         }
     }
 
@@ -383,15 +394,27 @@ struct ReaderView: View {
                     .foregroundColor(settings.currentTheme.textColor.opacity(0.6))
                     .multilineTextAlignment(.center)
             }
-            Button {
-                Task { await viewModel.setup() }
-            } label: {
-                Label("重试", systemImage: "arrow.clockwise")
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
+            HStack(spacing: 16) {
+                Button {
+                    dismiss()
+                } label: {
+                    Label("返回", systemImage: "chevron.left")
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.bordered)
+                .tint(.secondary)
+
+                Button {
+                    Task { await viewModel.setup() }
+                } label: {
+                    Label("重试", systemImage: "arrow.clockwise")
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
             }
-            .buttonStyle(.bordered)
-            .tint(.orange)
         }
         .padding()
     }
