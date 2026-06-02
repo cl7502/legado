@@ -3,7 +3,6 @@ import SwiftUI
 /// 设置界面
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
-    @AppStorage("readerPreset") private var readerPreset: String = "normal"
     @ObservedObject private var syncManager = WebDAVSyncManager.shared
     @ObservedObject private var webdavSettings = WebDAVSettings.shared
     @State private var webdavPassword = ""
@@ -24,21 +23,10 @@ struct SettingsView: View {
                     }
                 }
 
-                // MARK: 阅读偏好
-                Section(header: Text("阅读偏好")) {
-                    Picker("字号/行高预设", selection: $readerPreset) {
-                        Text("正常").tag("normal")
-                        Text("舒适").tag("comfortable")
-                        Text("紧凑").tag("compact")
-                    }
-                    .pickerStyle(.segmented)
-
-                    HStack {
-                        Image(systemName: "textformat.size")
-                            .foregroundColor(.secondary)
-                        Text(presetDescription)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                // MARK: 阅读
+                Section(header: Text("阅读")) {
+                    NavigationLink(destination: GlobalReaderSettingsView()) {
+                        Label("阅读设置", systemImage: "book")
                     }
                 }
 
@@ -163,12 +151,71 @@ struct SettingsView: View {
             .navigationTitle("设置")
         }
     }
+}
 
-    private var presetDescription: String {
-        switch readerPreset {
-        case "comfortable": return "字号 18pt · 行高 1.8 — 适合长时间阅读"
-        case "compact":     return "字号 14pt · 行高 1.3 — 显示更多内容"
-        default:            return "字号 16pt · 行高 1.5 — 默认设置"
+// MARK: - GlobalReaderSettingsView（全局阅读设置）
+
+struct GlobalReaderSettingsView: View {
+    @StateObject private var settings = ReaderSettings.shared
+
+    var body: some View {
+        Form {
+            // ── 翻页动画 ──────────────────────────────────
+            Section("翻页动画") {
+                Picker("动画效果", selection: Binding(
+                    get: { settings.pageAnimation },
+                    set: { settings.pageAnimation = $0 }
+                )) {
+                    ForEach(PageAnimation.allCases, id: \.self) { anim in
+                        Text(anim.displayName).tag(anim)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            // ── 缓存 ──────────────────────────────────────
+            Section("缓存") {
+                HStack {
+                    Text("预缓存章节数")
+                    Spacer()
+                    Button {
+                        settings.prefetchCount = max(1, settings.prefetchCount - 1)
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }.buttonStyle(.plain)
+                    Text("\(settings.prefetchCount)章")
+                        .frame(width: 44, alignment: .center)
+                        .monospacedDigit()
+                    Button {
+                        settings.prefetchCount = min(50, settings.prefetchCount + 1)
+                    } label: {
+                        Image(systemName: "plus.circle")
+                    }.buttonStyle(.plain)
+                }
+                Text("阅读时在后台提前下载后续章节，数值越大消耗流量越多。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            // ── 高级 ──────────────────────────────────────
+            Section("高级") {
+                Toggle("屏幕常亮", isOn: $settings.keepScreenOn)
+                    .onChange(of: settings.keepScreenOn) { val in
+                        UIApplication.shared.isIdleTimerDisabled = val
+                    }
+                Toggle("繁体中文", isOn: $settings.useTraditionalChinese)
+                Toggle("音量键翻页", isOn: $settings.volumePageTurn)
+                if ModelManager.isAvailable(.zipVoiceDistillInt8) {
+                    Toggle("高质量TTS（ZipVoice）", isOn: $settings.useNovellaTTS)
+                }
+            }
+        }
+        .navigationTitle("阅读设置")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // 进入设置页时同步系统状态
+            UIApplication.shared.isIdleTimerDisabled = settings.keepScreenOn
         }
     }
 }
+

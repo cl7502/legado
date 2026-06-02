@@ -1089,11 +1089,8 @@ struct ReaderMenuView: View {
 
 struct ReaderSettingsSheet: View {
     @StateObject private var settings = ReaderSettings.shared
-    @StateObject private var fontManager = FontManager.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var showPreferences = false
     @State private var brightness: Double = Double(UIScreen.main.brightness)
-    @State private var showFontImporter = false
 
     var body: some View {
         NavigationView {
@@ -1109,36 +1106,12 @@ struct ReaderSettingsSheet: View {
                     }
                 }
 
-                // ── 字体排版 ─────────────────────────────────
-                Section("字体排版") {
-                    stepperRow(title: "字号",   value: $settings.fontSize,        range: 12...40, step: 1)
-                    stepperRow(title: "行高",   value: $settings.lineSpacing,      range: 0...30,  step: 1)
-                    stepperRow(title: "字间距", value: $settings.letterSpacing,    range: -3...10, step: 0.5)
-                    stepperRow(title: "段间距", value: $settings.paragraphSpacing, range: 0...50,  step: 2)
-
-                    Picker("字体", selection: $settings.fontName) {
-                        Text("系统默认").tag("")
-                        ForEach(fontManager.importedFonts) { entry in
-                            Text(entry.displayName).tag(entry.psName)
-                        }
-                    }
-
-                    Button {
-                        showFontImporter = true
+                // ── 字体排版（子页面）──────────────────────────
+                Section {
+                    NavigationLink {
+                        TypographySettingsView()
                     } label: {
-                        Label("导入字体文件（TTF/OTF）", systemImage: "plus.circle")
-                    }
-                    .fileImporter(
-                        isPresented: $showFontImporter,
-                        allowedContentTypes: [.font],
-                        allowsMultipleSelection: false
-                    ) { result in
-                        guard let url = try? result.get().first else { return }
-                        let accessing = url.startAccessingSecurityScopedResource()
-                        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-                        if let entry = fontManager.importFont(from: url) {
-                            settings.fontName = entry.psName
-                        }
+                        Label("字体排版", systemImage: "textformat")
                     }
                 }
 
@@ -1170,20 +1143,43 @@ struct ReaderSettingsSheet: View {
                     }
                 }
 
-                // ── 更多设置入口 ──────────────────────────────
-                Section {
-                    Button {
-                        showPreferences = true
-                    } label: {
+                // ── 页眉信息 ─────────────────────────────────
+                Section("页眉信息") {
+                    Toggle("显示章节进度", isOn: $settings.showHeaderProgress)
+                    Toggle("显示右上电量", isOn: $settings.showHeaderBattery)
+                }
+
+                // ── 自动翻页 ─────────────────────────────────
+                Section("自动翻页") {
+                    Toggle("启用自动翻页", isOn: $settings.autoScrollEnabled)
+                    if settings.autoScrollEnabled {
                         HStack {
-                            Text("更多阅读设置")
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            Text("翻页间隔")
+                            Slider(value: $settings.autoScrollInterval, in: 3...120)
+                            Text("\(Int(settings.autoScrollInterval))秒")
+                                .monospacedDigit()
+                                .frame(width: 44, alignment: .trailing)
                         }
                     }
-                    .foregroundColor(.primary)
+                }
+
+                // ── 文字颜色 ─────────────────────────────────
+                Section("文字颜色") {
+                    Toggle("自定义文字颜色", isOn: Binding(
+                        get:  { settings.textColorOverrideHex.isEmpty == false },
+                        set:  { on in
+                            if on { settings.textColorOverride = settings.currentTheme.textColor }
+                            else  { settings.textColorOverrideHex = "" }
+                        }
+                    ))
+                    if settings.textColorOverrideHex.isEmpty == false {
+                        ColorPicker("文字颜色", selection: Binding(
+                            get: { settings.textColorOverride ?? settings.currentTheme.textColor },
+                            set: { settings.textColorOverride = $0 }
+                        ), supportsOpacity: false)
+                        Button("恢复主题默认") { settings.textColorOverrideHex = "" }
+                            .foregroundColor(.red)
+                    }
                 }
             }
             .navigationTitle("阅读设置")
@@ -1194,9 +1190,6 @@ struct ReaderSettingsSheet: View {
                 }
             }
             .onAppear { brightness = Double(UIScreen.main.brightness) }
-            .sheet(isPresented: $showPreferences) {
-                ReadingPreferencesView()
-            }
         }
     }
 
@@ -1260,28 +1253,7 @@ struct ReaderSettingsSheet: View {
         }
     }
 
-    // MARK: - Stepper 行
-
-    private func stepperRow(title: String, value: Binding<CGFloat>,
-                             range: ClosedRange<CGFloat>, step: CGFloat) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Button {
-                if value.wrappedValue > range.lowerBound { value.wrappedValue -= step }
-            } label: {
-                Image(systemName: "minus.circle").foregroundColor(.blue)
-            }.buttonStyle(.plain)
-            Text(String(format: step < 1 ? "%.1f" : "%.0f", value.wrappedValue))
-                .frame(width: 36, alignment: .center)
-                .monospacedDigit()
-            Button {
-                if value.wrappedValue < range.upperBound { value.wrappedValue += step }
-            } label: {
-                Image(systemName: "plus.circle").foregroundColor(.blue)
-            }.buttonStyle(.plain)
-        }
-    }
+    // MARK: - Stepper 行（主题圆保留，stepperRow 移至 TypographySettingsView）
 }
 
 // MARK: - ReaderPageContent（兼容旧引用）
@@ -1401,121 +1373,64 @@ private struct MixedContentView: View {
     }
 }
 
-// MARK: - ReadingPreferencesView（阅读偏好）
+// MARK: - TypographySettingsView（字体排版子页面）
 
-struct ReadingPreferencesView: View {
+struct TypographySettingsView: View {
     @StateObject private var settings = ReaderSettings.shared
-    @Environment(\.dismiss) private var dismiss
+    @StateObject private var fontManager = FontManager.shared
+    @State private var showFontImporter = false
 
     var body: some View {
-        NavigationView {
-            Form {
-                // ── 布局预设 ──────────────────────────────────
-                Section("布局预设") {
-                    HStack(spacing: 12) {
-                        presetButton(label: "正常",  fontSize: 18, lineSpacing: 8,  sideMargin: 20)
-                        presetButton(label: "舒适",  fontSize: 19, lineSpacing: 12, sideMargin: 24)
-                        presetButton(label: "紧凑",  fontSize: 17, lineSpacing: 6,  sideMargin: 16)
-                    }
-                    .padding(.vertical, 4)
+        Form {
+            // ── 布局预设 ──────────────────────────────────
+            Section("布局预设") {
+                HStack(spacing: 12) {
+                    presetButton(label: "正常",  fontSize: 18, lineSpacing: 8,  sideMargin: 20)
+                    presetButton(label: "舒适",  fontSize: 19, lineSpacing: 12, sideMargin: 24)
+                    presetButton(label: "紧凑",  fontSize: 17, lineSpacing: 6,  sideMargin: 16)
                 }
-
-                // ── 页眉信息 ──────────────────────────────────
-                Section("页眉信息") {
-                    Toggle("显示章节进度", isOn: $settings.showHeaderProgress)
-                    Toggle("显示右上电量", isOn: $settings.showHeaderBattery)
-                }
-
-                // ── 高级 ──────────────────────────────────────
-                Section("高级") {
-                    Toggle("屏幕常亮", isOn: $settings.keepScreenOn)
-                        .onChange(of: settings.keepScreenOn) { val in
-                            UIApplication.shared.isIdleTimerDisabled = val
-                        }
-                    Toggle("繁体中文", isOn: $settings.useTraditionalChinese)
-                    Toggle("音量键翻页", isOn: $settings.volumePageTurn)
-                    if ModelManager.isAvailable(.zipVoiceDistillInt8) {
-                        Toggle("高质量TTS（ZipVoice）", isOn: $settings.useNovellaTTS)
-                    }
-                }
-
-                // ── 翻页动画 ──────────────────────────────────
-                Section("翻页动画") {
-                    Picker("动画效果", selection: Binding(
-                        get: { settings.pageAnimation },
-                        set: { settings.pageAnimation = $0 }
-                    )) {
-                        ForEach(PageAnimation.allCases, id: \.self) { anim in
-                            Text(anim.displayName).tag(anim)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                // ── 自动翻页 ──────────────────────────────────
-                Section("自动翻页") {
-                    Toggle("启用自动翻页", isOn: $settings.autoScrollEnabled)
-                    if settings.autoScrollEnabled {
-                        HStack {
-                            Text("翻页间隔")
-                            Slider(value: $settings.autoScrollInterval, in: 3...120)
-                            Text("\(Int(settings.autoScrollInterval))秒")
-                                .monospacedDigit()
-                                .frame(width: 44, alignment: .trailing)
-                        }
-                    }
-                }
-
-                // ── 文字颜色 ──────────────────────────────────
-                Section("文字颜色") {
-                    Toggle("自定义文字颜色", isOn: Binding(
-                        get:  { settings.textColorOverrideHex.isEmpty == false },
-                        set:  { on in
-                            if on { settings.textColorOverride = settings.currentTheme.textColor }
-                            else  { settings.textColorOverrideHex = "" }
-                        }
-                    ))
-                    if settings.textColorOverrideHex.isEmpty == false {
-                        ColorPicker("文字颜色", selection: Binding(
-                            get: { settings.textColorOverride ?? settings.currentTheme.textColor },
-                            set: { settings.textColorOverride = $0 }
-                        ), supportsOpacity: false)
-                        Button("恢复主题默认") {
-                            settings.textColorOverrideHex = ""
-                        }
-                        .foregroundColor(.red)
-                    }
-                }
-
-                // ── 缓存 ──────────────────────────────────────
-                Section("缓存") {
-                    HStack {
-                        Text("预缓存章节数")
-                        Spacer()
-                        Button {
-                            settings.prefetchCount = max(1, settings.prefetchCount - 1)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }.buttonStyle(.plain)
-                        Text("\(settings.prefetchCount)章")
-                            .frame(width: 40, alignment: .center)
-                            .monospacedDigit()
-                        Button {
-                            settings.prefetchCount = min(50, settings.prefetchCount + 1)
-                        } label: {
-                            Image(systemName: "plus.circle")
-                        }.buttonStyle(.plain)
-                    }
-                }
+                .padding(.vertical, 4)
             }
-            .navigationTitle("阅读偏好")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") { dismiss() }
+
+            // ── 精细调节 ──────────────────────────────────
+            Section("精细调节") {
+                stepperRow(title: "字号",   value: $settings.fontSize,        range: 12...40, step: 1)
+                stepperRow(title: "行高",   value: $settings.lineSpacing,      range: 0...30,  step: 1)
+                stepperRow(title: "字间距", value: $settings.letterSpacing,    range: -3...10, step: 0.5)
+                stepperRow(title: "段间距", value: $settings.paragraphSpacing, range: 0...50,  step: 2)
+                stepperRow(title: "左右边距", value: $settings.sideMargin,     range: 0...60,  step: 2)
+                stepperRow(title: "上下边距", value: $settings.topMargin,      range: 0...40,  step: 2)
+            }
+
+            // ── 字体 ──────────────────────────────────────
+            Section("字体") {
+                Picker("字体", selection: $settings.fontName) {
+                    Text("系统默认").tag("")
+                    ForEach(fontManager.importedFonts) { entry in
+                        Text(entry.displayName).tag(entry.psName)
+                    }
+                }
+                Button {
+                    showFontImporter = true
+                } label: {
+                    Label("导入字体文件（TTF/OTF）", systemImage: "plus.circle")
+                }
+                .fileImporter(
+                    isPresented: $showFontImporter,
+                    allowedContentTypes: [.font],
+                    allowsMultipleSelection: false
+                ) { result in
+                    guard let url = try? result.get().first else { return }
+                    let accessing = url.startAccessingSecurityScopedResource()
+                    defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                    if let entry = fontManager.importFont(from: url) {
+                        settings.fontName = entry.psName
+                    }
                 }
             }
         }
+        .navigationTitle("字体排版")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func presetButton(label: String, fontSize: CGFloat,
@@ -1532,13 +1447,35 @@ struct ReadingPreferencesView: View {
                 .font(.subheadline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(isActive ? Color.blue : Color(.systemGray5))
+                .background(isActive ? Color.accentColor : Color(.secondarySystemFill))
                 .foregroundColor(isActive ? .white : .primary)
                 .cornerRadius(8)
         }
         .buttonStyle(.plain)
     }
+
+    private func stepperRow(title: String, value: Binding<CGFloat>,
+                             range: ClosedRange<CGFloat>, step: CGFloat) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Button {
+                if value.wrappedValue > range.lowerBound { value.wrappedValue -= step }
+            } label: {
+                Image(systemName: "minus.circle").foregroundColor(.blue)
+            }.buttonStyle(.plain)
+            Text(String(format: step < 1 ? "%.1f" : "%.0f", value.wrappedValue))
+                .frame(width: 40, alignment: .center)
+                .monospacedDigit()
+            Button {
+                if value.wrappedValue < range.upperBound { value.wrappedValue += step }
+            } label: {
+                Image(systemName: "plus.circle").foregroundColor(.blue)
+            }.buttonStyle(.plain)
+        }
+    }
 }
+
 
 // MARK: - HiddenVolumeView — 抑制系统音量 HUD，暴露 UISlider 用于复位音量
 
