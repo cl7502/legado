@@ -213,6 +213,9 @@ class RuleExecutor {
         for (key, subRule) in putMap {
             let value = execute(subRule, in: &tempCtx) ?? ""
             context.variables[key] = value
+            // Bridge @put to java.get's global store so cross-context rules can retrieve these values
+            // (e.g., explore @put:{id:id} → book info {{java.get('id')}})
+            JSJavaHelper.globalPut(key, value: value, sourceUrl: context.source.bookSourceUrl)
         }
         // Propagate any variables set by sub-rules' JS
         context.variables.merge(tempCtx.variables) { _, new in new }

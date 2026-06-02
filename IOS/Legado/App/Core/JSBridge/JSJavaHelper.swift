@@ -107,7 +107,24 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     // Keyed by sourceUrl so different sources don't share cache entries.
     private var cacheObjects: [String: Any] = [:]
 
-    // MARK: - Network
+    // MARK: - Global variable store (mirrors Android BookSourceHelp.varMap)
+    // java.put(key, value) writes here; java.get(key) reads here.
+    // Keyed by sourceUrl so sources are isolated.
+    // @put:{} in RuleExecutor also bridges here so explore-stored vars survive
+    // across context resets (e.g., explore → book info → chapter content).
+    static var globalVarStore: [String: [String: String]] = [:]
+    private static let varStoreLock = NSLock()
+
+    static func globalPut(_ key: String, value: String, sourceUrl: String) {
+        varStoreLock.lock(); defer { varStoreLock.unlock() }
+        globalVarStore[sourceUrl, default: [:]][key] = value
+    }
+
+    static func globalGet(_ key: String, sourceUrl: String) -> String? {
+        varStoreLock.lock(); defer { varStoreLock.unlock() }
+        return globalVarStore[sourceUrl]?[key]
+    }
+
     // Android ajax()/connect() pass the URL string through AnalyzeUrl, so
     // "http://api.example.com/list,{\"headers\":{...}}" correctly attaches
     // request headers. We replicate that by parsing with AnalyzeUrl.parse().
@@ -155,22 +172,35 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     //   java.ajax(url + ',' + java.put("headers", JSON.stringify({...})))
     @discardableResult
     func put(_ key: String, _ value: Any) -> Any {
-        currentContext?.variables[key] = value
+        let strVal = "\(value)"
+        currentContext?.variables[key] = strVal
+        // Also persist globally so cross-evaluation rules (book info, TOC, content) can read via java.get
+        if let srcUrl = currentContext?.source.bookSourceUrl {
+            JSJavaHelper.globalPut(key, value: strVal, sourceUrl: srcUrl)
+        }
         return value
     }
 
     func get(_ key: String) -> Any? {
-        // Check reserved keys first (mirrors Android AnalyzeRule.get)
+        // Reserved keys — always from local context
         if key == "bookName" { return currentContext?.variables["bookName"] }
         if key == "title"    { return currentContext?.variables["title"] }
-        return currentContext?.variables[key]
+        // Check local context first, fall back to global store
+        if let local = currentContext?.variables[key] { return local }
+        if let srcUrl = currentContext?.source.bookSourceUrl {
+            return JSJavaHelper.globalGet(key, sourceUrl: srcUrl)
+        }
+        return nil
     }
 
     /// 两参数版 get(key, defaultValue)——Android 书源常用，第二个参数为默认值
     func get(_ key: String, _ defaultValue: JSValue) -> Any? {
         if key == "bookName" { return currentContext?.variables["bookName"] }
         if key == "title"    { return currentContext?.variables["title"] }
-        return currentContext?.variables[key] ?? (defaultValue.isUndefined || defaultValue.isNull ? nil : defaultValue)
+        if let local = currentContext?.variables[key] { return local }
+        if let srcUrl = currentContext?.source.bookSourceUrl,
+           let global = JSJavaHelper.globalGet(key, sourceUrl: srcUrl) { return global }
+        return defaultValue.isUndefined || defaultValue.isNull ? nil : defaultValue
     }
 
     // MARK: - Cross-evaluation object cache (mirrors Android JsExtensions cacheMap)
