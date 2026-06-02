@@ -122,31 +122,43 @@ class RuleParser {
         var s = jsonStr.trimmingCharacters(in: .whitespacesAndNewlines)
         guard s.hasPrefix("{") && s.hasSuffix("}") else { return [:] }
 
-        // Try standard JSON first
+        // Try standard JSON first (fully-quoted format)
         if let data = s.data(using: .utf8),
            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
             return dict
         }
 
-        // Lenient: add quotes to unquoted keys then retry
-        if let re = try? NSRegularExpression(pattern: #"(\w+)\s*:"#),
-           let data = re.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s),
-                                                  withTemplate: "\"$1\":").data(using: .utf8),
-           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
-            return dict
-        }
+        // Lenient: split the inner content by top-level commas, then split each chunk by first colon.
+        // This correctly handles {id:id,name:name,author:author} with multiple unquoted pairs.
+        let inner = String(s.dropFirst().dropLast())
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !inner.isEmpty else { return [:] }
 
-        // Fallback: first-colon split — key 是纯字母数字，value 取剩余全部（支持含 : 的子规则）
-        s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
-        if let colonIdx = s.firstIndex(of: ":") {
-            let key = s[..<colonIdx]
+        var result: [String: String] = [:]
+        // Split by commas that are NOT inside nested brackets { } [ ]
+        var depth = 0
+        var current = ""
+        var pairs: [String] = []
+        for ch in inner {
+            if ch == "{" || ch == "[" { depth += 1; current.append(ch) }
+            else if ch == "}" || ch == "]" { depth -= 1; current.append(ch) }
+            else if ch == "," && depth == 0 { pairs.append(current); current = "" }
+            else { current.append(ch) }
+        }
+        if !current.isEmpty { pairs.append(current) }
+
+        for pair in pairs {
+            let trimmed = pair.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let colonIdx = trimmed.firstIndex(of: ":") else { continue }
+            let key = trimmed[..<colonIdx]
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-            let value = String(s[s.index(after: colonIdx)...])
+            let value = String(trimmed[trimmed.index(after: colonIdx)...])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !key.isEmpty { return [key: value] }
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            if !key.isEmpty { result[key] = value }
         }
-        return [:]
+        return result
     }
 
     private func parseSingle(_ rule: String) -> RuleSegment {
