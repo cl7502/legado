@@ -286,10 +286,20 @@ class ReaderViewModel: ObservableObject {
                 if let comps = URLComponents(string: urlStr) {
                     for item in comps.queryItems ?? [] {
                         let v = item.value ?? ""
-                        context.variables[item.name]            = v   // 原始大小写
-                        context.variables[item.name.lowercased()] = v // 全小写兼容
+                        context.variables[item.name]            = v
+                        context.variables[item.name.lowercased()] = v
+                        // 同时写入全局 varStore，保证跨会话 java.get() 仍可读取
+                        if !v.isEmpty {
+                            JSJavaHelper.globalPut(item.name, value: v, sourceUrl: source.bookSourceUrl)
+                            JSJavaHelper.globalPut(item.name.lowercased(), value: v, sourceUrl: source.bookSourceUrl)
+                        }
                     }
                 }
+            }
+            // 将 novel_id / novelId 也作为 "id" 写入全局 varStore（番薯小说等源用 java.get('id')）
+            let novelIdVal = (context.variables["novel_id"] ?? context.variables["novelid"]) as? String ?? ""
+            if !novelIdVal.isEmpty && JSJavaHelper.globalGet("id", sourceUrl: source.bookSourceUrl) == nil {
+                JSJavaHelper.globalPut("id", value: novelIdVal, sourceUrl: source.bookSourceUrl)
             }
             // 同时存入 bookId 的常见别名，供不同书源使用
             if let bId = (context.variables["bookId"] ?? context.variables["bookid"]) as? String, !bId.isEmpty {
@@ -516,6 +526,8 @@ class ReaderViewModel: ObservableObject {
             }
 
             self.chapterContents[index] = content
+            // chapterContents LRU 淘汰：保留当前章节前后各 20 章，释放远离章节的内存
+            evictDistantChapterContents(around: index)
 
             // 持久化到 DB，下次进入直接从 DB 读取，跳过网络请求
             await db.saveChapterContent(content, for: chapter.url)
@@ -560,6 +572,8 @@ class ReaderViewModel: ObservableObject {
                           let content = self.chapterContents[i],
                           self.prepagedChapters[i] == nil else { return }
                     self.prepagedChapters[i] = self.paginateChapter(index: i, content: content)
+                    // 预分页完成后顺便淘汰远离当前章节的内存缓存
+                    self.evictDistantChapterContents(around: self.currentChapterIndex)
                 }
                 await MainActor.run { [weak self] in
                     _ = self?.prefetchTasks.removeValue(forKey: i)
@@ -574,6 +588,24 @@ class ReaderViewModel: ObservableObject {
         prefetchTasks.values.forEach { $0.cancel() }
         prefetchTasks.removeAll()
         prepagedChapters.removeAll()
+    }
+
+    /// LRU 淘汰：释放远离当前章节的内存缓存（DB 仍保留，下次需要时从 DB 读）
+    private func evictDistantChapterContents(around index: Int) {
+        let window = 20  // 保留前后各 20 章
+        let keysToRemove = chapterContents.keys.filter {
+            abs($0 - index) > window
+        }
+        for key in keysToRemove {
+            chapterContents.removeValue(forKey: key)
+        }
+        // prepagedChapters 只保留相邻 ±1，其余释放
+        let prepagedToRemove = prepagedChapters.keys.filter {
+            abs($0 - index) > 1
+        }
+        for key in prepagedToRemove {
+            prepagedChapters.removeValue(forKey: key)
+        }
     }
 
     func prefetchNextChapter() {
