@@ -22,7 +22,16 @@ class RuleExecutor {
         options: [.caseInsensitive]
     )
 
-    // MARK: - Public API
+    // I-5: NSCache 缓存已编译的 NSRegularExpression，内存压力下自动淘汰
+    private static let regexCache = NSCache<NSString, NSRegularExpression>()
+
+    private static func compiledRegex(pattern: String, options: NSRegularExpression.Options = [.dotMatchesLineSeparators]) -> NSRegularExpression? {
+        let key = "\(options.rawValue):\(pattern)" as NSString
+        if let cached = regexCache.object(forKey: key) { return cached }
+        guard let re = try? NSRegularExpression(pattern: pattern, options: options) else { return nil }
+        regexCache.setObject(re, forKey: key)
+        return re
+    }
 
     /// Execute rule, return single string result.
     func execute(_ rule: String, in context: inout AnalyzeContext) -> String? {
@@ -295,12 +304,11 @@ class RuleExecutor {
     private func applyHashHashReplace(_ text: String, pattern: String,
                                       replacement: String, replaceFirst: Bool) -> String {
         guard !pattern.isEmpty else { return text }
+        guard let regex = Self.compiledRegex(pattern: pattern) else { return text }
         do {
-            let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
             let range = NSRange(text.startIndex..., in: text)
             let result: String
             if replaceFirst {
-                // 无匹配时返回原文（Android 行为），而非 replacement 本身
                 if let match = regex.firstMatch(in: text, range: range) {
                     result = regex.stringByReplacingMatches(in: text, range: match.range, withTemplate: replacement)
                 } else {
@@ -344,8 +352,8 @@ class RuleExecutor {
 
     private func applyRegexExtract(_ text: String, pattern: String) -> String? {
         guard !pattern.isEmpty else { return text }
+        guard let regex = Self.compiledRegex(pattern: pattern) else { return nil }
         do {
-            let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
             let range = NSRange(text.startIndex..., in: text)
             if let match = regex.firstMatch(in: text, range: range) {
                 if match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: text) {

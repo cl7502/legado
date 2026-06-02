@@ -426,13 +426,20 @@ struct AnalyzeUrl {
         var webJs: String? = nil
     }
 
+    // 共享 JSContext（加锁保护），避免每次 parseOptionJSON 都创建整个 JS VM（~1-4MB）
+    // 番薯小说等书源的 TOC 可能有数百章节，每章 URL 含单引号 JSON options，
+    // 若每次都 JSContext() 则会在 loadChapters 遍历期间同时持有数百个 VM → OOM
+    private static let _normCtx: JSContext = JSContext()!
+    private static let _normLock = NSLock()
+
     private static func parseOptionJSON(_ json: String) -> UrlOption? {
         // 1. 先尝试标准 JSON 解析
         if let opt = parseOptionJSONStrict(json) { return opt }
-        // 2. 回退：通过 JSContext 规范化单引号/无引号 key 格式（如 {'method':'POST'}）
-        if let normalized = JSContext().evaluateScript("JSON.stringify(\(json))")?.toString(),
-           normalized.hasPrefix("{"),
-           let opt = parseOptionJSONStrict(normalized) {
+        // 2. 回退：通过共享 JSContext 规范化单引号/无引号 key 格式
+        _normLock.lock()
+        let normalized = _normCtx.evaluateScript("JSON.stringify(\(json))")?.toString()
+        _normLock.unlock()
+        if let n = normalized, n.hasPrefix("{"), let opt = parseOptionJSONStrict(n) {
             return opt
         }
         return nil

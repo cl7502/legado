@@ -451,6 +451,7 @@ class ReaderViewModel: ObservableObject {
         // DB 缓存命中 — 跳过网络请求
         if let cached = await db.getChapterContent(url: chapter.url), !cached.isEmpty {
             chapterContents[index] = cached
+            evictDistantChapterContents(around: currentChapterIndex)  // C-1: DB路径也淘汰
             if index == currentChapterIndex {
                 paginateCurrentChapter()
                 await syncProgress(chapter: chapter)
@@ -634,13 +635,16 @@ class ReaderViewModel: ObservableObject {
             let total = await self.chapters.count
             for i in 0..<total {
                 await self.loadChapterContent(at: i)
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    // C-1: 全本缓存每章后立即淘汰，防止 chapterContents 无限增长
+                    self.evictDistantChapterContents(around: self.currentChapterIndex)
                     self.cacheProgress = Double(i + 1) / Double(total)
                 }
             }
-            await MainActor.run {
-                self.isCachingAll = false
-                self.cacheProgress = 1.0
+            await MainActor.run { [weak self] in
+                self?.isCachingAll = false
+                self?.cacheProgress = 1.0
             }
         }
     }

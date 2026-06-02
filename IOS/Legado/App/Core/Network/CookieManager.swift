@@ -25,8 +25,16 @@ class CookieManager {
         guard let host = URL(string: url)?.host else { return }
         queue.async(flags: .barrier) { [weak self] in
             self?.cookies[host] = cookieString
+            self?.trimIfNeeded()
             self?.saveToDisk()
         }
+    }
+
+    private func trimIfNeeded() {
+        // W-9: 最多保留 200 条，防止无限增长（每条写入 UserDefaults 有双倍内存开销）
+        guard cookies.count > 200 else { return }
+        let overflow = cookies.count - 200
+        cookies.keys.prefix(overflow).forEach { cookies.removeValue(forKey: $0) }
     }
 
     private func saveToDisk() {

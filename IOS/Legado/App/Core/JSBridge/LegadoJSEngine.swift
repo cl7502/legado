@@ -209,44 +209,36 @@ class LegadoJSEngine {
 
         let block = { [weak self] in
             guard let self = self else { return }
+            // W-7: autoreleasepool 确保每个 JSContext 在调用结束后立即释放，
+            // 不等串行队列的 autorelease pool drain（否则多次调用会暂时累积多个 JS VM）
+            autoreleasepool {
+                self.javaHelper.currentContext = ctx
 
-            // Bind the helper to the current evaluation context
-            self.javaHelper.currentContext = ctx
+                let context = self.makeFreshContext(ctx: ctx)
+                if let jsLib = ctx.source.jsLib, !jsLib.isEmpty {
+                    context.evaluateScript(jsLib)
+                }
 
-            // Fresh JSContext — zero pollution from previous evaluations
-            let context = self.makeFreshContext(ctx: ctx)
+                let jsValue = context.evaluateScript(script)
+                ctx.variables = self.javaHelper.currentContext?.variables ?? [:]
 
-            // Load source jsLib utility functions BEFORE the rule script.
-            // Android evaluates jsLib once per source engine; we re-eval per call
-            // (acceptable overhead, guarantees isolation).
-            if let jsLib = ctx.source.jsLib, !jsLib.isEmpty {
-                context.evaluateScript(jsLib)
-            }
-
-            let jsValue = context.evaluateScript(script)
-
-            // Propagate variables written by java.put() back to caller
-            ctx.variables = self.javaHelper.currentContext?.variables ?? [:]
-
-            if jsValue?.isUndefined == true || jsValue?.isNull == true {
-                resultString = nil
-            } else if jsValue?.isArray == true {
-                // Android Rhino returns actual Java arrays from JS; JavaScriptCore converts
-                // arrays to comma-separated strings via toString(). Normalise to newline-
-                // separated so RuleExecutor.applySegmentList can split on \n (matching Android).
-                if let arr = jsValue?.toArray() {
-                    let joined = arr
-                        .compactMap { item -> String? in
-                            let s = "\(item)"
-                            return (s == "undefined" || s == "null") ? nil : s
-                        }
-                        .joined(separator: "\n")
-                    resultString = joined.isEmpty ? nil : joined
+                if jsValue?.isUndefined == true || jsValue?.isNull == true {
+                    resultString = nil
+                } else if jsValue?.isArray == true {
+                    if let arr = jsValue?.toArray() {
+                        let joined = arr
+                            .compactMap { item -> String? in
+                                let s = "\(item)"
+                                return (s == "undefined" || s == "null") ? nil : s
+                            }
+                            .joined(separator: "\n")
+                        resultString = joined.isEmpty ? nil : joined
+                    } else {
+                        resultString = jsValue?.toString()
+                    }
                 } else {
                     resultString = jsValue?.toString()
                 }
-            } else {
-                resultString = jsValue?.toString()
             }
         }
 

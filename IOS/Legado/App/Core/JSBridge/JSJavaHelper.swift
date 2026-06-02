@@ -125,6 +125,12 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
         return globalVarStore[sourceUrl]?[key]
     }
 
+    /// 书源删除或书库清空时清理对应条目（C-3: 防止 globalVarStore 无限增长）
+    static func purgeVarStore(for sourceUrl: String) {
+        varStoreLock.lock(); defer { varStoreLock.unlock() }
+        globalVarStore.removeValue(forKey: sourceUrl)
+    }
+
     // Android ajax()/connect() pass the URL string through AnalyzeUrl, so
     // "http://api.example.com/list,{\"headers\":{...}}" correctly attaches
     // request headers. We replicate that by parsing with AnalyzeUrl.parse().
@@ -216,6 +222,11 @@ class JSJavaHelper: NSObject, JSJavaHelperProtocol {
     func setToCacheObject(_ key: String, _ value: Any) {
         let cacheKey = "\(currentContext?.source.bookSourceUrl ?? ""):\(key)"
         cacheObjects[cacheKey] = value
+        // C-2: 限制最多 50 条，防止 QueryTTFProxy 等大对象无限累积
+        if cacheObjects.count > 50 {
+            let overflow = cacheObjects.count - 50
+            cacheObjects.keys.prefix(overflow).forEach { cacheObjects.removeValue(forKey: $0) }
+        }
     }
 
     func clearCacheObjects() {
