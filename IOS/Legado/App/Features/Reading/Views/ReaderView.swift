@@ -117,6 +117,10 @@ struct ReaderView: View {
         .onChange(of: settings.autoScrollInterval) { _ in
             if settings.autoScrollEnabled { startAutoScroll() }
         }
+        // 音量键翻页开关实时生效（含从全局设置切回阅读器的场景）
+        .onChange(of: settings.volumePageTurn) { enabled in
+            if enabled { setupVolumePageTurn() } else { teardownVolumePageTurn() }
+        }
         .task { await viewModel.setup() }
     }
 
@@ -458,7 +462,14 @@ struct ReaderView: View {
     private func setupVolumePageTurn() {
         guard settings.volumePageTurn else { return }
         let session = AVAudioSession.sharedInstance()
+        // iOS 16+ 需先设 category 才能正确接收 outputVolume 变化；
+        // .ambient + .mixWithOthers 不中断背景音乐
+        try? session.setCategory(.ambient, options: .mixWithOthers)
         try? session.setActive(true)
+        // 重置到中间值确保两方向都有余量（延迟等 slider 引用就绪）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            volumeSlider?.setValue(0.5, animated: false)
+        }
         volumeObservation = session.observe(\.outputVolume, options: [.new, .old]) { _, change in
             guard let newVol = change.newValue, let oldVol = change.oldValue else { return }
             DispatchQueue.main.async {
@@ -468,21 +479,18 @@ struct ReaderView: View {
                 } else if newVol < oldVol - 0.01 {
                     turnPrev()
                 }
-                // 恢复音量到中间值，保证两个方向都能继续使用
+                // 恢复到中间值，保证两方向都能继续使用
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                     volumeSlider?.setValue(0.5, animated: false)
                 }
             }
-        }
-        // 设初始音量到中间值（留出上下各半格余量）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            volumeSlider?.setValue(0.5, animated: false)
         }
     }
 
     private func teardownVolumePageTurn() {
         volumeObservation?.invalidate()
         volumeObservation = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     // MARK: - 自动翻页
